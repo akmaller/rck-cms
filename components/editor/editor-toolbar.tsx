@@ -52,7 +52,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         variant={editor.isActive("heading", { level: 2 }) ? "default" : "ghost"}
         size="icon"
         className={toggleClasses}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        onClick={() => editor.chain().focus().clearNodes().toggleHeading({ level: 2 }).run()}
       >
         <Heading2 className="h-4 w-4" />
       </Button>
@@ -61,7 +61,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         variant={editor.isActive("heading", { level: 3 }) ? "default" : "ghost"}
         size="icon"
         className={toggleClasses}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        onClick={() => editor.chain().focus().clearNodes().toggleHeading({ level: 3 }).run()}
       >
         <Heading3 className="h-4 w-4" />
       </Button>
@@ -70,7 +70,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         variant={editor.isActive("heading", { level: 4 }) ? "default" : "ghost"}
         size="icon"
         className={toggleClasses}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 4 }).run()}
+        onClick={() => editor.chain().focus().clearNodes().toggleHeading({ level: 4 }).run()}
       >
         <Heading4 className="h-4 w-4" />
       </Button>
@@ -97,7 +97,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         variant={editor.isActive("blockquote") ? "default" : "ghost"}
         size="icon"
         className={toggleClasses}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
+        onClick={() => editor.chain().focus().clearNodes().toggleBlockquote().run()}
       >
         <Quote className="h-4 w-4" />
       </Button>
@@ -106,7 +106,7 @@ export function EditorToolbar({ editor }: { editor: Editor | null }) {
         variant={editor.isActive("codeBlock") ? "default" : "ghost"}
         size="icon"
         className={toggleClasses}
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
+        onClick={() => editor.chain().focus().clearNodes().toggleCodeBlock().run()}
       >
         <Code className="h-4 w-4" />
       </Button>

@@ -8,7 +8,14 @@ import { slugify } from "@/lib/utils/slug";
 import { pageUpdateSchema } from "@/lib/validators/page";
 import { writeAuditLog } from "@/lib/audit/log";
 
-function serialize(page: Awaited<ReturnType<typeof prisma.page.findUnique>>) {
+type PageDetail = Prisma.PageGetPayload<{
+  include: {
+    author: { select: { id: true; name: true; email: true } };
+    featuredMedia: true;
+  };
+}>;
+
+function serialize(page: PageDetail | null) {
   if (!page) return null;
   return {
     id: page.id,
@@ -61,7 +68,7 @@ export async function PATCH(
   const parsed = pageUpdateSchema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Payload tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Payload tidak valid" },
       { status: 422 }
     );
   }
@@ -82,20 +89,12 @@ export async function PATCH(
     }
   }
 
-  const updates: {
-    title?: string;
-    slug?: string;
-    excerpt?: string | null;
-    content?: unknown;
-    status?: ArticleStatus;
-    publishedAt?: Date | null;
-    featuredMedia?: Prisma.PageUpdateInput["featuredMedia"];
-  } = {};
+  const updates: Prisma.PageUpdateInput = {};
 
   if (parsed.data.title) updates.title = parsed.data.title;
   if (parsed.data.excerpt !== undefined) updates.excerpt = parsed.data.excerpt ?? null;
   if (parsed.data.content) {
-    updates.content = parsed.data.content as Record<string, unknown>;
+    updates.content = parsed.data.content as Prisma.InputJsonValue;
   }
 
   if (parsed.data.status) {

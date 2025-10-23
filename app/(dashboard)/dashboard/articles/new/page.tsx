@@ -1,41 +1,33 @@
-import Link from "next/link";
-
-import { buttonVariants } from "@/lib/button-variants";
-
-import { ArticleForm } from "@/components/forms/article-form";
 import { prisma } from "@/lib/prisma";
+import { ArticleEditorShell } from "@/app/(dashboard)/dashboard/articles/_components/editor-shell";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 export default async function NewArticlePage() {
-  const mediaPromise = prisma.media.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 12,
-  });
+  const [media, tags, categories] = await Promise.all([
+    prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
+    prisma.tag.findMany({ orderBy: { name: "asc" } }),
+    prisma.category.findMany({ orderBy: { name: "asc" } }),
+  ]);
 
-  const mediaItemsPromise = mediaPromise.then((items) =>
-    items.map((item) => ({
-      id: item.id,
-      title: item.title,
-      url: item.url,
-      mimeType: item.mimeType,
-      size: item.size,
-      createdAt: item.createdAt.toISOString(),
-    }))
-  );
+  const mediaItems = media.map((item) => ({
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    url: item.url,
+    mimeType: item.mimeType,
+    size: item.size,
+    createdAt: item.createdAt.toISOString(),
+  }));
+  const allTags = tags.map((tag) => tag.name);
+  const allCategories = categories.map((category) => category.name);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Artikel Baru</h1>
-          <p className="text-sm text-muted-foreground">
-            Tulis artikel baru dan simpan sebagai draft sebelum dipublikasikan.
-          </p>
-        </div>
-        <Link className={buttonVariants({ variant: "outline" })} href="/dashboard/articles">
-          Kembali ke daftar
-        </Link>
-      </div>
-      <ArticleForm mediaItems={await mediaItemsPromise} />
-    </div>
+    <>
+      <DashboardHeading
+        heading="Artikel Baru"
+        description="Tulis artikel baru dan simpan sebagai draft sebelum dipublikasikan."
+      />
+      <ArticleEditorShell mediaItems={mediaItems} allTags={allTags} allCategories={allCategories} />
+    </>
   );
 }

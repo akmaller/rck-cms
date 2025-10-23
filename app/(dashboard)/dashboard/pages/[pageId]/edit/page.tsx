@@ -10,6 +10,7 @@ export default async function EditPage({ params }: { params: { pageId: string } 
   const [page, media] = await Promise.all([
     prisma.page.findUnique({
       where: { id: params.pageId },
+      include: { featuredMedia: true },
     }),
     prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
   ]);
@@ -21,11 +22,24 @@ export default async function EditPage({ params }: { params: { pageId: string } 
   const mediaItems = media.map((item) => ({
     id: item.id,
     title: item.title,
+    description: item.description,
     url: item.url,
     mimeType: item.mimeType,
     size: item.size,
     createdAt: item.createdAt.toISOString(),
   }));
+
+  if (page.featuredMedia && !mediaItems.some((item) => item.id === page.featuredMediaId)) {
+    mediaItems.unshift({
+      id: page.featuredMedia.id,
+      title: page.featuredMedia.title,
+      description: page.featuredMedia.description,
+      url: page.featuredMedia.url,
+      mimeType: page.featuredMedia.mimeType,
+      size: page.featuredMedia.size,
+      createdAt: page.featuredMedia.createdAt.toISOString(),
+    });
+  }
 
   return (
     <div className="space-y-6">

@@ -43,7 +43,7 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
       where,
       include: {
         author: { select: { id: true, name: true } },
-        categories: { include: { category: true } },
+        categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
         featuredMedia: { select: { url: true, title: true, width: true, height: true } },
       },
       orderBy: { publishedAt: "desc" },

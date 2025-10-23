@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArticleStatus } from "@prisma/client";
+import { ArticleStatus, Prisma } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/lib/button-variants";
@@ -56,12 +56,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     }
   }
 
-  const where = query
+  const where: Prisma.ArticleWhereInput = query
     ? {
         status: ArticleStatus.PUBLISHED,
         OR: [
-          { title: { contains: query, mode: "insensitive" } },
-          { excerpt: { contains: query, mode: "insensitive" } },
+          { title: { contains: query, mode: Prisma.QueryMode.insensitive } },
+          { excerpt: { contains: query, mode: Prisma.QueryMode.insensitive } },
         ],
       }
     : { status: ArticleStatus.PUBLISHED };

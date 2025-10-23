@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { Prisma } from "@prisma/client";
+
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 
@@ -20,22 +22,25 @@ export async function GET(request: NextRequest) {
   const parsed = listQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Parameter tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Parameter tidak valid" },
       { status: 400 }
     );
   }
 
-  const { page, perPage, entity, action, userId } = parsed.data;
+  const { page, perPage, entity, action, userId, from, to } = parsed.data;
 
-  const where = {
+  const where: Prisma.AuditLogWhereInput = {
     entity: entity || undefined,
     action: action || undefined,
     userId: userId || undefined,
-    createdAt: from || to ? {
-      gte: from,
-      lte: to ? new Date(new Date(to).getTime() + 24 * 60 * 60 * 1000) : undefined,
-    } : undefined,
-  } satisfies Parameters<typeof prisma.auditLog.findMany>[0]["where"];
+    createdAt:
+      from || to
+        ? {
+            gte: from ?? undefined,
+            lte: to ? new Date(new Date(to).getTime() + 24 * 60 * 60 * 1000) : undefined,
+          }
+        : undefined,
+  };
 
   const [logs, total] = await Promise.all([
     prisma.auditLog.findMany({

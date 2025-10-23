@@ -26,9 +26,12 @@ export async function uploadMedia(formData: FormData) {
     return { error: "Ukuran file maksimal 5MB" };
   }
 
-  const parsed = uploadSchema.safeParse({ title: formData.get("title") || undefined });
+  const titleEntry = formData.get("title");
+  const parsed = uploadSchema.safeParse({
+    title: typeof titleEntry === "string" && titleEntry.trim().length > 0 ? titleEntry : undefined,
+  });
   if (!parsed.success) {
-    return { error: parsed.error.errors[0]?.message ?? "Judul tidak valid" };
+    return { error: parsed.error.issues[0]?.message ?? "Judul tidak valid" };
   }
 
   const saved = await saveMediaFile(file);

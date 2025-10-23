@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 import { TwoFactorManager } from "./two-factor-manager";
 
@@ -26,12 +27,10 @@ export default async function SecuritySettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Keamanan Akun</h1>
-        <p className="text-sm text-muted-foreground">
-          Atur autentikasi dua faktor dan pantau aktivitas akun Anda.
-        </p>
-      </div>
+      <DashboardHeading
+        heading="Keamanan Akun"
+        description="Atur autentikasi dua faktor dan pantau aktivitas akun Anda."
+      />
 
       <Card>
         <CardHeader>

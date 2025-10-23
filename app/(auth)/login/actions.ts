@@ -18,15 +18,20 @@ type LoginState = {
 };
 
 export async function loginAction(_prevState: LoginState, formData: FormData): Promise<LoginState> {
+  const toStringOrEmpty = (value: FormDataEntryValue | null) =>
+    typeof value === "string" ? value : "";
+  const toOptionalString = (value: FormDataEntryValue | null) =>
+    typeof value === "string" && value.trim().length > 0 ? value : undefined;
+
   const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-    twoFactorCode: formData.get("twoFactorCode") || undefined,
-    redirectTo: formData.get("redirectTo") || undefined,
+    email: toStringOrEmpty(formData.get("email")),
+    password: toStringOrEmpty(formData.get("password")),
+    twoFactorCode: toOptionalString(formData.get("twoFactorCode")),
+    redirectTo: toOptionalString(formData.get("redirectTo")),
   });
 
   if (!parsed.success) {
-    return { error: parsed.error.errors[0]?.message ?? "Form tidak valid" };
+    return { error: parsed.error.issues[0]?.message ?? "Form tidak valid" };
   }
 
   const { email, password, twoFactorCode, redirectTo } = parsed.data;
@@ -41,7 +46,13 @@ export async function loginAction(_prevState: LoginState, formData: FormData): P
   } catch (error) {
     if (error instanceof AuthError) {
       if (error.type === "CredentialsSignin") {
-        return { error: error.cause?.message ?? "Kredensial salah" };
+        const causeMessage =
+          typeof error.cause === "object" && error.cause && "message" in error.cause
+            ? (typeof (error.cause as { message?: unknown }).message === "string"
+                ? (error.cause as { message: string }).message
+                : "")
+            : "";
+        return { error: causeMessage || "Kredensial salah" };
       }
 
       return { error: "Autentikasi gagal. Silakan coba lagi." };

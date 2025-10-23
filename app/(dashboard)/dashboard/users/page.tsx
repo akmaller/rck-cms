@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { UserForm } from "@/components/forms/user-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 export default async function UsersPage() {
   const session = await auth();
@@ -15,14 +16,10 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Pengguna</h1>
-          <p className="text-sm text-muted-foreground">
-            Kelola akun pengguna dan perannya di CMS.
-          </p>
-        </div>
-      </div>
+      <DashboardHeading
+        heading="Pengguna"
+        description="Kelola akun pengguna dan perannya di CMS."
+      />
       <section className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
         <Card>
           <CardHeader>

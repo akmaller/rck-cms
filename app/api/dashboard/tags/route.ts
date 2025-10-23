@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { isRateLimited } from "@/lib/rate-limit";
 import { slugify } from "@/lib/utils/slug";
 import { tagCreateSchema } from "@/lib/validators/tag";
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
 
   if (!parsedQuery.success) {
     return NextResponse.json(
-      { error: parsedQuery.error.errors[0]?.message ?? "Parameter tidak valid" },
+      { error: parsedQuery.error.issues[0]?.message ?? "Parameter tidak valid" },
       { status: 400 }
     );
   }
@@ -48,26 +49,25 @@ export async function GET(request: NextRequest) {
 
   const where = search
     ? {
-        name: { contains: search, mode: "insensitive" },
+        name: { contains: search, mode: Prisma.QueryMode.insensitive },
       }
     : {};
 
-  const [items, total] = await prisma.$transaction([
-    prisma.tag.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * perPage,
-      take: perPage,
-      include: {
-        _count: {
-          select: {
-            articles: true,
-          },
+  const items = await prisma.tag.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    skip: (page - 1) * perPage,
+    take: perPage,
+    include: {
+      _count: {
+        select: {
+          articles: true,
         },
       },
-    }),
-    prisma.tag.count({ where }),
-  ]);
+    },
+  });
+
+  const total = await prisma.tag.count({ where });
 
   return NextResponse.json({
     data: items.map((item) => ({
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Payload tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Payload tidak valid" },
       { status: 422 }
     );
   }

@@ -7,7 +7,7 @@ export type AuditLogInput = {
   action: string;
   entity: string;
   entityId: string;
-  metadata?: Prisma.JsonValue;
+  metadata?: Prisma.InputJsonValue | null;
   userId?: string;
 };
 
@@ -21,7 +21,7 @@ export async function writeAuditLog(entry: AuditLogInput) {
       entity: entry.entity,
       entityId: entry.entityId,
       userId,
-      metadata: entry.metadata,
+      metadata: entry.metadata ?? undefined,
     },
   });
 }

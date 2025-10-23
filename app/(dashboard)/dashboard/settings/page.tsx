@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 const settingSections = [
   {
@@ -23,12 +24,10 @@ const settingSections = [
 export default function SettingsIndexPage() {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Pengaturan Situs</h1>
-        <p className="text-sm text-muted-foreground">
-          Sesuaikan konfigurasi global untuk Roemah Cita CMS.
-        </p>
-      </div>
+      <DashboardHeading
+        heading="Pengaturan Situs"
+        description="Sesuaikan konfigurasi global untuk Roemah Cita CMS."
+      />
       <div className="grid gap-4 md:grid-cols-3">
         {settingSections.map((section) => (
           <Card key={section.href} className="hover:border-primary/40">

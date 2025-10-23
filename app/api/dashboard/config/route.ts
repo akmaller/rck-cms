@@ -27,7 +27,7 @@ export async function PUT(request: NextRequest) {
   const parsed = siteConfigSchema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Konfigurasi tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Konfigurasi tidak valid" },
       { status: 422 }
     );
   }

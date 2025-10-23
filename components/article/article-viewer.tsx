@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Fragment, ReactNode } from "react";
+import { Fragment, type JSX, type ReactNode } from "react";
 
 type TiptapMark = {
   type: string;
@@ -64,14 +64,16 @@ function renderNode(node: TiptapNode, key: string): ReactNode {
       );
     case "text":
       return <Fragment key={key}>{applyMarks(node.text ?? "", node.marks)}</Fragment>;
-    case "heading":
-      const level = node.attrs?.level ?? 2;
-      const HeadingTag = (`h${Math.min(6, Math.max(1, level))}` as keyof JSX.IntrinsicElements);
+    case "heading": {
+      const rawLevel = Number(node.attrs?.level ?? 2);
+      const safeLevel = Number.isFinite(rawLevel) ? rawLevel : 2;
+      const HeadingTag = `h${Math.min(6, Math.max(1, safeLevel))}` as keyof JSX.IntrinsicElements;
       return (
         <HeadingTag key={key} className="scroll-m-20 font-semibold tracking-tight">
           {renderNodes(node.content, key)}
         </HeadingTag>
       );
+    }
     case "bulletList":
       return (
         <ul key={key} className="ml-6 list-disc space-y-2">
@@ -104,6 +106,8 @@ function renderNode(node: TiptapNode, key: string): ReactNode {
       return <br key={key} />;
     case "image":
       if (node.attrs?.src && typeof node.attrs.src === "string") {
+        const imageTitle =
+          node.attrs && typeof node.attrs.title === "string" ? node.attrs.title : undefined;
         return (
           <div key={key} className="my-4 overflow-hidden rounded-md border border-border/60">
             <Image
@@ -113,8 +117,8 @@ function renderNode(node: TiptapNode, key: string): ReactNode {
               height={node.attrs.height ? Number(node.attrs.height) : 450}
               className="h-auto w-full object-cover"
             />
-            {node.attrs.title ? (
-              <p className="bg-muted px-3 py-2 text-xs text-muted-foreground">{node.attrs.title}</p>
+            {imageTitle ? (
+              <p className="bg-muted px-3 py-2 text-xs text-muted-foreground">{imageTitle}</p>
             ) : null}
           </div>
         );

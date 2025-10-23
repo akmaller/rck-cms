@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { ConfigForm, ConfigValues } from "@/components/forms/config-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 export default async function GeneralSettingsPage() {
   const session = await auth();
@@ -32,12 +33,10 @@ export default async function GeneralSettingsPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Informasi Umum</h1>
-        <p className="text-sm text-muted-foreground">
-          Sesuaikan identitas dan metadata situs sebelum dipublikasikan.
-        </p>
-      </div>
+      <DashboardHeading
+        heading="Informasi Umum"
+        description="Sesuaikan identitas dan metadata situs sebelum dipublikasikan."
+      />
       <ConfigForm initialConfig={initialConfig} />
       <Card>
         <CardHeader>

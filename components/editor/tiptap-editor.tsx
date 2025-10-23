@@ -1,11 +1,14 @@
 "use client";
 
-import { useEditor, EditorContent } from "@tiptap/react";
+import type { ReactNode } from "react";
+import { useCallback, useEffect } from "react";
+import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import Image from "@tiptap/extension-image";
-import { useEffect } from "react";
+import { Bold, Italic, List, ListOrdered, Quote, Heading2, Heading3, Heading4, Minus, Link as LinkIcon, Image as ImageIcon, Code, Strikethrough } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 
 export type TiptapEditorProps = {
   value?: Record<string, unknown>;
@@ -18,11 +21,12 @@ const editorExtensions = [
     heading: { levels: [2, 3, 4] },
     bulletList: { keepMarks: true, keepAttributes: false },
     orderedList: { keepMarks: true, keepAttributes: false },
-    blockquote: true,
-    codeBlock: true,
+    blockquote: {},
+    codeBlock: {},
+    strike: {},
   }),
   Link.configure({
-    openOnClick: true,
+    openOnClick: false,
     autolink: true,
     linkOnPaste: true,
   }),
@@ -37,12 +41,11 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
     editorProps: {
       attributes: {
         class:
-          "min-h-[200px] prose prose-neutral max-w-none dark:prose-invert focus:outline-none",
+          "min-h-[240px] prose prose-neutral max-w-none dark:prose-invert focus:outline-none",
       },
     },
     onUpdate({ editor }) {
-      const json = editor.getJSON();
-      onChange?.(json as Record<string, unknown>);
+      onChange?.(editor.getJSON() as Record<string, unknown>);
     },
   });
 
@@ -54,6 +57,35 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
     }
   }, [editor, value]);
 
+  const toggleLink = useCallback(() => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href as string | undefined;
+    const url = window.prompt("Masukkan URL tautan", previousUrl ?? "https://");
+    if (url === null) {
+      return;
+    }
+    if (url.trim() === "") {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url.trim() }).run();
+  }, [editor]);
+
+  const insertImage = useCallback(() => {
+    if (!editor) return;
+    const url = window.prompt("URL gambar");
+    if (!url) return;
+    editor.chain().focus().setImage({ src: url }).run();
+  }, [editor]);
+
+  if (!editor) {
+    return (
+      <div className="rounded-md border border-input bg-background px-3 py-4 text-sm text-muted-foreground">
+        Memuat editor...
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-md border border-input bg-background">
       {placeholder ? (
@@ -61,7 +93,117 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
           {placeholder}
         </div>
       ) : null}
+      <div className="flex flex-wrap gap-2 border-b border-border px-3 py-2">
+        <ToolbarButton
+          tooltip="Judul 2"
+          onClick={() => editor.chain().focus().clearNodes().toggleHeading({ level: 2 }).run()}
+          isActive={editor.isActive("heading", { level: 2 })}
+        >
+          <Heading2 className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          tooltip="Judul 3"
+          onClick={() => editor.chain().focus().clearNodes().toggleHeading({ level: 3 }).run()}
+          isActive={editor.isActive("heading", { level: 3 })}
+        >
+          <Heading3 className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          tooltip="Judul 4"
+          onClick={() => editor.chain().focus().clearNodes().toggleHeading({ level: 4 }).run()}
+          isActive={editor.isActive("heading", { level: 4 })}
+        >
+          <Heading4 className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarSeparator />
+        <ToolbarButton
+          tooltip="Tebal"
+          onClick={() => editor.chain().focus().toggleBold().run()}
+          isActive={editor.isActive("bold")}
+        >
+          <Bold className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          tooltip="Miring"
+          onClick={() => editor.chain().focus().toggleItalic().run()}
+          isActive={editor.isActive("italic")}
+        >
+          <Italic className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          tooltip="Coret"
+          onClick={() => editor.chain().focus().toggleStrike().run()}
+          isActive={editor.isActive("strike")}
+        >
+          <Strikethrough className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarSeparator />
+        <ToolbarButton
+          tooltip="Daftar"
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+          isActive={editor.isActive("bulletList")}
+        >
+          <List className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          tooltip="Daftar bernomor"
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          isActive={editor.isActive("orderedList")}
+        >
+          <ListOrdered className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          tooltip="Indentasi kutipan"
+          onClick={() => editor.chain().focus().clearNodes().toggleBlockquote().run()}
+          isActive={editor.isActive("blockquote")}
+        >
+          <Quote className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton
+          tooltip="Kode blok"
+          onClick={() => editor.chain().focus().clearNodes().toggleCodeBlock().run()}
+          isActive={editor.isActive("codeBlock")}
+        >
+          <Code className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarSeparator />
+        <ToolbarButton tooltip="Tautkan" onClick={toggleLink} isActive={editor.isActive("link")}>
+          <LinkIcon className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton tooltip="Hapus tautan" onClick={() => editor.chain().focus().unsetLink().run()}>
+          <Minus className="h-4 w-4" />
+        </ToolbarButton>
+        <ToolbarButton tooltip="Sisipkan gambar" onClick={insertImage}>
+          <ImageIcon className="h-4 w-4" />
+        </ToolbarButton>
+      </div>
       <EditorContent editor={editor} className="px-3 py-4" />
     </div>
   );
+}
+
+type ToolbarButtonProps = {
+  children: ReactNode;
+  onClick: () => void;
+  isActive?: boolean;
+  tooltip?: string;
+};
+
+function ToolbarButton({ children, onClick, isActive = false, tooltip }: ToolbarButtonProps) {
+  return (
+    <Button
+      type="button"
+      onClick={onClick}
+      variant={isActive ? "secondary" : "ghost"}
+      size="sm"
+      title={tooltip}
+      className="h-8 w-8 p-0"
+    >
+      {children}
+    </Button>
+  );
+}
+
+function ToolbarSeparator() {
+  return <div className="mx-1 h-6 w-px bg-border" aria-hidden />;
 }

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { TiptapEditor } from "@/components/editor/tiptap-editor";
-import { MediaPicker } from "@/components/media/media-picker";
+import { FeaturedImagePicker, type SelectedMedia } from "@/components/media/featured-image-picker";
 import type { MediaItem } from "@/components/media/media-grid";
 
 
@@ -41,7 +41,24 @@ export function PageForm({
   const router = useRouter();
   const [state, setState] = useState<{ error?: string }>({});
   const [content, setContent] = useState<Record<string, unknown>>(initialValues?.content ?? emptyContent);
-  const [featuredMediaId, setFeaturedMediaId] = useState<string | null>(initialValues?.featuredMediaId ?? null);
+  const initialFeatured = initialValues?.featuredMediaId
+    ? mediaItems.find((item) => item.id === initialValues.featuredMediaId)
+    : undefined;
+  const [featuredMedia, setFeaturedMedia] = useState<SelectedMedia | null>(
+    initialFeatured
+      ? {
+          id: initialFeatured.id,
+          title: initialFeatured.title,
+          description: initialFeatured.description ?? null,
+          url: initialFeatured.url,
+          mimeType: initialFeatured.mimeType,
+          createdAt:
+            typeof initialFeatured.createdAt === "string"
+              ? initialFeatured.createdAt
+              : initialFeatured.createdAt.toISOString(),
+        }
+      : null
+  );
   const [isPending, startTransition] = useTransition();
 
   return (
@@ -55,8 +72,11 @@ export function PageForm({
           event.preventDefault();
           const formData = new FormData(event.currentTarget);
           formData.set("content", JSON.stringify(content));
-          if (featuredMediaId) {
-            formData.set("featuredMediaId", featuredMediaId);
+          const isEditing = Boolean(initialValues?.id);
+          if (featuredMedia?.id) {
+            formData.set("featuredMediaId", featuredMedia.id);
+          } else if (isEditing) {
+            formData.set("featuredMediaId", "__REMOVE__");
           } else {
             formData.delete("featuredMediaId");
           }
@@ -71,7 +91,7 @@ export function PageForm({
             if (!onSubmit) {
               event.currentTarget.reset();
               setContent(emptyContent);
-              setFeaturedMediaId(null);
+              setFeaturedMedia(null);
             }
             router.push(redirectTo);
             router.refresh();
@@ -98,11 +118,12 @@ export function PageForm({
           </div>
           <div className="space-y-2">
             <Label>Media Unggulan</Label>
-            {mediaItems.length ? (
-              <MediaPicker items={mediaItems} value={featuredMediaId} onSelect={setFeaturedMediaId} />
-            ) : (
-              <p className="text-sm text-muted-foreground">Belum ada media. Unggah gambar terlebih dahulu dari halaman Media.</p>
-            )}
+            <FeaturedImagePicker
+              initialItems={mediaItems}
+              selected={featuredMedia}
+              onSelect={setFeaturedMedia}
+              label="Pilih Media Unggulan"
+            />
           </div>
         </CardContent>
         <CardFooter className="flex items-center justify-between">

@@ -68,6 +68,7 @@ model Tag {
 model Media {
   id          String    @id @default(cuid())
   title       String
+  description String?   @db.Text
   fileName    String
   url         String    @unique
   mimeType    String
@@ -79,6 +80,7 @@ model Media {
   createdById String?
   createdBy   User?     @relation(fields: [createdById], references: [id])
   article     Article[]
+  pages       Page[]     @relation("PageFeaturedMedia")
 
   @@index([storageType])
 }
@@ -137,6 +139,8 @@ model Page {
   publishedAt DateTime?
   authorId    String
   author      User          @relation("PageAuthor", fields: [authorId], references: [id])
+  featuredMediaId String?
+  featuredMedia   Media?       @relation("PageFeaturedMedia", fields: [featuredMediaId], references: [id])
   menuItems   MenuItem[]
   createdAt   DateTime      @default(now())
   updatedAt   DateTime      @updatedAt

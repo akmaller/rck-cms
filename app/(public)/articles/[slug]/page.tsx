@@ -14,7 +14,7 @@ async function getArticle(slug: string) {
     where: { slug },
     include: {
       author: { select: { id: true, name: true } },
-      categories: { include: { category: true } },
+      categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
       tags: { include: { tag: true } },
       featuredMedia: { select: { url: true, title: true, width: true, height: true } },
     },

@@ -4,6 +4,7 @@ import { MediaGrid } from "@/components/media/media-grid";
 import { deleteMedia } from "./actions";
 import { UploadForm } from "@/app/(dashboard)/dashboard/media/upload-form";
 import { prisma } from "@/lib/prisma";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 async function deleteMediaAction(formData: FormData) {
   "use server";
@@ -28,14 +29,10 @@ export default async function MediaPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Media</h1>
-          <p className="text-sm text-muted-foreground">
-            Kelola file unggahan yang digunakan dalam artikel, halaman, atau galeri.
-          </p>
-        </div>
-      </div>
+      <DashboardHeading
+        heading="Media"
+        description="Kelola file unggahan yang digunakan dalam artikel, halaman, atau galeri."
+      />
       <section className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader>
@@ -50,6 +47,7 @@ export default async function MediaPage() {
               items={media.map((item) => ({
                 id: item.id,
                 title: item.title,
+                description: item.description,
                 url: item.url,
                 mimeType: item.mimeType,
                 size: item.size,

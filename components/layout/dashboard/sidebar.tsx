@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 import { dashboardNavigation } from "@/config/navigation";
 import { cn } from "@/lib/utils";
+import { SignOutButton } from "./sign-out-button";
 
 export function DashboardSidebar() {
   const pathname = usePathname();
@@ -38,6 +39,9 @@ export function DashboardSidebar() {
           );
         })}
       </nav>
+      <div className="mt-8 border-t border-border/60 pt-4">
+        <SignOutButton />
+      </div>
     </aside>
   );
 }

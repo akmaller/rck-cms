@@ -1,3 +1,5 @@
+import { type JSX } from "react";
+
 import { Card, CardContent } from "@/components/ui/card";
 
 export type MenuTreeNode = {

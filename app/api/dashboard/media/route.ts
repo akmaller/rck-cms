@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { Prisma } from "@prisma/client";
+
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { isRateLimited } from "@/lib/rate-limit";
@@ -24,18 +26,18 @@ export async function GET(request: NextRequest) {
 
   if (!parsedQuery.success) {
     return NextResponse.json(
-      { error: parsedQuery.error.errors[0]?.message ?? "Parameter tidak valid" },
+      { error: parsedQuery.error.issues[0]?.message ?? "Parameter tidak valid" },
       { status: 400 }
     );
   }
 
   const { page, perPage, search } = parsedQuery.data;
-  const where: Parameters<typeof prisma.media.findMany>[0]["where"] = {};
+  const where: Prisma.MediaWhereInput = {};
 
   if (search) {
     where.OR = [
-      { title: { contains: search, mode: "insensitive" } },
-      { fileName: { contains: search, mode: "insensitive" } },
+      { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      { fileName: { contains: search, mode: Prisma.QueryMode.insensitive } },
     ];
   }
 
@@ -43,7 +45,7 @@ export async function GET(request: NextRequest) {
     where.createdById = session.user.id;
   }
 
-  const [items, total] = await prisma.$transaction([
+  const [items, total] = await Promise.all([
     prisma.media.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -67,6 +69,7 @@ export async function GET(request: NextRequest) {
       storageType: item.storageType,
       width: item.width,
       height: item.height,
+      description: item.description,
       createdAt: item.createdAt,
       createdBy: item.createdBy,
     })),
@@ -111,6 +114,7 @@ export async function POST(request: NextRequest) {
   const media = await prisma.media.create({
     data: {
       title,
+      description: null,
       fileName: saved.fileName,
       url: saved.url,
       mimeType: file.type || "application/octet-stream",
@@ -129,11 +133,12 @@ export async function POST(request: NextRequest) {
     {
       data: {
         id: media.id,
-        title: media.title,
-        url: media.url,
-        mimeType: media.mimeType,
-        size: media.size,
-        storageType: media.storageType,
+      title: media.title,
+      description: media.description,
+      url: media.url,
+      mimeType: media.mimeType,
+      size: media.size,
+      storageType: media.storageType,
         createdAt: media.createdAt,
         createdBy: media.createdBy,
       },

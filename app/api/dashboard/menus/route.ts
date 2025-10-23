@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
   const parsed = listQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Parameter tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Parameter tidak valid" },
       { status: 400 }
     );
   }
@@ -55,7 +55,7 @@ export async function POST(request: NextRequest) {
   const parsed = menuItemCreateSchema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Payload tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Payload tidak valid" },
       { status: 422 }
     );
   }
@@ -105,7 +105,7 @@ export async function PATCH(request: NextRequest) {
   const parsed = menuReorderSchema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Payload tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Payload tidak valid" },
       { status: 422 }
     );
   }

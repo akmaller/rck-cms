@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 const quickActions = [
   {
@@ -37,14 +38,10 @@ export default async function DashboardHomePage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Selamat datang, {displayName}
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Pantau aktivitas terbaru dan kelola konten dari satu tempat.
-        </p>
-      </div>
+      <DashboardHeading
+        heading={`Selamat datang, ${displayName}`}
+        description="Pantau aktivitas terbaru dan kelola konten dari satu tempat."
+      />
       <div className="grid gap-4 md:grid-cols-3">
         {quickActions.map((item) => (
           <Card key={item.title}>

@@ -7,18 +7,136 @@ import { assertRole } from "@/lib/auth/permissions";
 import { hashPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils/slug";
+import { generateExcerptFromContent, ensureUniqueArticleSlug } from "@/lib/articles/utils";
 import { menuItemCreateSchema } from "@/lib/validators/menu";
-import { pageCreateSchema } from "@/lib/validators/page";
-import { siteConfigSchema } from "@/lib/validators/config";
+import { pageCreateSchema, pageUpdateSchema } from "@/lib/validators/page";
+import { siteConfigSchema, type SiteConfigInput } from "@/lib/validators/config";
 import { writeAuditLog } from "@/lib/audit/log";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 const EMPTY_TIPTAP_DOC = { type: "doc", content: [] } as const;
 
+type PrismaClientLike = Prisma.TransactionClient | typeof prisma;
+
+function normalizeTagNames(value: FormDataEntryValue | null | undefined): string[] {
+  if (!value || typeof value !== "string") {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((tag) => tag.trim().replace(/\s+/g, " "))
+        .filter(Boolean)
+    )
+  );
+}
+
+function normalizeCategoryNames(value: FormDataEntryValue | null | undefined): string[] {
+  if (!value || typeof value !== "string") {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .split(",")
+        .map((category) => category.trim().replace(/\s+/g, " "))
+        .filter(Boolean)
+    )
+  );
+}
+
+async function ensureTag(client: PrismaClientLike, name: string): Promise<{ id: string }> {
+  const normalized = name.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    throw new Error("Tag tidak valid");
+  }
+
+  const existingByName = await client.tag.findFirst({
+    where: {
+      name: {
+        equals: normalized,
+        mode: "insensitive",
+      },
+    },
+    select: { id: true },
+  });
+
+  if (existingByName) {
+    await client.tag.update({ where: { id: existingByName.id }, data: { name: normalized } });
+    return { id: existingByName.id };
+  }
+
+  let baseSlug = slugify(normalized);
+  if (!baseSlug) {
+    baseSlug = `tag-${Date.now()}`;
+  }
+  let candidate = baseSlug;
+  let counter = 1;
+  while (true) {
+    const exists = await client.tag.findUnique({ where: { slug: candidate }, select: { id: true } });
+    if (!exists) {
+      break;
+    }
+    candidate = `${baseSlug}-${counter++}`;
+  }
+
+  const created = await client.tag.create({
+    data: { name: normalized, slug: candidate },
+    select: { id: true },
+  });
+
+  return { id: created.id };
+}
+
+async function ensureCategory(client: PrismaClientLike, name: string): Promise<{ id: string }> {
+  const normalized = name.trim().replace(/\s+/g, " ");
+  if (!normalized) {
+    throw new Error("Kategori tidak valid");
+  }
+
+  const existingByName = await client.category.findFirst({
+    where: {
+      name: {
+        equals: normalized,
+        mode: "insensitive",
+      },
+    },
+    select: { id: true },
+  });
+
+  if (existingByName) {
+    await client.category.update({ where: { id: existingByName.id }, data: { name: normalized } });
+    return { id: existingByName.id };
+  }
+
+  let baseSlug = slugify(normalized);
+  if (!baseSlug) {
+    baseSlug = `kategori-${Date.now()}`;
+  }
+  let candidate = baseSlug;
+  let counter = 1;
+  while (true) {
+    const exists = await client.category.findUnique({ where: { slug: candidate }, select: { id: true } });
+    if (!exists) {
+      break;
+    }
+    candidate = `${baseSlug}-${counter++}`;
+  }
+
+  const created = await client.category.create({
+    data: { name: normalized, slug: candidate },
+    select: { id: true },
+  });
+
+  return { id: created.id };
+}
+
 const articleFormSchema = z.object({
   title: z.string().min(5, "Judul minimal 5 karakter"),
   slug: z.string().optional(),
-  excerpt: z.string().max(500).optional(),
   content: z.string().transform((value, ctx) => {
     try {
       const parsed = JSON.parse(value) as Record<string, unknown>;
@@ -45,7 +163,6 @@ export async function createArticle(formData: FormData) {
     const parsed = articleFormSchema.safeParse({
       title: formData.get("title"),
       slug: formData.get("slug") || undefined,
-      excerpt: formData.get("excerpt") || undefined,
       content: formData.get("content") || JSON.stringify(EMPTY_TIPTAP_DOC),
       featuredMediaId: (formData.get("featuredMediaId") || null) as string | null,
     });
@@ -54,26 +171,58 @@ export async function createArticle(formData: FormData) {
       return { error: parsed.error.issues[0]?.message ?? "Data tidak valid" };
     }
 
-    const baseSlug = slugify(parsed.data.slug ?? parsed.data.title);
-    const safeBase = baseSlug.length > 0 ? baseSlug : `artikel-${Date.now()}`;
-    let candidate = safeBase;
-    let counter = 1;
-    while (true) {
-      const existing = await prisma.article.findUnique({ where: { slug: candidate } });
-      if (!existing) break;
-      candidate = `${safeBase}-${counter++}`;
-    }
+    const tagNames = normalizeTagNames(formData.get("tags"));
+    const categoryNames = normalizeCategoryNames(formData.get("categories"));
+    const uniqueSlug = await ensureUniqueArticleSlug(parsed.data.slug ?? parsed.data.title);
+    const generatedExcerpt =
+      generateExcerptFromContent(parsed.data.content as Record<string, unknown>) ?? null;
 
-    const article = await prisma.article.create({
-      data: {
-        title: parsed.data.title,
-        slug: candidate,
-        excerpt: parsed.data.excerpt,
-        content: parsed.data.content,
-        status: ArticleStatus.DRAFT,
-        authorId: session.user.id,
-        featuredMediaId: parsed.data.featuredMediaId ?? null,
-      },
+    const article = await prisma.$transaction(async (tx) => {
+      const categoryIds: string[] = [];
+      for (const categoryName of categoryNames) {
+        const category = await ensureCategory(tx, categoryName);
+        categoryIds.push(category.id);
+      }
+
+      const tagIds: string[] = [];
+      for (const tagName of tagNames) {
+        const tag = await ensureTag(tx, tagName);
+        tagIds.push(tag.id);
+      }
+
+      const created = await tx.article.create({
+        data: {
+          title: parsed.data.title,
+          slug: uniqueSlug,
+          excerpt: generatedExcerpt,
+          content: parsed.data.content as Prisma.InputJsonValue,
+          status: ArticleStatus.DRAFT,
+          authorId: session.user.id,
+          featuredMediaId: parsed.data.featuredMediaId ?? null,
+        },
+      });
+
+      if (categoryIds.length) {
+        const baseTime = Date.now();
+        await tx.articleCategory.deleteMany({ where: { articleId: created.id } });
+        await tx.articleCategory.createMany({
+          data: categoryIds.map((categoryId, index) => ({
+            articleId: created.id,
+            categoryId,
+            assignedAt: new Date(baseTime + index),
+          })),
+          skipDuplicates: true,
+        });
+      }
+
+      if (tagIds.length) {
+        await tx.articleTag.createMany({
+          data: tagIds.map((tagId) => ({ articleId: created.id, tagId })),
+          skipDuplicates: true,
+        });
+      }
+
+      return created;
     });
 
     await writeAuditLog({
@@ -97,6 +246,10 @@ const categoryFormSchema = z.object({
   name: z.string().min(2, "Nama minimal 2 karakter"),
   slug: z.string().optional(),
   description: z.string().max(500).optional(),
+});
+
+const categoryUpdateSchema = categoryFormSchema.extend({
+  id: z.string().cuid(),
 });
 
 export async function createCategory(formData: FormData) {
@@ -146,55 +299,89 @@ export async function createCategory(formData: FormData) {
   }
 }
 
-const tagFormSchema = z.object({
-  name: z.string().min(2, "Nama minimal 2 karakter"),
-  slug: z.string().optional(),
-});
-
-export async function createTag(formData: FormData) {
+export async function updateCategory(formData: FormData) {
   try {
     await assertRole(["EDITOR", "ADMIN"]);
 
-    const parsed = tagFormSchema.safeParse({
-      name: formData.get("name"),
+    const parsed = categoryUpdateSchema.safeParse({
+      id: formData.get("id"),
+      name: formData.get("name") || undefined,
       slug: formData.get("slug") || undefined,
+      description: formData.get("description") || undefined,
     });
 
     if (!parsed.success) {
-      return { error: parsed.error.issues[0]?.message ?? "Data tag tidak valid" };
+      return { error: parsed.error.issues[0]?.message ?? "Data kategori tidak valid" };
     }
 
-    const baseSlug = slugify(parsed.data.slug ?? parsed.data.name);
-    const safeBase = baseSlug.length > 0 ? baseSlug : `tag-${Date.now()}`;
+    const category = await prisma.category.findUnique({ where: { id: parsed.data.id } });
+    if (!category) {
+      return { error: "Kategori tidak ditemukan" };
+    }
+
+    const baseSlug = slugify(parsed.data.slug ?? parsed.data.name ?? category.name);
+    const safeBase = baseSlug.length > 0 ? baseSlug : `kategori-${Date.now()}`;
     let candidate = safeBase;
     let counter = 1;
     while (true) {
-      const exists = await prisma.tag.findUnique({ where: { slug: candidate } });
-      if (!exists) break;
+      const exists = await prisma.category.findUnique({ where: { slug: candidate } });
+      if (!exists || exists.id === category.id) break;
       candidate = `${safeBase}-${counter++}`;
     }
 
-    const tag = await prisma.tag.create({
+    const updated = await prisma.category.update({
+      where: { id: category.id },
       data: {
         name: parsed.data.name,
         slug: candidate,
+        description: parsed.data.description ?? null,
       },
+      select: { id: true, name: true, slug: true, description: true, _count: { select: { articles: true } }, createdAt: true },
     });
 
     await writeAuditLog({
-      action: "TAG_CREATE",
-      entity: "Tag",
-      entityId: tag.id,
+      action: "CATEGORY_UPDATE",
+      entity: "Category",
+      entityId: category.id,
       metadata: { name: parsed.data.name },
     });
 
     revalidateTag("content");
+    revalidatePath("/dashboard/taxonomies");
+    return { success: true, data: updated };
+  } catch (error) {
+    console.error(error);
+    return { error: "Gagal memperbarui kategori" };
+  }
+}
+
+export async function deleteCategory(id: string) {
+  try {
+    await assertRole(["EDITOR", "ADMIN"]);
+
+    const category = await prisma.category.findUnique({ where: { id } });
+    if (!category) {
+      return { error: "Kategori tidak ditemukan" };
+    }
+
+    await prisma.category.delete({ where: { id } });
+
+    await writeAuditLog({
+      action: "CATEGORY_DELETE",
+      entity: "Category",
+      entityId: id,
+      metadata: { name: category.name },
+    });
+
+    revalidateTag("content");
+    revalidatePath("/dashboard/taxonomies");
     return { success: true };
   } catch (error) {
     console.error(error);
-    return { error: "Gagal membuat tag" };
+    return { error: "Gagal menghapus kategori" };
   }
 }
+
 
 const userFormSchema = z.object({
   name: z.string().min(2, "Nama minimal 2 karakter"),
@@ -283,7 +470,12 @@ export async function createMenuItem(formData: FormData) {
     let candidate = safeBase;
     let counter = 1;
     while (true) {
-      const exists = await prisma.menuItem.findUnique({ where: { slug: candidate } });
+      const exists = await prisma.menuItem.findFirst({
+        where: {
+          slug: candidate,
+          menu: parsed.data.menu,
+        },
+      });
       if (!exists) break;
       candidate = `${safeBase}-${counter++}`;
     }
@@ -336,40 +528,43 @@ export async function updateSiteConfig(formData: FormData) {
           .filter(Boolean)
       : undefined;
 
-    const social = {
-      facebook: sanitize(formData.get("social.facebook")),
-      instagram: sanitize(formData.get("social.instagram")),
-      youtube: sanitize(formData.get("social.youtube")),
-      twitter: sanitize(formData.get("social.twitter")),
-    };
+    const data: SiteConfigInput = {};
 
-    const metadata = {
-      title: sanitize(formData.get("metadata.title")),
-      description: sanitize(formData.get("metadata.description")),
-      keywords,
-    };
+    const siteName = sanitize(formData.get("siteName"));
+    if (siteName !== undefined) data.siteName = siteName;
 
-    const data = {
-      siteName: sanitize(formData.get("siteName")),
-      logoUrl: sanitize(formData.get("logoUrl")),
-      tagline: sanitize(formData.get("tagline")),
-      contactEmail: sanitize(formData.get("contactEmail")),
-      social,
-      metadata,
-    };
+    const logoUrl = sanitize(formData.get("logoUrl"));
+    if (logoUrl !== undefined) data.logoUrl = logoUrl;
 
-    if (Object.values(social).every((value) => value === undefined)) {
-      delete (data as typeof data & { social?: undefined }).social;
+    const tagline = sanitize(formData.get("tagline"));
+    if (tagline !== undefined) data.tagline = tagline;
+
+    const contactEmail = sanitize(formData.get("contactEmail"));
+    if (contactEmail !== undefined) data.contactEmail = contactEmail;
+
+    const socialValues: NonNullable<SiteConfigInput["social"]> = {};
+    const socialFacebook = sanitize(formData.get("social.facebook"));
+    if (socialFacebook !== undefined) socialValues.facebook = socialFacebook;
+    const socialInstagram = sanitize(formData.get("social.instagram"));
+    if (socialInstagram !== undefined) socialValues.instagram = socialInstagram;
+    const socialYoutube = sanitize(formData.get("social.youtube"));
+    if (socialYoutube !== undefined) socialValues.youtube = socialYoutube;
+    const socialTwitter = sanitize(formData.get("social.twitter"));
+    if (socialTwitter !== undefined) socialValues.twitter = socialTwitter;
+    if (Object.keys(socialValues).length > 0) {
+      data.social = socialValues;
     }
 
-    if (
-      keywords === undefined &&
-      metadata.title === undefined &&
-      metadata.description === undefined
-    ) {
-      delete (data as typeof data & { metadata?: undefined }).metadata;
-    } else if (keywords === undefined) {
-      delete metadata.keywords;
+    const metadataValues: NonNullable<SiteConfigInput["metadata"]> = {};
+    const metadataTitle = sanitize(formData.get("metadata.title"));
+    if (metadataTitle !== undefined) metadataValues.title = metadataTitle;
+    const metadataDescription = sanitize(formData.get("metadata.description"));
+    if (metadataDescription !== undefined) metadataValues.description = metadataDescription;
+    if (keywords !== undefined && keywords.length > 0) {
+      metadataValues.keywords = keywords;
+    }
+    if (Object.keys(metadataValues).length > 0) {
+      data.metadata = metadataValues;
     }
 
     const parsed = siteConfigSchema.safeParse(data);
@@ -412,12 +607,18 @@ export async function createPage(formData: FormData) {
       }
     }
 
+    const rawFeaturedMediaId = formData.get("featuredMediaId");
+    const featuredMediaId =
+      typeof rawFeaturedMediaId === "string" && rawFeaturedMediaId.trim() && rawFeaturedMediaId !== "__REMOVE__"
+        ? rawFeaturedMediaId
+        : undefined;
+
     const parsed = pageCreateSchema.safeParse({
       title: formData.get("title"),
       slug: formData.get("slug") || undefined,
       excerpt: formData.get("excerpt") || undefined,
       content: parsedContent,
-      featuredMediaId: (formData.get("featuredMediaId") || null) as string | null,
+      featuredMediaId,
     });
 
     if (!parsed.success) {
@@ -439,10 +640,12 @@ export async function createPage(formData: FormData) {
         title: parsed.data.title,
         slug: candidate,
         excerpt: parsed.data.excerpt,
-        content: parsed.data.content,
+        content: parsed.data.content as Prisma.InputJsonValue,
         status: ArticleStatus.DRAFT,
-        authorId: session.user.id,
-        featuredMediaId: parsed.data.featuredMediaId ?? null,
+        author: { connect: { id: session.user.id } },
+        featuredMedia: featuredMediaId
+          ? { connect: { id: featuredMediaId } }
+          : undefined,
       },
     });
 
@@ -492,12 +695,19 @@ export async function updatePage(formData: FormData) {
       }
     }
 
+    const rawFeaturedMediaId = formData.get("featuredMediaId");
+    const shouldDisconnectFeaturedMedia = rawFeaturedMediaId === "__REMOVE__";
+    const featuredMediaId =
+      typeof rawFeaturedMediaId === "string" && rawFeaturedMediaId.trim() && rawFeaturedMediaId !== "__REMOVE__"
+        ? rawFeaturedMediaId
+        : undefined;
+
     const updatePayload = pageUpdateSchema.safeParse({
       title: formData.get("title") || undefined,
       slug: (formData.get("slug") || undefined) as string | undefined,
       excerpt: formData.get("excerpt") || undefined,
       content: parsedContent,
-      featuredMediaId: (formData.get("featuredMediaId") || null) as string | null | undefined,
+      featuredMediaId,
     });
 
     if (!updatePayload.success) {
@@ -510,13 +720,13 @@ export async function updatePage(formData: FormData) {
     if (data.title) updates.title = data.title;
     if (data.slug) updates.slug = data.slug;
     if (data.excerpt !== undefined) updates.excerpt = data.excerpt ?? null;
-    if (data.content) updates.content = data.content;
+    if (data.content) updates.content = data.content as Prisma.InputJsonValue;
     if (data.status) updates.status = data.status;
     if (data.publishedAt !== undefined) updates.publishedAt = data.publishedAt ?? null;
-    if (data.featuredMediaId !== undefined) {
-      updates.featuredMedia = data.featuredMediaId
-        ? { connect: { id: data.featuredMediaId } }
-        : { disconnect: true };
+    if (featuredMediaId !== undefined) {
+      updates.featuredMedia = { connect: { id: featuredMediaId } };
+    } else if (shouldDisconnectFeaturedMedia) {
+      updates.featuredMedia = { disconnect: true };
     }
 
     if (Object.keys(updates).length === 0) {
@@ -557,7 +767,6 @@ export async function updateArticle(formData: FormData) {
       articleId: formData.get("articleId"),
       title: formData.get("title"),
       slug: formData.get("slug") || undefined,
-      excerpt: formData.get("excerpt") || undefined,
       content: formData.get("content") || JSON.stringify(EMPTY_TIPTAP_DOC),
       featuredMediaId: (formData.get("featuredMediaId") || null) as string | null,
     });
@@ -568,7 +777,7 @@ export async function updateArticle(formData: FormData) {
 
     const article = await prisma.article.findUnique({
       where: { id: parsed.data.articleId },
-      select: { id: true, authorId: true },
+      select: { id: true, authorId: true, slug: true, title: true, excerpt: true },
     });
 
     if (!article) {
@@ -579,21 +788,69 @@ export async function updateArticle(formData: FormData) {
       return { error: "Tidak diizinkan mengubah artikel ini" };
     }
 
-    await prisma.article.update({
-      where: { id: parsed.data.articleId },
-      data: {
-        title: parsed.data.title,
-        slug: parsed.data.slug || undefined,
-        excerpt: parsed.data.excerpt,
-        content: parsed.data.content,
-        featured: parsed.data.featuredMediaId !== undefined ? Boolean(parsed.data.featuredMediaId) : undefined,
-        featuredMedia:
-          parsed.data.featuredMediaId !== undefined
-            ? parsed.data.featuredMediaId
-              ? { connect: { id: parsed.data.featuredMediaId } }
-              : { disconnect: true }
-            : undefined,
-      },
+    const tagNames = normalizeTagNames(formData.get("tags"));
+    const categoryNames = normalizeCategoryNames(formData.get("categories"));
+    const uniqueSlug = await ensureUniqueArticleSlug(
+      parsed.data.slug ?? article.slug ?? parsed.data.title ?? article.title,
+      article.id
+    );
+    const generatedExcerpt =
+      generateExcerptFromContent(parsed.data.content as Record<string, unknown>) ?? null;
+
+    const updateData: Prisma.ArticleUpdateInput = {
+      title: parsed.data.title,
+      slug: uniqueSlug,
+      excerpt: generatedExcerpt,
+      content: parsed.data.content as Prisma.InputJsonValue,
+      featured:
+        parsed.data.featuredMediaId !== undefined ? Boolean(parsed.data.featuredMediaId) : undefined,
+      featuredMedia:
+        parsed.data.featuredMediaId !== undefined
+          ? parsed.data.featuredMediaId
+            ? { connect: { id: parsed.data.featuredMediaId } }
+            : { disconnect: true }
+          : undefined,
+    };
+
+    await prisma.$transaction(async (tx) => {
+      const categoryIds: string[] = [];
+      for (const categoryName of categoryNames) {
+        const category = await ensureCategory(tx, categoryName);
+        categoryIds.push(category.id);
+      }
+
+      const tagIds: string[] = [];
+      for (const tagName of tagNames) {
+        const tag = await ensureTag(tx, tagName);
+        tagIds.push(tag.id);
+      }
+
+      await tx.article.update({
+        where: { id: parsed.data.articleId },
+        data: updateData,
+      });
+
+      await tx.articleTag.deleteMany({ where: { articleId: parsed.data.articleId } });
+      if (tagIds.length) {
+        await tx.articleTag.createMany({
+          data: tagIds.map((tagId) => ({ articleId: parsed.data.articleId, tagId })),
+          skipDuplicates: true,
+        });
+      }
+
+      await tx.articleCategory.deleteMany({ where: { articleId: parsed.data.articleId } });
+      if (categoryIds.length) {
+        const baseTime = Date.now();
+        await tx.articleCategory.createMany({
+          data: categoryIds.map((categoryId, index) => ({
+            articleId: parsed.data.articleId,
+            categoryId,
+            assignedAt: new Date(baseTime + index),
+          })),
+          skipDuplicates: true,
+        });
+      }
+
     });
 
     await writeAuditLog({

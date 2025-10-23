@@ -57,7 +57,14 @@ export async function assertMediaOwnership(mediaId: string) {
 
   const media = await prisma.media.findUnique({
     where: { id: mediaId },
-    select: { id: true, createdById: true, storageType: true, fileName: true },
+    select: {
+      id: true,
+      createdById: true,
+      storageType: true,
+      fileName: true,
+      title: true,
+      description: true,
+    },
   });
 
   if (!media) {

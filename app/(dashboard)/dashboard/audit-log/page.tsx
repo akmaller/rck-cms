@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { buttonVariants } from "@/lib/button-variants";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 const PAGE_SIZE = 50;
 
@@ -30,7 +33,7 @@ export default async function AuditLogPage({
   const currentPage = Math.max(1, Number(searchParams.page ?? 1));
   const { entity, action, userId, from, to } = searchParams;
 
-  const where = {
+  const where: Prisma.AuditLogWhereInput = {
     entity: entity?.trim() ? entity : undefined,
     action: action?.trim() ? action : undefined,
     userId: userId?.trim() ? userId : undefined,
@@ -41,7 +44,7 @@ export default async function AuditLogPage({
             lte: to ? new Date(new Date(to).getTime() + 24 * 60 * 60 * 1000) : undefined,
           }
         : undefined,
-  } satisfies Parameters<typeof prisma.auditLog.findMany>[0]["where"];
+  };
 
   const [logs, total, distinctActions, distinctEntities] = await Promise.all([
     prisma.auditLog.findMany({
@@ -68,12 +71,10 @@ export default async function AuditLogPage({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Audit Log</h1>
-        <p className="text-sm text-muted-foreground">
-          Riwayat perubahan data untuk keperluan keamanan dan monitoring.
-        </p>
-      </div>
+      <DashboardHeading
+        heading="Audit Log"
+        description="Riwayat perubahan data untuk keperluan keamanan dan monitoring."
+      />
       <Card>
         <CardHeader>
           <CardTitle>Filter</CardTitle>

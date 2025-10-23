@@ -1,4 +1,4 @@
-import { ArticleStatus } from "@prisma/client";
+import { ArticleStatus, Prisma } from "@prisma/client";
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
@@ -9,6 +9,13 @@ import { slugify } from "@/lib/utils/slug";
 import { pageCreateSchema } from "@/lib/validators/page";
 import { writeAuditLog } from "@/lib/audit/log";
 
+type PageListItem = Prisma.PageGetPayload<{
+  include: {
+    author: { select: { id: true; name: true; email: true } };
+    featuredMedia: { select: { id: true; url: true } };
+  };
+}>;
+
 const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(100).default(20),
@@ -16,7 +23,7 @@ const listQuerySchema = z.object({
   status: z.nativeEnum(ArticleStatus).optional(),
 });
 
-function serialize(page: Awaited<ReturnType<typeof prisma.page.findMany>>[number]) {
+function serialize(page: PageListItem) {
   return {
     id: page.id,
     title: page.title,
@@ -53,14 +60,14 @@ export async function GET(request: NextRequest) {
   const parsed = listQuerySchema.safeParse(Object.fromEntries(request.nextUrl.searchParams));
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Parameter tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Parameter tidak valid" },
       { status: 400 }
     );
   }
 
   const { page, perPage, search, status } = parsed.data;
 
-  const where: Parameters<typeof prisma.page.findMany>[0]["where"] = {};
+  const where: Prisma.PageWhereInput = {};
 
   if (session.user.role === "AUTHOR") {
     where.authorId = session.user.id;
@@ -68,8 +75,8 @@ export async function GET(request: NextRequest) {
 
   if (search) {
     where.OR = [
-      { title: { contains: search, mode: "insensitive" } },
-      { excerpt: { contains: search, mode: "insensitive" } },
+      { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      { excerpt: { contains: search, mode: Prisma.QueryMode.insensitive } },
     ];
   }
 
@@ -77,7 +84,7 @@ export async function GET(request: NextRequest) {
     where.status = status;
   }
 
-  const [pages, total] = await prisma.$transaction([
+  const [pages, total] = await Promise.all([
     prisma.page.findMany({
       where,
       orderBy: { createdAt: "desc" },
@@ -109,7 +116,7 @@ export async function POST(request: NextRequest) {
   const parsed = pageCreateSchema.safeParse(payload);
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Payload tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Payload tidak valid" },
       { status: 422 }
     );
   }
@@ -134,7 +141,7 @@ export async function POST(request: NextRequest) {
       title: parsed.data.title,
       slug,
       excerpt: parsed.data.excerpt,
-      content: parsed.data.content as Record<string, unknown>,
+      content: parsed.data.content as Prisma.InputJsonValue,
       status: targetStatus,
       publishedAt,
       authorId: session.user.id,

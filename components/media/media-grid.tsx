@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 export type MediaItem = {
   id: string;
   title: string;
+  description?: string | null;
   url: string;
   mimeType: string;
   size: number;
@@ -50,6 +51,11 @@ export function MediaGrid({ items, onDelete, filter = "all" }: MediaGridProps) {
               <span>{formatSize(item.size)}</span>
               <span>{new Date(item.createdAt).toLocaleDateString("id-ID")}</span>
             </CardDescription>
+            {item.description ? (
+              <CardDescription className="text-xs text-muted-foreground">
+                {item.description}
+              </CardDescription>
+            ) : null}
           </CardHeader>
           <CardContent className="flex items-center justify-center bg-muted/40">
             {item.mimeType.startsWith("image/") ? (

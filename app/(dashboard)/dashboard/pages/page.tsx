@@ -4,6 +4,7 @@ import { PageForm } from "@/components/forms/page-form";
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 export default async function DashboardPages() {
   const [pages, media] = await Promise.all([
@@ -14,6 +15,7 @@ export default async function DashboardPages() {
   const mediaItems = media.map((item) => ({
     id: item.id,
     title: item.title,
+    description: item.description,
     url: item.url,
     mimeType: item.mimeType,
     size: item.size,
@@ -22,13 +24,11 @@ export default async function DashboardPages() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Halaman Statis</h1>
-          <p className="text-sm text-muted-foreground">
-            Atur halaman konten seperti Tentang, Kontak, atau landing khusus.
-          </p>
-        </div>
+      <DashboardHeading
+        heading="Halaman Statis"
+        description="Atur halaman konten seperti Tentang, Kontak, atau landing khusus."
+      />
+      <div className="flex justify-end">
         <Link className={buttonVariants({ variant: "outline" })} href="/dashboard/articles">
           Kelola Artikel
         </Link>

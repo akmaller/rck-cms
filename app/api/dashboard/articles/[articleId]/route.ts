@@ -7,6 +7,7 @@ import { isRateLimited } from "@/lib/rate-limit";
 import { slugify } from "@/lib/utils/slug";
 import { articleUpdateSchema } from "@/lib/validators/article";
 import { writeAuditLog } from "@/lib/audit/log";
+import { validateRelations } from "../route";
 
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 20;
@@ -20,6 +21,7 @@ async function fetchArticle(articleId: string) {
         include: {
           category: { select: { id: true, name: true, slug: true } },
         },
+        orderBy: { assignedAt: "asc" },
       },
       tags: {
         include: {
@@ -80,7 +82,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { articl
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Payload tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Payload tidak valid" },
       { status: 422 }
     );
   }
@@ -119,7 +121,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { articl
   }
 
   if (data.content) {
-    updates.content = data.content as Prisma.JsonValue;
+    updates.content = data.content as Prisma.InputJsonValue;
   }
 
   if (data.featuredMediaId !== undefined) {

@@ -37,7 +37,7 @@ async function ensureUniqueSlug(baseSlug: string) {
   return candidate;
 }
 
-async function validateRelations(input: ArticleCreateInput) {
+export async function validateRelations(input: ArticleCreateInput) {
   const [categories, tags, media] = await Promise.all([
     input.categoryIds.length
       ? prisma.category.findMany({ where: { id: { in: input.categoryIds } }, select: { id: true } })
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
 
   if (!parsedQuery.success) {
     return NextResponse.json(
-      { error: parsedQuery.error.errors[0]?.message ?? "Parameter tidak valid" },
+      { error: parsedQuery.error.issues[0]?.message ?? "Parameter tidak valid" },
       { status: 400 }
     );
   }
@@ -86,8 +86,8 @@ export async function GET(request: NextRequest) {
 
   if (search) {
     where.OR = [
-      { title: { contains: search, mode: "insensitive" } },
-      { excerpt: { contains: search, mode: "insensitive" } },
+      { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      { excerpt: { contains: search, mode: Prisma.QueryMode.insensitive } },
     ];
   }
 
@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
 
   if (!parsedBody.success) {
     return NextResponse.json(
-      { error: parsedBody.error.errors[0]?.message ?? "Payload tidak valid" },
+      { error: parsedBody.error.issues[0]?.message ?? "Payload tidak valid" },
       { status: 422 }
     );
   }
@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
       title: parsedBody.data.title,
       slug: uniqueSlug,
       excerpt: parsedBody.data.excerpt,
-      content: parsedBody.data.content as Prisma.JsonValue,
+      content: parsedBody.data.content as Prisma.InputJsonValue,
       status: targetStatus,
       featured: parsedBody.data.featured ?? false,
       featuredMediaId: parsedBody.data.featuredMediaId ?? null,

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { z } from "zod";
 
+import { Prisma } from "@prisma/client";
+
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit/log";
@@ -39,38 +41,37 @@ export async function GET(request: NextRequest) {
 
   if (!parsedQuery.success) {
     return NextResponse.json(
-      { error: parsedQuery.error.errors[0]?.message ?? "Parameter tidak valid" },
+      { error: parsedQuery.error.issues[0]?.message ?? "Parameter tidak valid" },
       { status: 400 }
     );
   }
 
   const { page, perPage, search } = parsedQuery.data;
 
-  const where = search
+  const where: Prisma.CategoryWhereInput = search
     ? {
         OR: [
-          { name: { contains: search, mode: "insensitive" } },
-          { description: { contains: search, mode: "insensitive" } },
+          { name: { contains: search, mode: Prisma.QueryMode.insensitive } },
+          { description: { contains: search, mode: Prisma.QueryMode.insensitive } },
         ],
       }
     : {};
 
-  const [items, total] = await prisma.$transaction([
-    prisma.category.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * perPage,
-      take: perPage,
-      include: {
-        _count: {
-          select: {
-            articles: true,
-          },
+  const items = await prisma.category.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    skip: (page - 1) * perPage,
+    take: perPage,
+    include: {
+      _count: {
+        select: {
+          articles: true,
         },
       },
-    }),
-    prisma.category.count({ where }),
-  ]);
+    },
+  });
+
+  const total = await prisma.category.count({ where });
 
   return NextResponse.json({
     data: items.map((item) => ({
@@ -107,7 +108,7 @@ export async function POST(request: NextRequest) {
 
   if (!parsed.success) {
     return NextResponse.json(
-      { error: parsed.error.errors[0]?.message ?? "Payload tidak valid" },
+      { error: parsed.error.issues[0]?.message ?? "Payload tidak valid" },
       { status: 422 }
     );
   }

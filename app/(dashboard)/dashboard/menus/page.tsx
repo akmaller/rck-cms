@@ -5,6 +5,7 @@ import { MenuTree, MenuTreeNode } from "@/components/menu/menu-tree";
 import { MenuSelector } from "@/components/menu/menu-selector";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 const DEFAULT_MENU = "main";
 
@@ -61,13 +62,11 @@ export default async function MenusPage({ searchParams }: MenusPageProps) {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Menu Builder</h1>
-          <p className="text-sm text-muted-foreground">
-            Kelola struktur navigasi untuk tampilan publik.
-          </p>
-        </div>
+      <DashboardHeading
+        heading="Menu Builder"
+        description="Kelola struktur navigasi untuk tampilan publik."
+      />
+      <div className="flex justify-end">
         <MenuSelector menus={menuNames} />
       </div>
       <section className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">

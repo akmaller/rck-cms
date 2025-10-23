@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { assertMediaOwnership, assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { deleteMediaFile } from "@/lib/storage/media";
 import { writeAuditLog } from "@/lib/audit/log";
+
+const updateSchema = z.object({
+  title: z.string().min(2).max(120).optional(),
+  description: z.string().max(500).nullable().optional(),
+});
 
 export async function GET(
   _request: NextRequest,
@@ -30,6 +36,7 @@ export async function GET(
     data: {
       id: media.id,
       title: media.title,
+      description: media.description,
       url: media.url,
       fileName: media.fileName,
       mimeType: media.mimeType,
@@ -39,6 +46,79 @@ export async function GET(
       height: media.height,
       createdAt: media.createdAt,
       createdBy: media.createdBy,
+    },
+  });
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: { mediaId: string } }
+) {
+  let ownership;
+  try {
+    ownership = await assertMediaOwnership(params.mediaId);
+  } catch (error) {
+    if (error instanceof Error && error.message === "NotFound") {
+      return NextResponse.json({ error: "Media tidak ditemukan" }, { status: 404 });
+    }
+    return NextResponse.json({ error: "Tidak diizinkan" }, { status: 403 });
+  }
+
+  const payload = await request.json().catch(() => null);
+  const parsed = updateSchema.safeParse(payload);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message ?? "Data tidak valid" },
+      { status: 422 }
+    );
+  }
+
+  const updateData: {
+    title?: string;
+    description?: string | null;
+  } = {};
+
+  if (parsed.data.title !== undefined) {
+    updateData.title = parsed.data.title;
+  }
+  if (parsed.data.description !== undefined) {
+    updateData.description = parsed.data.description ?? null;
+  }
+
+  if (Object.keys(updateData).length === 0) {
+    return NextResponse.json({ message: "Tidak ada perubahan" });
+  }
+
+  const updated = await prisma.media.update({
+    where: { id: params.mediaId },
+    data: updateData,
+    include: {
+      createdBy: { select: { id: true, name: true, email: true } },
+    },
+  });
+
+  await writeAuditLog({
+    action: "MEDIA_UPDATE",
+    entity: "Media",
+    entityId: updated.id,
+    metadata: { title: updated.title },
+    userId: ownership.session.user.id,
+  });
+
+  return NextResponse.json({
+    data: {
+      id: updated.id,
+      title: updated.title,
+      description: updated.description,
+      url: updated.url,
+      fileName: updated.fileName,
+      mimeType: updated.mimeType,
+      size: updated.size,
+      storageType: updated.storageType,
+      width: updated.width,
+      height: updated.height,
+      createdAt: updated.createdAt,
+      createdBy: updated.createdBy,
     },
   });
 }

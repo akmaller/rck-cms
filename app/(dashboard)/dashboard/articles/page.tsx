@@ -9,29 +9,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { ArticleForm } from "@/components/forms/article-form";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
 export default async function DashboardArticlesPage() {
-  const [articles, media] = await Promise.all([
-    prisma.article.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        author: { select: { id: true, name: true, email: true } },
-        categories: { include: { category: true } },
-        tags: { include: { tag: true } },
-      },
-    }),
-    prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
-  ]);
-
-  const mediaItems = media.map((item) => ({
-    id: item.id,
-    title: item.title,
-    url: item.url,
-    mimeType: item.mimeType,
-    size: item.size,
-    createdAt: item.createdAt.toISOString(),
-  }));
+  const articles = await prisma.article.findMany({
+    orderBy: { createdAt: "desc" },
+    include: {
+      author: { select: { id: true, name: true, email: true } },
+      categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
+      tags: { include: { tag: true } },
+    },
+  });
 
   const primaryBtn =
     "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -42,18 +30,16 @@ export default async function DashboardArticlesPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Artikel</h1>
-          <p className="text-sm text-muted-foreground">
-            Kelola artikel, status publikasi, dan media unggulan.
-          </p>
-        </div>
+      <DashboardHeading
+        heading="Artikel"
+        description="Kelola artikel, status publikasi, dan media unggulan."
+      />
+      <div className="flex justify-end">
         <Link className={primaryBtn} href="/dashboard/articles/new">
           + Artikel Baru
         </Link>
       </div>
-      <section className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
+      <section className="grid gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Daftar Artikel</CardTitle>
@@ -96,7 +82,6 @@ export default async function DashboardArticlesPage() {
             ) : null}
           </CardContent>
         </Card>
-        <ArticleForm mediaItems={mediaItems} />
       </section>
     </div>
   );
