@@ -4,8 +4,8 @@ import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-import { siteConfig } from "@/config/site";
 import { cn } from "@/lib/utils";
+import { getSiteConfig } from "@/lib/site-config/server";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -17,38 +17,46 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteConfig.url),
-  title: {
-    default: siteConfig.name,
-    template: `%s | ${siteConfig.name}`,
-  },
-  description: siteConfig.description,
-  openGraph: {
-    title: siteConfig.name,
-    description: siteConfig.description,
-    url: siteConfig.url,
-    siteName: siteConfig.name,
-    locale: "id_ID",
-    type: "website",
-    images: [
-      {
-        url: siteConfig.ogImage,
-        width: 1200,
-        height: 630,
-        alt: siteConfig.name,
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: siteConfig.name,
-    description: siteConfig.description,
-    images: [siteConfig.ogImage],
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getSiteConfig();
+  const title = config.metadata.title ?? config.name;
+  const description = config.metadata.description ?? config.description;
+  const ogImage = config.ogImage ?? config.logoUrl ?? "/og.jpg";
 
-export default function RootLayout({ children }: { children: ReactNode }) {
+  return {
+    metadataBase: new URL(config.url),
+    title: {
+      default: title,
+      template: `%s | ${config.name}`,
+    },
+    description,
+    icons: config.logoUrl ? { icon: config.logoUrl } : undefined,
+    openGraph: {
+      title,
+      description,
+      url: config.url,
+      siteName: config.name,
+      locale: "id_ID",
+      type: "website",
+      images: [
+        {
+          url: ogImage,
+          width: 1200,
+          height: 630,
+          alt: config.name,
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [ogImage],
+    },
+  };
+}
+
+export default async function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="id" suppressHydrationWarning>
       <body

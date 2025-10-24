@@ -281,8 +281,8 @@ export function FeaturedImagePicker({
 
       {isOpen ? (
         <Modal onClose={handleClose}>
-          <div className="flex h-[90vh] w-[95vw] max-w-5xl flex-col overflow-hidden rounded-xl bg-background shadow-2xl">
-            <div className="flex items-center justify-between border-b border-border px-6 py-4">
+          <div className="flex w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-background shadow-2xl max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-4rem)]">
+            <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold">Media Library</h2>
                 <p className="text-xs text-muted-foreground">
@@ -293,119 +293,121 @@ export function FeaturedImagePicker({
                 Tutup
               </Button>
             </div>
-            <div className="flex min-h-0 flex-1 divide-x divide-border">
-              <div className="flex-1 overflow-hidden">
-                <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={`mx-6 mt-4 flex min-h-[140px] flex-col items-center justify-center rounded border-2 border-dashed px-6 py-8 text-center text-sm transition ${
-                    isDragging ? "border-primary bg-primary/10" : "border-border/60"
-                  }`}
-                >
-                  <p className="font-medium text-foreground">Tarik & Letakkan gambar di sini</p>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    atau
-                  </p>
-                  <Button type="button" variant="secondary" className="mt-3" onClick={handleUploadClick} disabled={uploading}>
-                    {uploading ? "Mengunggah..." : "Unggah dari komputer"}
-                  </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const { files } = event.target;
-                      if (files && files.length > 0) {
-                        void handleFilesUpload(files);
-                      }
-                    }}
-                  />
-                  {uploadError ? <p className="mt-3 text-xs text-destructive">{uploadError}</p> : null}
-                </div>
-                <div className="flex-1 overflow-y-auto px-6 py-4">
-                  {loading ? (
-                    <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                      Memuat...
-                    </div>
-                  ) : listError ? (
-                    <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-destructive">
-                      <p>{listError}</p>
-                      <Button type="button" variant="outline" size="sm" onClick={() => fetchPage(page)}>
-                        Coba lagi
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row md:divide-x md:divide-border">
+              <div className="flex-1 min-h-0">
+                <div className="flex h-full min-h-0 flex-col">
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`mx-6 mt-4 flex min-h-[140px] flex-col items-center justify-center rounded border-2 border-dashed px-6 py-8 text-center text-sm transition ${
+                      isDragging ? "border-primary bg-primary/10" : "border-border/60"
+                    }`}
+                  >
+                    <p className="font-medium text-foreground">Tarik & Letakkan gambar di sini</p>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      atau
+                    </p>
+                    <Button type="button" variant="secondary" className="mt-3" onClick={handleUploadClick} disabled={uploading}>
+                      {uploading ? "Mengunggah..." : "Unggah dari komputer"}
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const { files } = event.target;
+                        if (files && files.length > 0) {
+                          void handleFilesUpload(files);
+                        }
+                      }}
+                    />
+                    {uploadError ? <p className="mt-3 text-xs text-destructive">{uploadError}</p> : null}
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4">
+                    {loading ? (
+                      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+                        Memuat...
+                      </div>
+                    ) : listError ? (
+                      <div className="flex h-40 flex-col items-center justify-center gap-2 text-sm text-destructive">
+                        <p>{listError}</p>
+                        <Button type="button" variant="outline" size="sm" onClick={() => fetchPage(page)}>
+                          Coba lagi
+                        </Button>
+                      </div>
+                    ) : items.length === 0 ? (
+                      <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
+                        Belum ada media yang diunggah.
+                      </div>
+                    ) : (
+                      <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                        {items.map((item) => (
+                          <button
+                            type="button"
+                            key={item.id}
+                            onClick={() => handleSelectionChange(item)}
+                            className={`flex flex-col overflow-hidden rounded-md border text-left transition hover:border-primary/60 ${
+                              selectedMedia?.id === item.id ? "border-primary ring-2 ring-primary/40" : "border-border/60"
+                            }`}
+                          >
+                            {item.mimeType.startsWith("image/") ? (
+                              <Image
+                                src={item.url}
+                                alt={item.title}
+                                width={320}
+                                height={200}
+                                className="h-40 w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-40 w-full items-center justify-center bg-muted/40 text-xs text-muted-foreground">
+                                {item.mimeType}
+                              </div>
+                            )}
+                            <div className="space-y-1 px-3 py-2">
+                              <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
+                              <p className="line-clamp-2 text-xs text-muted-foreground">
+                                {item.description ?? "Tidak ada deskripsi"}
+                              </p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {new Date(item.createdAt as string).toLocaleString("id-ID")}
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex shrink-0 items-center justify-between border-t border-border px-6 py-3 text-xs text-muted-foreground">
+                    <span>
+                      Halaman {page} dari {totalPages}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={page <= 1 || loading}
+                        onClick={() => fetchPage(page - 1)}
+                      >
+                        Sebelumnya
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={page >= totalPages || loading}
+                        onClick={() => fetchPage(page + 1)}
+                      >
+                        Berikutnya
                       </Button>
                     </div>
-                  ) : items.length === 0 ? (
-                    <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
-                      Belum ada media yang diunggah.
-                    </div>
-                  ) : (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {items.map((item) => (
-                        <button
-                          type="button"
-                          key={item.id}
-                          onClick={() => handleSelectionChange(item)}
-                          className={`flex flex-col overflow-hidden rounded-md border text-left transition hover:border-primary/60 ${
-                            selectedMedia?.id === item.id ? "border-primary ring-2 ring-primary/40" : "border-border/60"
-                          }`}
-                        >
-                          {item.mimeType.startsWith("image/") ? (
-                            <Image
-                              src={item.url}
-                              alt={item.title}
-                              width={320}
-                              height={200}
-                              className="h-40 w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-40 w-full items-center justify-center bg-muted/40 text-xs text-muted-foreground">
-                              {item.mimeType}
-                            </div>
-                          )}
-                          <div className="space-y-1 px-3 py-2">
-                            <p className="truncate text-sm font-medium text-foreground">{item.title}</p>
-                            <p className="line-clamp-2 text-xs text-muted-foreground">
-                              {item.description ?? "Tidak ada deskripsi"}
-                            </p>
-                            <p className="text-[11px] text-muted-foreground">
-                              {new Date(item.createdAt as string).toLocaleString("id-ID")}
-                            </p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center justify-between border-t border-border px-6 py-3 text-xs text-muted-foreground">
-                  <span>
-                    Halaman {page} dari {totalPages}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={page <= 1 || loading}
-                      onClick={() => fetchPage(page - 1)}
-                    >
-                      Sebelumnya
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={page >= totalPages || loading}
-                      onClick={() => fetchPage(page + 1)}
-                    >
-                      Berikutnya
-                    </Button>
                   </div>
                 </div>
               </div>
-              <div className="flex w-full max-w-sm flex-col justify-between border-l border-border bg-muted/10">
-                <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="flex w-full min-h-0 flex-col justify-between border-t border-border bg-muted/10 md:max-w-sm md:border-t-0 md:border-l">
+                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4">
                   {selectedMedia ? (
                     <div className="space-y-4">
                       <div>
@@ -457,7 +459,7 @@ export function FeaturedImagePicker({
                     </div>
                   )}
                 </div>
-                <div className="flex items-center justify-between border-t border-border px-6 py-3">
+                <div className="flex shrink-0 items-center justify-between border-t border-border px-6 py-3">
                   <Button
                     type="button"
                     variant="outline"
@@ -506,13 +508,15 @@ function Modal({ children, onClose }: ModalProps) {
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-10">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/60 p-4 sm:p-8">
       <div
         className="absolute inset-0"
         onClick={onClose}
         aria-hidden
       />
-      <div className="relative z-10 w-full max-w-6xl">{children}</div>
+      <div className="relative z-10 w-full max-w-6xl max-h-full" role="dialog" aria-modal="true">
+        {children}
+      </div>
     </div>,
     document.body
   );

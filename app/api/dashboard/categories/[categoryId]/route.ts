@@ -13,12 +13,13 @@ const MUTATION_LIMIT = 30;
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { categoryId: string } }
+  context: { params: Promise<{ categoryId: string }> }
 ) {
+  const { categoryId } = await context.params;
   await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
 
   const category = await prisma.category.findUnique({
-    where: { id: params.categoryId },
+    where: { id: categoryId },
     include: {
       _count: {
         select: {
@@ -47,8 +48,9 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { categoryId: string } }
+  context: { params: Promise<{ categoryId: string }> }
 ) {
+  const { categoryId } = await context.params;
   const session = await assertRole(["EDITOR", "ADMIN"]);
   const rateKey = `category_mutation:${session.user.id}`;
 
@@ -69,7 +71,7 @@ export async function PATCH(
     );
   }
 
-  const existing = await prisma.category.findUnique({ where: { id: params.categoryId } });
+  const existing = await prisma.category.findUnique({ where: { id: categoryId } });
   if (!existing) {
     return NextResponse.json({ error: "Kategori tidak ditemukan" }, { status: 404 });
   }
@@ -137,8 +139,9 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { categoryId: string } }
+  context: { params: Promise<{ categoryId: string }> }
 ) {
+  const { categoryId } = await context.params;
   const session = await assertRole(["EDITOR", "ADMIN"]);
   const rateKey = `category_mutation:${session.user.id}`;
 
@@ -150,7 +153,7 @@ export async function DELETE(
   }
 
   try {
-    await prisma.category.delete({ where: { id: params.categoryId } });
+    await prisma.category.delete({ where: { id: categoryId } });
   } catch {
     return NextResponse.json({ error: "Kategori tidak ditemukan" }, { status: 404 });
   }
@@ -158,7 +161,7 @@ export async function DELETE(
   await writeAuditLog({
     action: "CATEGORY_DELETE",
     entity: "Category",
-    entityId: params.categoryId,
+    entityId: categoryId,
   });
 
   revalidateTag("content");

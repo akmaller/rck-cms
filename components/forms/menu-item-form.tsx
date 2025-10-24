@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { notifyError, notifySuccess } from "@/lib/notifications/client";
 
 type ParentOption = {
   id: string;
@@ -39,16 +40,19 @@ export function MenuItemForm({ menu, parents, pages }: MenuItemFormProps) {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const form = new FormData(event.currentTarget);
+          const formElement = event.currentTarget;
+          const form = new FormData(formElement);
           form.set("menu", menu);
           startTransition(async () => {
             const result = await createMenuItem(form);
             if (result?.error) {
               setState({ error: result.error });
+              notifyError(result.error);
               return;
             }
-            event.currentTarget.reset();
+            formElement.reset();
             setState({ success: true });
+            notifySuccess("Item menu ditambahkan.");
             router.refresh();
           });
         }}

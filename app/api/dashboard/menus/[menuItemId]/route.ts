@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
@@ -25,11 +26,12 @@ function serialize(item: Awaited<ReturnType<typeof prisma.menuItem.findUnique>>)
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { menuItemId: string } }
+  context: { params: Promise<{ menuItemId: string }> }
 ) {
+  const { menuItemId } = await context.params;
   await assertRole("ADMIN");
 
-  const item = await prisma.menuItem.findUnique({ where: { id: params.menuItemId } });
+  const item = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
   if (!item) {
     return NextResponse.json({ error: "Menu item tidak ditemukan" }, { status: 404 });
   }
@@ -39,8 +41,9 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { menuItemId: string } }
+  context: { params: Promise<{ menuItemId: string }> }
 ) {
+  const { menuItemId } = await context.params;
   await assertRole("ADMIN");
 
   const payload = await request.json().catch(() => null);
@@ -52,7 +55,7 @@ export async function PATCH(
     );
   }
 
-  const existing = await prisma.menuItem.findUnique({ where: { id: params.menuItemId } });
+  const existing = await prisma.menuItem.findUnique({ where: { id: menuItemId } });
   if (!existing) {
     return NextResponse.json({ error: "Menu item tidak ditemukan" }, { status: 404 });
   }
@@ -75,9 +78,24 @@ export async function PATCH(
     where: { id: existing.id },
     data: {
       title: parsed.data.title ?? existing.title,
-      slug: parsed.data.slug ?? existing.slug,
-      url: parsed.data.url ?? existing.url,
-      icon: parsed.data.icon ?? existing.icon,
+      slug:
+        parsed.data.slug !== undefined
+          ? parsed.data.slug.trim().length > 0
+            ? parsed.data.slug.trim()
+            : null
+          : existing.slug,
+      url:
+        parsed.data.url !== undefined
+          ? parsed.data.url.trim().length > 0
+            ? parsed.data.url.trim()
+            : null
+          : existing.url,
+      icon:
+        parsed.data.icon !== undefined
+          ? parsed.data.icon.trim().length > 0
+            ? parsed.data.icon.trim()
+            : null
+          : existing.icon,
       order: parsed.data.order ?? existing.order,
       parentId: parsed.data.parentId ?? existing.parentId,
       pageId: parsed.data.pageId ?? existing.pageId,
@@ -93,19 +111,25 @@ export async function PATCH(
     metadata: { title: updated.title, menu: updated.menu },
   });
 
+  revalidatePath("/");
+  revalidatePath("/dashboard/menus");
+  revalidatePath(`/dashboard/menus?menu=${existing.menu}`);
+  revalidatePath("/dashboard");
+
   return NextResponse.json({ data: serialize(updated) });
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { menuItemId: string } }
+  context: { params: Promise<{ menuItemId: string }> }
 ) {
+  const { menuItemId } = await context.params;
   await assertRole("ADMIN");
 
   try {
     await prisma.$transaction([
-      prisma.menuItem.deleteMany({ where: { parentId: params.menuItemId } }),
-      prisma.menuItem.delete({ where: { id: params.menuItemId } }),
+      prisma.menuItem.deleteMany({ where: { parentId: menuItemId } }),
+      prisma.menuItem.delete({ where: { id: menuItemId } }),
     ]);
   } catch {
     return NextResponse.json({ error: "Menu item tidak ditemukan" }, { status: 404 });
@@ -114,8 +138,12 @@ export async function DELETE(
   await writeAuditLog({
     action: "MENU_ITEM_DELETE",
     entity: "MenuItem",
-    entityId: params.menuItemId,
+    entityId: menuItemId,
   });
+
+  revalidatePath("/");
+  revalidatePath("/dashboard/menus");
+  revalidatePath("/dashboard");
 
   return NextResponse.json({ message: "Menu item dihapus" });
 }

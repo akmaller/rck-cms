@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { ArticleStatus } from "@prisma/client";
 
-import { siteConfig } from "@/config/site";
 import { prisma } from "@/lib/prisma";
-
-const BASE_URL = siteConfig.url.replace(/\/$/, "");
+import { getSiteConfig } from "@/lib/site-config/server";
 
 export const revalidate = 900;
 
@@ -13,6 +11,8 @@ function escapeCdata(value: string) {
 }
 
 export async function GET() {
+  const config = await getSiteConfig();
+  const BASE_URL = config.url.replace(/\/$/, "");
   const articles = await prisma.article.findMany({
     where: { status: ArticleStatus.PUBLISHED },
     select: {
@@ -50,9 +50,9 @@ export async function GET() {
   const feed = `<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0">
   <channel>
-    <title><![CDATA[${escapeCdata(siteConfig.name)}]]></title>
+    <title><![CDATA[${escapeCdata(config.metadata.title ?? config.name)}]]></title>
     <link>${BASE_URL}/</link>
-    <description><![CDATA[${escapeCdata(siteConfig.description)}]]></description>
+    <description><![CDATA[${escapeCdata(config.metadata.description ?? config.description)}]]></description>
     <language>id-ID</language>
     <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
     ${itemsXml}
@@ -67,4 +67,3 @@ export async function GET() {
     },
   });
 }
-

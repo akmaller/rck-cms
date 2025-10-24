@@ -3,7 +3,7 @@
 import { ArticleStatus, Prisma } from "@prisma/client";
 import { z } from "zod";
 
-import { assertRole } from "@/lib/auth/permissions";
+import { assertRole, assertArticleOwnership } from "@/lib/auth/permissions";
 import { hashPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils/slug";
@@ -171,6 +171,11 @@ export async function createArticle(formData: FormData) {
       return { error: parsed.error.issues[0]?.message ?? "Data tidak valid" };
     }
 
+    const intentRaw = formData.get("intent");
+    const intent = typeof intentRaw === "string" && intentRaw === "publish" ? "publish" : "draft";
+    const targetStatus = intent === "publish" ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
+    const targetPublishedAt = targetStatus === ArticleStatus.PUBLISHED ? new Date() : null;
+
     const tagNames = normalizeTagNames(formData.get("tags"));
     const categoryNames = normalizeCategoryNames(formData.get("categories"));
     const uniqueSlug = await ensureUniqueArticleSlug(parsed.data.slug ?? parsed.data.title);
@@ -196,7 +201,8 @@ export async function createArticle(formData: FormData) {
           slug: uniqueSlug,
           excerpt: generatedExcerpt,
           content: parsed.data.content as Prisma.InputJsonValue,
-          status: ArticleStatus.DRAFT,
+          status: targetStatus,
+          publishedAt: targetPublishedAt,
           authorId: session.user.id,
           featuredMediaId: parsed.data.featuredMediaId ?? null,
         },
@@ -229,7 +235,11 @@ export async function createArticle(formData: FormData) {
       action: "ARTICLE_CREATE",
       entity: "Article",
       entityId: article.id,
-      metadata: { title: parsed.data.title, featuredMediaId: parsed.data.featuredMediaId ?? null },
+      metadata: {
+        title: parsed.data.title,
+        featuredMediaId: parsed.data.featuredMediaId ?? null,
+        status: targetStatus,
+      },
     });
 
     revalidateTag("content");
@@ -533,11 +543,20 @@ export async function updateSiteConfig(formData: FormData) {
     const siteName = sanitize(formData.get("siteName"));
     if (siteName !== undefined) data.siteName = siteName;
 
+    const siteUrl = sanitize(formData.get("siteUrl"));
+    if (siteUrl !== undefined) data.siteUrl = siteUrl;
+
     const logoUrl = sanitize(formData.get("logoUrl"));
     if (logoUrl !== undefined) data.logoUrl = logoUrl;
 
+    const iconUrl = sanitize(formData.get("iconUrl"));
+    if (iconUrl !== undefined) data.iconUrl = iconUrl;
+
     const tagline = sanitize(formData.get("tagline"));
     if (tagline !== undefined) data.tagline = tagline;
+
+    const timezone = sanitize(formData.get("timezone"));
+    if (timezone !== undefined) data.timezone = timezone;
 
     const contactEmail = sanitize(formData.get("contactEmail"));
     if (contactEmail !== undefined) data.contactEmail = contactEmail;
@@ -567,6 +586,12 @@ export async function updateSiteConfig(formData: FormData) {
       data.metadata = metadataValues;
     }
 
+    const cacheValues = formData.getAll("cacheEnabled").map(String);
+    if (cacheValues.length > 0) {
+      const enabled = cacheValues.includes("true") || cacheValues.includes("on");
+      data.cache = { enabled };
+    }
+
     const parsed = siteConfigSchema.safeParse(data);
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? "Data konfigurasi tidak valid" };
@@ -585,6 +610,15 @@ export async function updateSiteConfig(formData: FormData) {
       metadata: parsed.data,
     });
 
+    revalidateTag("site-config");
+    revalidatePath("/");
+    revalidatePath("/articles");
+    revalidatePath("/dashboard");
+    revalidatePath("/login");
+    revalidatePath("/login/2fa");
+    revalidatePath("/sitemap.xml");
+    revalidatePath("/rss.xml");
+    revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/settings/general");
     return { success: true };
   } catch (error) {
@@ -612,6 +646,11 @@ export async function createPage(formData: FormData) {
       typeof rawFeaturedMediaId === "string" && rawFeaturedMediaId.trim() && rawFeaturedMediaId !== "__REMOVE__"
         ? rawFeaturedMediaId
         : undefined;
+
+    const intentRaw = formData.get("intent");
+    const intent = typeof intentRaw === "string" && intentRaw === "publish" ? "publish" : "draft";
+    const targetStatus = intent === "publish" ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
+    const targetPublishedAt = targetStatus === ArticleStatus.PUBLISHED ? new Date() : null;
 
     const parsed = pageCreateSchema.safeParse({
       title: formData.get("title"),
@@ -641,7 +680,8 @@ export async function createPage(formData: FormData) {
         slug: candidate,
         excerpt: parsed.data.excerpt,
         content: parsed.data.content as Prisma.InputJsonValue,
-        status: ArticleStatus.DRAFT,
+        status: targetStatus,
+        publishedAt: targetPublishedAt,
         author: { connect: { id: session.user.id } },
         featuredMedia: featuredMediaId
           ? { connect: { id: featuredMediaId } }
@@ -653,7 +693,11 @@ export async function createPage(formData: FormData) {
       action: "PAGE_CREATE",
       entity: "Page",
       entityId: page.id,
-      metadata: { title: parsed.data.title, featuredMediaId: parsed.data.featuredMediaId ?? null },
+      metadata: {
+        title: parsed.data.title,
+        featuredMediaId: parsed.data.featuredMediaId ?? null,
+        status: targetStatus,
+      },
     });
 
     revalidateTag("content");
@@ -702,6 +746,12 @@ export async function updatePage(formData: FormData) {
         ? rawFeaturedMediaId
         : undefined;
 
+    const intentRaw = formData.get("intent");
+    const intent = typeof intentRaw === "string" && intentRaw === "publish" ? "publish" : "draft";
+    const targetStatus = intent === "publish" ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
+    const targetPublishedAt =
+      targetStatus === ArticleStatus.PUBLISHED ? existing.publishedAt ?? new Date() : null;
+
     const updatePayload = pageUpdateSchema.safeParse({
       title: formData.get("title") || undefined,
       slug: (formData.get("slug") || undefined) as string | undefined,
@@ -721,8 +771,8 @@ export async function updatePage(formData: FormData) {
     if (data.slug) updates.slug = data.slug;
     if (data.excerpt !== undefined) updates.excerpt = data.excerpt ?? null;
     if (data.content) updates.content = data.content as Prisma.InputJsonValue;
-    if (data.status) updates.status = data.status;
-    if (data.publishedAt !== undefined) updates.publishedAt = data.publishedAt ?? null;
+    updates.status = targetStatus;
+    updates.publishedAt = targetPublishedAt;
     if (featuredMediaId !== undefined) {
       updates.featuredMedia = { connect: { id: featuredMediaId } };
     } else if (shouldDisconnectFeaturedMedia) {
@@ -742,7 +792,11 @@ export async function updatePage(formData: FormData) {
       action: "PAGE_UPDATE",
       entity: "Page",
       entityId: pageId,
-      metadata: { title: page.title, featuredMediaId: page.featuredMediaId ?? null },
+      metadata: {
+        title: page.title,
+        featuredMediaId: page.featuredMediaId ?? null,
+        status: targetStatus,
+      },
     });
 
     revalidateTag("content");
@@ -777,7 +831,7 @@ export async function updateArticle(formData: FormData) {
 
     const article = await prisma.article.findUnique({
       where: { id: parsed.data.articleId },
-      select: { id: true, authorId: true, slug: true, title: true, excerpt: true },
+      select: { id: true, authorId: true, slug: true, title: true, excerpt: true, publishedAt: true },
     });
 
     if (!article) {
@@ -787,6 +841,12 @@ export async function updateArticle(formData: FormData) {
     if (session.user.role === "AUTHOR" && article.authorId !== session.user.id) {
       return { error: "Tidak diizinkan mengubah artikel ini" };
     }
+
+    const intentRaw = formData.get("intent");
+    const intent = typeof intentRaw === "string" && intentRaw === "publish" ? "publish" : "draft";
+    const targetStatus = intent === "publish" ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
+    const nextPublishedAt =
+      targetStatus === ArticleStatus.PUBLISHED ? article.publishedAt ?? new Date() : null;
 
     const tagNames = normalizeTagNames(formData.get("tags"));
     const categoryNames = normalizeCategoryNames(formData.get("categories"));
@@ -810,6 +870,8 @@ export async function updateArticle(formData: FormData) {
             ? { connect: { id: parsed.data.featuredMediaId } }
             : { disconnect: true }
           : undefined,
+      status: targetStatus,
+      publishedAt: nextPublishedAt,
     };
 
     await prisma.$transaction(async (tx) => {
@@ -857,7 +919,11 @@ export async function updateArticle(formData: FormData) {
       action: "ARTICLE_UPDATE",
       entity: "Article",
       entityId: parsed.data.articleId,
-      metadata: { title: parsed.data.title, featuredMediaId: parsed.data.featuredMediaId ?? null },
+      metadata: {
+        title: parsed.data.title,
+        featuredMediaId: parsed.data.featuredMediaId ?? null,
+        status: targetStatus,
+      },
     });
 
     revalidatePath(`/dashboard/articles/${parsed.data.articleId}/edit`);
@@ -866,5 +932,40 @@ export async function updateArticle(formData: FormData) {
   } catch (error) {
     console.error(error);
     return { error: "Gagal memperbarui artikel" };
+  }
+}
+
+export async function deleteArticle(articleId: string) {
+  try {
+    await assertArticleOwnership(articleId);
+
+    const article = await prisma.article.findUnique({
+      where: { id: articleId },
+      select: { id: true, slug: true, title: true },
+    });
+
+    if (!article) {
+      return { error: "Artikel tidak ditemukan" };
+    }
+
+    await prisma.article.delete({ where: { id: articleId } });
+
+    await writeAuditLog({
+      action: "ARTICLE_DELETE",
+      entity: "Article",
+      entityId: articleId,
+      metadata: { title: article.title },
+    });
+
+    revalidateTag("content");
+    revalidatePath("/dashboard/articles");
+    if (article.slug) {
+      revalidatePath(`/articles/${article.slug}`);
+    }
+
+    return { success: true };
+  } catch (error) {
+    console.error(error);
+    return { error: "Gagal menghapus artikel" };
   }
 }

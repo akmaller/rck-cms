@@ -3,13 +3,19 @@ import { notFound } from "next/navigation";
 
 import { prisma } from "@/lib/prisma";
 import { PageForm } from "@/components/forms/page-form";
-import { updatePage } from "@/components/forms/actions";
 import { buttonVariants } from "@/lib/button-variants";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { DeletePageButton } from "../../_components/delete-page-button";
 
-export default async function EditPage({ params }: { params: { pageId: string } }) {
+type EditPageProps = {
+  params: Promise<{ pageId: string }>;
+};
+
+export default async function EditPage({ params }: EditPageProps) {
+  const { pageId } = await params;
   const [page, media] = await Promise.all([
     prisma.page.findUnique({
-      where: { id: params.pageId },
+      where: { id: pageId },
       include: { featuredMedia: true },
     }),
     prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
@@ -62,13 +68,25 @@ export default async function EditPage({ params }: { params: { pageId: string } 
           content: (page.content as Record<string, unknown>) ?? undefined,
           featuredMediaId: page.featuredMediaId ?? null,
         }}
-        submitLabel="Perbarui Halaman"
-        onSubmit={async (formData) => {
-          formData.set("pageId", page.id);
-          return updatePage(formData);
-        }}
+        submitLabel="Simpan Draft"
+        publishLabel="Publikasikan"
         redirectTo="/dashboard/pages"
       />
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle>Hapus Halaman</CardTitle>
+          <CardDescription>
+            Menghapus halaman akan menghilangkan konten dari situs publik. Tindakan ini tidak dapat
+            dibatalkan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Pastikan Anda sudah membuat cadangan jika diperlukan sebelum menghapus.
+          </p>
+          <DeletePageButton pageId={page.id} pageTitle={page.title} redirectTo="/dashboard/pages" />
+        </CardContent>
+      </Card>
     </div>
   );
 }

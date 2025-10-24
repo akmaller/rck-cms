@@ -6,19 +6,23 @@ export type ArticleEditorShellProps = {
   backHref?: string;
   mediaItems: MediaItem[];
   initialValues?: Parameters<typeof ArticleForm>[0]["initialValues"];
-  submitLabel?: string;
+  draftLabel?: string;
+  publishLabel?: string;
   redirectTo?: string;
   allTags: string[];
   allCategories: string[];
+  currentRole: Parameters<typeof ArticleForm>[0]["currentRole"];
 };
 
 export function ArticleEditorShell({
   mediaItems,
   initialValues,
-  submitLabel,
+  draftLabel,
+  publishLabel,
   redirectTo,
   allTags,
   allCategories,
+  currentRole,
 }: ArticleEditorShellProps) {
   return (
     <div className="space-y-6">
@@ -26,10 +30,12 @@ export function ArticleEditorShell({
         key={initialValues?.id ?? "new-article"}
         mediaItems={mediaItems}
         initialValues={initialValues}
-        submitLabel={submitLabel}
+        draftLabel={draftLabel}
+        publishLabel={publishLabel}
         redirectTo={redirectTo}
         allTags={allTags}
         allCategories={allCategories}
+        currentRole={currentRole}
       />
     </div>
   );

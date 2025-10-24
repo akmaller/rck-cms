@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 import { createUser } from "./actions";
+import { notifyError, notifySuccess } from "@/lib/notifications/client";
 
 export function UserForm() {
   const [state, setState] = useState<{ error?: string; success?: boolean }>({});
@@ -22,15 +23,18 @@ export function UserForm() {
       <form
         onSubmit={(event) => {
           event.preventDefault();
-          const form = new FormData(event.currentTarget);
+          const formElement = event.currentTarget;
+          const form = new FormData(formElement);
           startTransition(async () => {
             const result = await createUser(form);
             if (result?.error) {
               setState({ error: result.error });
+              notifyError(result.error);
               return;
             }
-            event.currentTarget.reset();
+            formElement.reset();
             setState({ success: true });
+            notifySuccess("Pengguna baru berhasil ditambahkan.");
           });
         }}
       >

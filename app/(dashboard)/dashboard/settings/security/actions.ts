@@ -14,13 +14,14 @@ export async function startTwoFactorSetup() {
 
   const { secret, uri } = generateTwoFactorSecret(session.user.email ?? userId);
 
-  await prisma.twoFactorToken.deleteMany({ where: { userId } });
+  await prisma.twoFactorToken.deleteMany({ where: { userId, purpose: "SETUP" } });
 
   await prisma.twoFactorToken.create({
     data: {
       userId,
       token: secret,
       expiresAt: new Date(Date.now() + SETUP_EXPIRATION_MINUTES * 60 * 1000),
+      purpose: "SETUP",
     },
   });
 
@@ -32,7 +33,7 @@ export async function confirmTwoFactorSetup(code: string) {
   const userId = session.user.id;
 
   const pendingSetup = await prisma.twoFactorToken.findFirst({
-    where: { userId },
+    where: { userId, purpose: "SETUP" },
     orderBy: { createdAt: "desc" },
   });
 
@@ -64,6 +65,7 @@ export async function confirmTwoFactorSetup(code: string) {
   ]);
 
   revalidatePath("/dashboard/settings/security");
+  revalidatePath("/dashboard/profile");
   return { success: true, message: "Autentikasi dua faktor diaktifkan." };
 }
 
@@ -81,5 +83,6 @@ export async function disableTwoFactor() {
   ]);
 
   revalidatePath("/dashboard/settings/security");
+  revalidatePath("/dashboard/profile");
   return { success: true, message: "Autentikasi dua faktor dinonaktifkan." };
 }

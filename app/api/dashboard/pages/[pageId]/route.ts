@@ -35,12 +35,13 @@ function serialize(page: PageDetail | null) {
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { pageId: string } }
+  context: { params: Promise<{ pageId: string }> }
 ) {
+  const { pageId } = await context.params;
   const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
 
   const page = await prisma.page.findUnique({
-    where: { id: params.pageId },
+    where: { id: pageId },
     include: {
       author: { select: { id: true, name: true, email: true } },
       featuredMedia: true,
@@ -60,8 +61,9 @@ export async function GET(
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { pageId: string } }
+  context: { params: Promise<{ pageId: string }> }
 ) {
+  const { pageId } = await context.params;
   const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
 
   const payload = await request.json().catch(() => null);
@@ -73,7 +75,7 @@ export async function PATCH(
     );
   }
 
-  const page = await prisma.page.findUnique({ where: { id: params.pageId } });
+  const page = await prisma.page.findUnique({ where: { id: pageId } });
   if (!page) {
     return NextResponse.json({ error: "Halaman tidak ditemukan" }, { status: 404 });
   }
@@ -150,14 +152,15 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { pageId: string } }
+  context: { params: Promise<{ pageId: string }> }
 ) {
+  const { pageId } = await context.params;
   await assertRole(["EDITOR", "ADMIN"]);
 
   try {
     await prisma.$transaction([
-      prisma.menuItem.updateMany({ where: { pageId: params.pageId }, data: { pageId: null } }),
-      prisma.page.delete({ where: { id: params.pageId } }),
+      prisma.menuItem.updateMany({ where: { pageId }, data: { pageId: null } }),
+      prisma.page.delete({ where: { id: pageId } }),
     ]);
   } catch {
     return NextResponse.json({ error: "Halaman tidak ditemukan" }, { status: 404 });
@@ -166,7 +169,7 @@ export async function DELETE(
   await writeAuditLog({
     action: "PAGE_DELETE",
     entity: "Page",
-    entityId: params.pageId,
+    entityId: pageId,
   });
 
   revalidateTag("content");

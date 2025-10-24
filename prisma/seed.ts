@@ -41,10 +41,18 @@ async function main() {
     update: {
       value: {
         logoUrl: "/logo.svg",
+        iconUrl: "/favicon.ico",
         tagline: "Merawat cita lokal, satu cerita dalam satu waktu",
+        siteName: "Roemah Cita CMS",
+        contactEmail: "admin@roemahcita.local",
         social: {
           facebook: "https://facebook.com/roemahcita",
           instagram: "https://instagram.com/roemahcita",
+        },
+        metadata: {
+          title: "Roemah Cita CMS",
+          description: "Content management system untuk mengelola artikel dan media Roemah Cita.",
+          keywords: ["roemah cita", "cms", "konten"],
         },
       },
     },
@@ -52,10 +60,18 @@ async function main() {
       key: "general",
       value: {
         logoUrl: "/logo.svg",
+        iconUrl: "/favicon.ico",
         tagline: "Merawat cita lokal, satu cerita dalam satu waktu",
+        siteName: "Roemah Cita CMS",
+        contactEmail: "admin@roemahcita.local",
         social: {
           facebook: "https://facebook.com/roemahcita",
           instagram: "https://instagram.com/roemahcita",
+        },
+        metadata: {
+          title: "Roemah Cita CMS",
+          description: "Content management system untuk mengelola artikel dan media Roemah Cita.",
+          keywords: ["roemah cita", "cms", "konten"],
         },
       },
     },

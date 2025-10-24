@@ -1,68 +1,56 @@
 import Link from "next/link";
 
-import { PageForm } from "@/components/forms/page-form";
-import { buttonVariants } from "@/lib/button-variants";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
+import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
+import { buttonVariants } from "@/lib/button-variants";
+import type { RoleKey } from "@/lib/auth/permissions";
+
+import { PageList } from "./_components/page-list";
 
 export default async function DashboardPages() {
-  const [pages, media] = await Promise.all([
-    prisma.page.findMany({ orderBy: { createdAt: "desc" } }),
-    prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
-  ]);
+  const session = await auth();
+  const role = (session?.user?.role ?? "AUTHOR") as RoleKey;
+  if (!session?.user || !(["ADMIN", "EDITOR"] as RoleKey[]).includes(role)) {
+    return (
+      <DashboardUnauthorized description="Hanya Admin dan Editor yang dapat mengelola halaman statis." />
+    );
+  }
 
-  const mediaItems = media.map((item) => ({
-    id: item.id,
-    title: item.title,
-    description: item.description,
-    url: item.url,
-    mimeType: item.mimeType,
-    size: item.size,
-    createdAt: item.createdAt.toISOString(),
-  }));
+  const pages = await prisma.page.findMany({
+    orderBy: { updatedAt: "desc" },
+    select: {
+      id: true,
+      title: true,
+      slug: true,
+      status: true,
+      updatedAt: true,
+      createdAt: true,
+    },
+  });
 
   return (
-    <div className="space-y-8">
-      <DashboardHeading
-        heading="Halaman Statis"
-        description="Atur halaman konten seperti Tentang, Kontak, atau landing khusus."
-      />
-      <div className="flex justify-end">
-        <Link className={buttonVariants({ variant: "outline" })} href="/dashboard/articles">
-          Kelola Artikel
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <DashboardHeading
+          heading="Halaman Statis"
+          description="Kelola konten statis seperti Tentang, Kontak, dan landing page lainnya."
+        />
+        <Link className={buttonVariants()} href="/dashboard/pages/new">
+          Tambah Halaman
         </Link>
       </div>
-      <section className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Daftar Halaman</CardTitle>
-            <CardDescription>Halaman yang sudah dibuat.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {pages.map((page) => (
-              <div key={page.id} className="flex items-center justify-between rounded-md border border-border/60 bg-card px-3 py-2">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{page.title}</p>
-                  <p className="text-xs text-muted-foreground">
-                    /{page.slug} • {page.status}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{new Date(page.updatedAt).toLocaleDateString("id-ID")}</span>
-                  <Link className={buttonVariants({ variant: "ghost", size: "sm" })} href={`/dashboard/pages/${page.id}/edit`}>
-                    Edit
-                  </Link>
-                </div>
-              </div>
-            ))}
-            {pages.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Belum ada halaman statis.</p>
-            ) : null}
-          </CardContent>
-        </Card>
-        <PageForm mediaItems={mediaItems} />
-      </section>
+      <PageList
+        pages={pages.map((page) => ({
+          id: page.id,
+          title: page.title,
+          slug: page.slug,
+          status: page.status,
+          updatedAt: page.updatedAt.toISOString(),
+          createdAt: page.createdAt.toISOString(),
+        }))}
+      />
     </div>
   );
 }

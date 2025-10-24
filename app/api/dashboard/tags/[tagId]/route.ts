@@ -11,11 +11,15 @@ import { writeAuditLog } from "@/lib/audit/log";
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 50;
 
-export async function GET(_request: NextRequest, { params }: { params: { tagId: string } }) {
+export async function GET(
+  _request: NextRequest,
+  context: { params: Promise<{ tagId: string }> }
+) {
+  const { tagId } = await context.params;
   await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
 
   const tag = await prisma.tag.findUnique({
-    where: { id: params.tagId },
+    where: { id: tagId },
     include: {
       _count: {
         select: {
@@ -43,8 +47,9 @@ export async function GET(_request: NextRequest, { params }: { params: { tagId: 
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { tagId: string } }
+  context: { params: Promise<{ tagId: string }> }
 ) {
+  const { tagId } = await context.params;
   const session = await assertRole(["EDITOR", "ADMIN"]);
   const rateKey = `tag_mutation:${session.user.id}`;
 
@@ -65,7 +70,7 @@ export async function PATCH(
     );
   }
 
-  const existing = await prisma.tag.findUnique({ where: { id: params.tagId } });
+  const existing = await prisma.tag.findUnique({ where: { id: tagId } });
   if (!existing) {
     return NextResponse.json({ error: "Tag tidak ditemukan" }, { status: 404 });
   }
@@ -124,8 +129,9 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { tagId: string } }
+  context: { params: Promise<{ tagId: string }> }
 ) {
+  const { tagId } = await context.params;
   const session = await assertRole(["EDITOR", "ADMIN"]);
   const rateKey = `tag_mutation:${session.user.id}`;
 
@@ -137,7 +143,7 @@ export async function DELETE(
   }
 
   try {
-    await prisma.tag.delete({ where: { id: params.tagId } });
+    await prisma.tag.delete({ where: { id: tagId } });
   } catch {
     return NextResponse.json({ error: "Tag tidak ditemukan" }, { status: 404 });
   }
@@ -145,7 +151,7 @@ export async function DELETE(
   await writeAuditLog({
     action: "TAG_DELETE",
     entity: "Tag",
-    entityId: params.tagId,
+    entityId: tagId,
   });
 
   revalidateTag("content");

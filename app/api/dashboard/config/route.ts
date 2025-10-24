@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
@@ -44,6 +45,15 @@ export async function PUT(request: NextRequest) {
     entityId: config.id,
     metadata: parsed.data,
   });
+
+  revalidateTag("site-config");
+  revalidatePath("/");
+  revalidatePath("/articles");
+  revalidatePath("/dashboard");
+  revalidatePath("/login");
+  revalidatePath("/login/2fa");
+  revalidatePath("/sitemap.xml");
+  revalidatePath("/rss.xml");
 
   return NextResponse.json({
     data: {

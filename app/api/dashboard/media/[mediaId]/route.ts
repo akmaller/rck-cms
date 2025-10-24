@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { assertMediaOwnership, assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
-import { deleteMediaFile } from "@/lib/storage/media";
+import { deleteMediaFile, deriveThumbnailUrl } from "@/lib/storage/media";
 import { writeAuditLog } from "@/lib/audit/log";
 
 const updateSchema = z.object({
@@ -13,12 +13,13 @@ const updateSchema = z.object({
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { mediaId: string } }
+  context: { params: Promise<{ mediaId: string }> }
 ) {
+  const { mediaId } = await context.params;
   const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
 
   const media = await prisma.media.findUnique({
-    where: { id: params.mediaId },
+    where: { id: mediaId },
     include: {
       createdBy: { select: { id: true, name: true, email: true } },
     },
@@ -46,17 +47,19 @@ export async function GET(
       height: media.height,
       createdAt: media.createdAt,
       createdBy: media.createdBy,
+      thumbnailUrl: deriveThumbnailUrl(media.url) ?? undefined,
     },
   });
 }
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { mediaId: string } }
+  context: { params: Promise<{ mediaId: string }> }
 ) {
+  const { mediaId } = await context.params;
   let ownership;
   try {
-    ownership = await assertMediaOwnership(params.mediaId);
+    ownership = await assertMediaOwnership(mediaId);
   } catch (error) {
     if (error instanceof Error && error.message === "NotFound") {
       return NextResponse.json({ error: "Media tidak ditemukan" }, { status: 404 });
@@ -90,7 +93,7 @@ export async function PATCH(
   }
 
   const updated = await prisma.media.update({
-    where: { id: params.mediaId },
+    where: { id: mediaId },
     data: updateData,
     include: {
       createdBy: { select: { id: true, name: true, email: true } },
@@ -119,17 +122,19 @@ export async function PATCH(
       height: updated.height,
       createdAt: updated.createdAt,
       createdBy: updated.createdBy,
+      thumbnailUrl: deriveThumbnailUrl(updated.url) ?? undefined,
     },
   });
 }
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { mediaId: string } }
+  context: { params: Promise<{ mediaId: string }> }
 ) {
+  const { mediaId } = await context.params;
   let result;
   try {
-    result = await assertMediaOwnership(params.mediaId);
+    result = await assertMediaOwnership(mediaId);
   } catch (error) {
     if (error instanceof Error && error.message === "NotFound") {
       return NextResponse.json({ error: "Media tidak ditemukan" }, { status: 404 });

@@ -6,7 +6,7 @@ import { Prisma } from "@prisma/client";
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { isRateLimited } from "@/lib/rate-limit";
-import { saveMediaFile } from "@/lib/storage/media";
+import { deriveThumbnailUrl, saveMediaFile } from "@/lib/storage/media";
 
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 20;
@@ -72,6 +72,7 @@ export async function GET(request: NextRequest) {
       description: item.description,
       createdAt: item.createdAt,
       createdBy: item.createdBy,
+      thumbnailUrl: deriveThumbnailUrl(item.url) ?? undefined,
     })),
     meta: {
       page,
@@ -117,10 +118,10 @@ export async function POST(request: NextRequest) {
       description: null,
       fileName: saved.fileName,
       url: saved.url,
-      mimeType: file.type || "application/octet-stream",
-      size: Number(file.size) || 0,
-      width: null,
-      height: null,
+      mimeType: "image/webp",
+      size: saved.size,
+      width: saved.width,
+      height: saved.height,
       storageType: saved.storageType,
       createdById: session.user.id,
     },
@@ -133,14 +134,17 @@ export async function POST(request: NextRequest) {
     {
       data: {
         id: media.id,
-      title: media.title,
-      description: media.description,
-      url: media.url,
-      mimeType: media.mimeType,
-      size: media.size,
-      storageType: media.storageType,
+        title: media.title,
+        description: media.description,
+        url: media.url,
+        mimeType: media.mimeType,
+        size: media.size,
+        storageType: media.storageType,
+        width: media.width,
+        height: media.height,
         createdAt: media.createdAt,
         createdBy: media.createdBy,
+        thumbnailUrl: deriveThumbnailUrl(media.url) ?? undefined,
       },
     },
     { status: 201 }

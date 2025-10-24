@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -10,9 +10,12 @@ import { Label } from "@/components/ui/label";
 import { TiptapEditor } from "@/components/editor/tiptap-editor";
 import { FeaturedImagePicker, type SelectedMedia } from "@/components/media/featured-image-picker";
 import type { MediaItem } from "@/components/media/media-grid";
+import { ArticleStatus } from "@prisma/client";
 import { slugify } from "@/lib/utils/slug";
 
-import { createArticle, updateArticle } from "./actions";
+import { createArticle, updateArticle, deleteArticle } from "./actions";
+import { notifyError, notifySuccess } from "@/lib/notifications/client";
+import { useUnsavedChangesPrompt } from "@/components/forms/use-unsaved-changes";
 
 const emptyContent = { type: "doc", content: [] } as const;
 
@@ -26,23 +29,37 @@ type ArticleFormProps = {
     featuredMediaId?: string | null;
     tags?: string[];
     categories?: string[];
+    status?: ArticleStatus;
+    authorId?: string;
   };
   submitLabel?: string;
+  draftLabel?: string;
+  publishLabel?: string;
   redirectTo?: string;
   allTags: string[];
   allCategories: string[];
+  currentRole: "ADMIN" | "EDITOR" | "AUTHOR";
 };
 
 export function ArticleForm({
   mediaItems,
   initialValues,
-  submitLabel = "Simpan Draft",
+  submitLabel,
+  draftLabel = "Simpan Draft",
+  publishLabel = "Publikasikan",
   redirectTo = "/dashboard/articles",
   allTags,
   allCategories,
+  currentRole,
 }: ArticleFormProps) {
   const router = useRouter();
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const pendingRedirectRef = useRef<string>(redirectTo);
+  const saveAndExitResolverRef = useRef<((success: boolean) => void) | null>(null);
   const [state, setState] = useState<{ error?: string }>({});
+  useEffect(() => {
+    pendingRedirectRef.current = redirectTo;
+  }, [redirectTo]);
   const [title, setTitle] = useState(initialValues?.title ?? "");
   const initialTitle = initialValues?.title ?? "";
   const initialSlug = initialValues?.slug ?? "";
@@ -66,6 +83,7 @@ export function ArticleForm({
       : null
   );
   const [isPending, startTransition] = useTransition();
+  const [isDeleting, startDeleteTransition] = useTransition();
   const normalizedAllCategories = useMemo(
     () =>
       Array.from(
@@ -186,14 +204,117 @@ export function ArticleForm({
     return slugify(trimmedTitle);
   }, [initialValues?.id, initialSlug, initialTitle, title]);
 
+  type SubmitIntent = "draft" | "publish";
+  const defaultIntent: SubmitIntent =
+    initialValues?.status === ArticleStatus.PUBLISHED ? "publish" : "draft";
+  const [submitIntent, setSubmitIntent] = useState<SubmitIntent>(defaultIntent);
+  const submitIntentRef = useRef<SubmitIntent>(defaultIntent);
+
+  const setIntent = (intent: SubmitIntent) => {
+    submitIntentRef.current = intent;
+    setSubmitIntent(intent);
+  };
+
+  const serializeArticleState = useCallback(
+    (params: {
+      title: string;
+      content: Record<string, unknown>;
+      featuredMediaId: string | null;
+      categories: string[];
+      tags: string[];
+    }) =>
+      JSON.stringify({
+        title: params.title.trim(),
+        content: JSON.stringify(params.content ?? emptyContent),
+        featuredMediaId: params.featuredMediaId,
+        categories: params.categories,
+        tags: params.tags,
+      }),
+    []
+  );
+
+  const initialSnapshotRef = useRef(
+    serializeArticleState({
+      title: initialValues?.title ?? "",
+      content: initialValues?.content ?? emptyContent,
+      featuredMediaId: initialValues?.featuredMediaId ?? null,
+      categories: initialValues?.categories ?? [],
+      tags: initialValues?.tags ?? [],
+    })
+  );
+
+  const currentSnapshot = useMemo(
+    () =>
+      serializeArticleState({
+        title,
+        content,
+        featuredMediaId: featuredMedia?.id ?? null,
+        categories: selectedCategories,
+        tags: selectedTags,
+      }),
+    [content, featuredMedia?.id, selectedCategories, selectedTags, serializeArticleState, title]
+  );
+
+  const isDirty = initialSnapshotRef.current !== currentSnapshot;
+
+  const handleSaveAndExit = useCallback(
+    async (targetUrl: string | null) => {
+      if (!formRef.current) {
+        return false;
+      }
+
+      pendingRedirectRef.current = targetUrl ?? redirectTo;
+
+      return new Promise<boolean>((resolve) => {
+        saveAndExitResolverRef.current = (status) => {
+          resolve(status);
+        };
+        formRef.current?.requestSubmit();
+      });
+    },
+    [redirectTo]
+  );
+
+  const { dialog: unsavedChangesDialog } = useUnsavedChangesPrompt({
+    isDirty,
+    onSaveAndExit: handleSaveAndExit,
+  });
+
+  const canPublish = currentRole === "ADMIN" || currentRole === "EDITOR" || currentRole === "AUTHOR";
+  const handleDelete = () => {
+    const articleId = initialValues?.id;
+    if (!articleId) {
+      return;
+    }
+    const confirmed = window.confirm("Yakin ingin menghapus artikel ini? Tindakan ini tidak dapat dibatalkan.");
+    if (!confirmed) {
+      return;
+    }
+    startDeleteTransition(async () => {
+      const result = await deleteArticle(articleId);
+      if (result && "error" in result && result.error) {
+        setState({ error: result.error });
+        notifyError(result.error);
+        return;
+      }
+      setState({ error: undefined });
+      notifySuccess("Artikel berhasil dihapus.");
+      initialSnapshotRef.current = currentSnapshot;
+      router.push(redirectTo);
+      router.refresh();
+    });
+  };
+
   return (
-    <Card>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          const formElement = event.currentTarget;
-          const formData = new FormData(formElement);
-          if (computedSlug) {
+    <>
+      <Card>
+        <form
+          ref={formRef}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const formElement = event.currentTarget;
+            const formData = new FormData(formElement);
+            if (computedSlug) {
             formData.set("slug", computedSlug);
           } else {
             formData.delete("slug");
@@ -209,28 +330,71 @@ export function ArticleForm({
           }
           formData.set("tags", selectedTags.join(","));
           formData.set("categories", selectedCategories.join(","));
+          formData.set("intent", submitIntentRef.current);
           startTransition(async () => {
-            const submitAction = isEditing ? updateArticle : createArticle;
-            if (isEditing && initialValues?.id) {
-              formData.set("articleId", initialValues.id);
+            try {
+              const submitAction = isEditing ? updateArticle : createArticle;
+              if (isEditing && initialValues?.id) {
+                formData.set("articleId", initialValues.id);
+              }
+
+              const result = await submitAction(formData);
+              if (result && "error" in result && result.error) {
+                setState({ error: result.error });
+                notifyError(result.error);
+                saveAndExitResolverRef.current?.(false);
+                saveAndExitResolverRef.current = null;
+                pendingRedirectRef.current = redirectTo;
+                return;
+              }
+
+              const targetRedirect = pendingRedirectRef.current ?? redirectTo;
+              const snapshotAfterSave = serializeArticleState({
+                title,
+                content,
+                featuredMediaId: featuredMedia?.id ?? null,
+                categories: selectedCategories,
+                tags: selectedTags,
+              });
+
+              setState({ error: undefined });
+              if (!isEditing) {
+                formElement.reset();
+                setTitle("");
+                setContent(emptyContent);
+                setFeaturedMedia(null);
+                setSelectedTags([]);
+                setTagInput("");
+                setSelectedCategories([]);
+                setCategoryInput("");
+                setIntent("draft");
+                initialSnapshotRef.current = serializeArticleState({
+                  title: "",
+                  content: emptyContent,
+                  featuredMediaId: null,
+                  categories: [],
+                  tags: [],
+                });
+                notifySuccess("Artikel baru berhasil disimpan.");
+              } else {
+                notifySuccess("Perubahan artikel tersimpan.");
+                initialSnapshotRef.current = snapshotAfterSave;
+              }
+
+              saveAndExitResolverRef.current?.(true);
+              saveAndExitResolverRef.current = null;
+              pendingRedirectRef.current = redirectTo;
+
+              router.push(targetRedirect);
+              router.refresh();
+            } catch (error) {
+              console.error(error);
+              setState({ error: "Gagal menyimpan artikel." });
+              notifyError("Gagal menyimpan artikel.");
+              saveAndExitResolverRef.current?.(false);
+              saveAndExitResolverRef.current = null;
+              pendingRedirectRef.current = redirectTo;
             }
-            const result = await submitAction(formData);
-            if (result && "error" in result && result.error) {
-              setState({ error: result.error });
-              return;
-            }
-            setState({ error: undefined });
-            if (!isEditing) {
-              formElement.reset();
-              setContent(emptyContent);
-              setFeaturedMedia(null);
-              setSelectedTags([]);
-              setTagInput("");
-              setSelectedCategories([]);
-              setCategoryInput("");
-            }
-            router.push(redirectTo);
-            router.refresh();
           });
         }}
       >
@@ -267,6 +431,7 @@ export function ArticleForm({
               value={content}
               onChange={setContent}
               placeholder="Gunakan toolbar untuk menulis konten artikel..."
+              mediaItems={mediaItems}
             />
           </div>
           <div className="space-y-2">
@@ -405,13 +570,47 @@ export function ArticleForm({
             </p>
           </div>
         </CardContent>
-        <CardFooter className="flex items-center justify-between">
-          {state.error ? <p className="text-sm text-destructive">{state.error}</p> : <span />}
-          <Button type="submit" disabled={isPending}>
-            {isPending ? "Menyimpan..." : submitLabel}
-          </Button>
+        <CardFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {initialValues?.id ? (
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={isPending || isDeleting}
+                onClick={handleDelete}
+              >
+                {isDeleting ? "Menghapus..." : "Hapus Artikel"}
+              </Button>
+            ) : null}
+            {state.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="submit"
+              disabled={isPending || isDeleting}
+              onClick={() => setIntent("draft")}
+            >
+              {isPending && submitIntent === "draft"
+                ? "Menyimpan..."
+                : submitLabel ?? draftLabel}
+            </Button>
+            {canPublish ? (
+              <Button
+                type="submit"
+                variant="secondary"
+                disabled={isPending || isDeleting}
+                onClick={() => setIntent("publish")}
+              >
+                {isPending && submitIntent === "publish"
+                  ? "Memublikasikan..."
+                  : publishLabel}
+              </Button>
+            ) : null}
+          </div>
         </CardFooter>
-      </form>
-    </Card>
+        </form>
+      </Card>
+      {unsavedChangesDialog}
+    </>
   );
 }

@@ -3,11 +3,16 @@ import { ConfigForm, ConfigValues } from "@/components/forms/config-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
+import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
+import type { RoleKey } from "@/lib/auth/permissions";
 
 export default async function GeneralSettingsPage() {
   const session = await auth();
-  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "EDITOR")) {
-    return null;
+  const role = (session?.user?.role ?? "AUTHOR") as RoleKey;
+  if (!session?.user || role !== "ADMIN") {
+    return (
+      <DashboardUnauthorized description="Hanya Administrator yang dapat mengubah informasi umum." />
+    );
   }
 
   const configRecord = await prisma.siteConfig.findUnique({ where: { key: "general" } });
@@ -16,6 +21,7 @@ export default async function GeneralSettingsPage() {
   const initialConfig: ConfigValues = {
     siteName: value.siteName ?? "",
     logoUrl: value.logoUrl ?? "",
+    iconUrl: value.iconUrl ?? "",
     tagline: value.tagline ?? "",
     contactEmail: value.contactEmail ?? "",
     social: {

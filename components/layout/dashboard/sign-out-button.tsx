@@ -3,8 +3,9 @@
 import { LogOut } from "lucide-react";
 import { useTransition } from "react";
 
-import { signOut } from "@/auth";
 import { Button } from "@/components/ui/button";
+
+import { signOutAction } from "./sign-out-action";
 
 export function SignOutButton() {
   const [isPending, startTransition] = useTransition();
@@ -17,7 +18,7 @@ export function SignOutButton() {
       disabled={isPending}
       onClick={() => {
         startTransition(() => {
-          void signOut({ redirectTo: "/login" });
+          void signOutAction();
         });
       }}
     >
@@ -26,4 +27,3 @@ export function SignOutButton() {
     </Button>
   );
 }
-

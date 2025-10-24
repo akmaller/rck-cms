@@ -7,41 +7,33 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum UserRole {
-  ADMIN
-  EDITOR
-  AUTHOR
-}
-
-enum ArticleStatus {
-  DRAFT
-  REVIEW
-  SCHEDULED
-  PUBLISHED
-  ARCHIVED
+enum UserTheme {
+  LIGHT
+  DARK
 }
 
 model User {
-  id                     String                  @id @default(cuid())
-  email                  String                  @unique
+  id                     String                 @id @default(cuid())
+  email                  String                 @unique
   passwordHash           String
   name                   String
-  avatarUrl              String?                 @db.Text
-  role                   UserRole                @default(AUTHOR)
-  bio                    String?                 @db.Text
-  twoFactorEnabled       Boolean                 @default(false)
-  twoFactorSecret        String?                 @db.Text
+  avatarUrl              String?
+  role                   UserRole               @default(AUTHOR)
+  bio                    String?
+  twoFactorEnabled       Boolean                @default(false)
+  twoFactorSecret        String?
   lastLoginAt            DateTime?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
-  articles               Article[]               @relation("ArticleAuthor")
-  pages                  Page[]                  @relation("PageAuthor")
-  media                  Media[]
+  theme                  UserTheme              @default(LIGHT)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
   accounts               Account[]
-  sessions               Session[]
-  twoFactorTokens        TwoFactorToken[]
-  twoFactorConfirmations TwoFactorConfirmation[]
+  articles               Article[]              @relation("ArticleAuthor")
   auditLogs              AuditLog[]
+  media                  Media[]
+  pages                  Page[]                 @relation("PageAuthor")
+  sessions               Session[]
+  twoFactorConfirmations TwoFactorConfirmation?
+  twoFactorTokens        TwoFactorToken[]
 
   @@index([role])
 }
@@ -50,7 +42,7 @@ model Category {
   id          String            @id @default(cuid())
   name        String
   slug        String            @unique
-  description String?           @db.Text
+  description String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   articles    ArticleCategory[]
@@ -68,7 +60,6 @@ model Tag {
 model Media {
   id          String    @id @default(cuid())
   title       String
-  description String?   @db.Text
   fileName    String
   url         String    @unique
   mimeType    String
@@ -78,9 +69,10 @@ model Media {
   storageType String    @default("local")
   createdAt   DateTime  @default(now())
   createdById String?
-  createdBy   User?     @relation(fields: [createdById], references: [id])
+  description String?
   article     Article[]
-  pages       Page[]     @relation("PageFeaturedMedia")
+  createdBy   User?     @relation(fields: [createdById], references: [id])
+  pages       Page[]    @relation("PageFeaturedMedia")
 
   @@index([storageType])
 }
@@ -89,19 +81,19 @@ model Article {
   id              String            @id @default(cuid())
   title           String
   slug            String            @unique
-  excerpt         String?           @db.Text
+  excerpt         String?
   content         Json
   status          ArticleStatus     @default(DRAFT)
   publishedAt     DateTime?
   featured        Boolean           @default(false)
   authorId        String
-  author          User              @relation("ArticleAuthor", fields: [authorId], references: [id])
   featuredMediaId String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  author          User              @relation("ArticleAuthor", fields: [authorId], references: [id])
   featuredMedia   Media?            @relation(fields: [featuredMediaId], references: [id])
   categories      ArticleCategory[]
   tags            ArticleTag[]
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
 
   @@index([status, publishedAt])
   @@index([authorId])
@@ -111,9 +103,8 @@ model ArticleCategory {
   articleId  String
   categoryId String
   assignedAt DateTime @default(now())
-
-  article  Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  article    Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
   @@id([articleId, categoryId])
 }
@@ -122,28 +113,27 @@ model ArticleTag {
   articleId  String
   tagId      String
   assignedAt DateTime @default(now())
-
-  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
-  tag     Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  article    Article  @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([articleId, tagId])
 }
 
 model Page {
-  id          String        @id @default(cuid())
-  title       String
-  slug        String        @unique
-  excerpt     String?       @db.Text
-  content     Json
-  status      ArticleStatus @default(DRAFT)
-  publishedAt DateTime?
-  authorId    String
-  author      User          @relation("PageAuthor", fields: [authorId], references: [id])
+  id              String        @id @default(cuid())
+  title           String
+  slug            String        @unique
+  excerpt         String?
+  content         Json
+  status          ArticleStatus @default(DRAFT)
+  publishedAt     DateTime?
+  authorId        String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
   featuredMediaId String?
-  featuredMedia   Media?       @relation("PageFeaturedMedia", fields: [featuredMediaId], references: [id])
-  menuItems   MenuItem[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  menuItems       MenuItem[]
+  author          User          @relation("PageAuthor", fields: [authorId], references: [id])
+  featuredMedia   Media?        @relation("PageFeaturedMedia", fields: [featuredMediaId], references: [id])
 }
 
 model SiteConfig {
@@ -167,9 +157,9 @@ model MenuItem {
   isExternal Boolean    @default(false)
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
+  page       Page?      @relation(fields: [pageId], references: [id])
   parent     MenuItem?  @relation("MenuHierarchy", fields: [parentId], references: [id])
   children   MenuItem[] @relation("MenuHierarchy")
-  page       Page?      @relation(fields: [pageId], references: [id])
 
   @@index([menu])
   @@index([parentId])
@@ -181,9 +171,9 @@ model AuditLog {
   entity    String
   entityId  String
   userId    String?
-  user      User?    @relation(fields: [userId], references: [id])
   metadata  Json?
   createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
 
   @@index([entity, entityId])
   @@index([userId])
@@ -195,12 +185,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
+  refresh_token     String?
+  access_token      String?
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String? @db.Text
+  id_token          String?
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -229,6 +219,7 @@ model TwoFactorToken {
   userId    String
   createdAt DateTime @default(now())
   expiresAt DateTime
+  purpose   TwoFactorTokenPurpose @default(SETUP)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
@@ -240,4 +231,23 @@ model TwoFactorConfirmation {
   userId    String   @unique
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  AUTHOR
+}
+
+enum TwoFactorTokenPurpose {
+  SETUP
+  LOGIN
+}
+
+enum ArticleStatus {
+  DRAFT
+  REVIEW
+  SCHEDULED
+  PUBLISHED
+  ARCHIVED
 }

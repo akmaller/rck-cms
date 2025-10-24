@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 import { createCategory } from "./actions";
+import { notifyError, notifySuccess } from "@/lib/notifications/client";
 
 export function CategoryForm() {
   const [state, setState] = useState<{ error?: string; success?: boolean }>({});
@@ -23,15 +24,18 @@ export function CategoryForm() {
       <form
         onSubmit={(event) => {
           event.preventDefault();
+          const formElement = event.currentTarget;
           const form = new FormData(event.currentTarget);
           startTransition(async () => {
             const result = await createCategory(form);
             if (result?.error) {
               setState({ error: result.error });
+              notifyError(result.error);
               return;
             }
-            event.currentTarget.reset();
+            formElement.reset();
             setState({ success: true });
+            notifySuccess("Kategori baru berhasil ditambahkan.");
           });
         }}
       >

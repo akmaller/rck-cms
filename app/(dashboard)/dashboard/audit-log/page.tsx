@@ -2,135 +2,173 @@ import Link from "next/link";
 
 import { Prisma } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
+import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
+import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
+import type { RoleKey } from "@/lib/auth/permissions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { buttonVariants } from "@/lib/button-variants";
-import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
+import { AuditLogList } from "./_components/audit-log-list";
 
-const PAGE_SIZE = 50;
+type RangeOption = "week" | "month" | "custom";
+
+const PAGE_SIZE = 20;
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+function subtractDays(date: Date, days: number) {
+  return new Date(date.getTime() - days * DAY_IN_MS);
+}
+
+function addDays(date: Date, days: number) {
+  return new Date(date.getTime() + days * DAY_IN_MS);
+}
+
+function parseDate(value?: string | null) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date;
+}
+
+function formatDateLabel(date?: Date) {
+  if (!date) return "-";
+  return date.toLocaleDateString("id-ID", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 export default async function AuditLogPage({
   searchParams,
 }: {
   searchParams: {
     page?: string;
-    entity?: string;
-    action?: string;
-    userId?: string;
+    range?: string;
     from?: string;
     to?: string;
   };
 }) {
   const session = await auth();
-  if (!session?.user || (session.user.role !== "ADMIN" && session.user.role !== "EDITOR")) {
-    return null;
+  const role = (session?.user?.role ?? "AUTHOR") as RoleKey;
+
+  if (!session?.user || role !== "ADMIN") {
+    return <DashboardUnauthorized description="Log aktivitas hanya tersedia untuk Administrator." />;
   }
 
-  const currentPage = Math.max(1, Number(searchParams.page ?? 1));
-  const { entity, action, userId, from, to } = searchParams;
+  const now = new Date();
+  const rawRange = (searchParams.range ?? "week") as RangeOption;
+  const range: RangeOption = ["week", "month", "custom"].includes(rawRange)
+    ? rawRange
+    : "week";
+
+  const customFrom = parseDate(searchParams.from);
+  const customTo = parseDate(searchParams.to);
+
+  let fromDate: Date | undefined;
+  let toDate: Date | undefined;
+
+  if (range === "week") {
+    fromDate = subtractDays(now, 7);
+    toDate = now;
+  } else if (range === "month") {
+    fromDate = subtractDays(now, 30);
+    toDate = now;
+  } else {
+    fromDate = customFrom;
+    toDate = customTo ? addDays(customTo, 1) : undefined;
+  }
 
   const where: Prisma.AuditLogWhereInput = {
-    entity: entity?.trim() ? entity : undefined,
-    action: action?.trim() ? action : undefined,
-    userId: userId?.trim() ? userId : undefined,
     createdAt:
-      from || to
+      fromDate || toDate
         ? {
-            gte: from ? new Date(from) : undefined,
-            lte: to ? new Date(new Date(to).getTime() + 24 * 60 * 60 * 1000) : undefined,
+            gte: fromDate,
+            lte: toDate,
           }
         : undefined,
   };
 
-  const [logs, total, distinctActions, distinctEntities] = await Promise.all([
+  const currentPage = Math.max(1, Number(searchParams.page ?? 1));
+
+  const [logs, total] = await Promise.all([
     prisma.auditLog.findMany({
       where,
       orderBy: { createdAt: "desc" },
       skip: (currentPage - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
-      include: { user: { select: { id: true, name: true, email: true } } },
+      include: {
+        user: { select: { id: true, name: true, email: true } },
+      },
     }),
     prisma.auditLog.count({ where }),
-    prisma.auditLog.findMany({ distinct: ["action"], select: { action: true } }),
-    prisma.auditLog.findMany({ distinct: ["entity"], select: { entity: true } }),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const displayFrom = range === "custom" ? customFrom : fromDate;
+  const displayTo = range === "custom" ? customTo : toDate;
 
-  const baseParams = new URLSearchParams({
-    ...(entity ? { entity } : {}),
-    ...(action ? { action } : {}),
-    ...(userId ? { userId } : {}),
-    ...(from ? { from } : {}),
-    ...(to ? { to } : {}),
-  });
+  const baseParams = new URLSearchParams();
+  baseParams.set("range", range);
+  if (range === "custom") {
+    if (searchParams.from) baseParams.set("from", searchParams.from);
+    if (searchParams.to) baseParams.set("to", searchParams.to);
+  }
+
+  const prevParams = new URLSearchParams(baseParams);
+  prevParams.set("page", String(currentPage - 1));
+  const nextParams = new URLSearchParams(baseParams);
+  nextParams.set("page", String(currentPage + 1));
 
   return (
     <div className="space-y-6">
       <DashboardHeading
-        heading="Audit Log"
-        description="Riwayat perubahan data untuk keperluan keamanan dan monitoring."
+        heading="Log Aktivitas"
+        description="Pantau aktivitas sistem untuk audit dan investigasi keamanan."
       />
+
       <Card>
         <CardHeader>
-          <CardTitle>Filter</CardTitle>
-          <CardDescription>Saring catatan aktivitas berdasarkan entitas, aksi, atau tanggal.</CardDescription>
+          <CardTitle>Rentang Waktu</CardTitle>
+          <CardDescription>
+            Secara default sistem menampilkan log 7 hari terakhir (20 entri per halaman).
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="grid gap-4 md:grid-cols-3" action="/dashboard/audit-log" method="get">
-            <div className="space-y-2">
-              <Label htmlFor="entity">Entitas</Label>
+          <form action="/dashboard/audit-log" method="get" className="grid gap-4 md:grid-cols-4">
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="range">Pilih rentang</Label>
               <select
-                id="entity"
-                name="entity"
-                defaultValue={entity ?? ""}
+                id="range"
+                name="range"
+                defaultValue={range}
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
-                <option value="">Semua</option>
-                {distinctEntities
-                  .map((item) => item.entity)
-                  .filter(Boolean)
-                  .map((value) => (
-                    <option key={value} value={value!}>
-                      {value}
-                    </option>
-                  ))}
+                <option value="week">7 hari terakhir</option>
+                <option value="month">30 hari terakhir</option>
+                <option value="custom">Custom</option>
               </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="action">Aksi</Label>
-              <select
-                id="action"
-                name="action"
-                defaultValue={action ?? ""}
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              >
-                <option value="">Semua</option>
-                {distinctActions
-                  .map((item) => item.action)
-                  .filter(Boolean)
-                  .map((value) => (
-                    <option key={value} value={value!}>
-                      {value}
-                    </option>
-                  ))}
-              </select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="userId">User ID</Label>
-              <Input id="userId" name="userId" placeholder="Optional" defaultValue={userId ?? ""} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="from">Dari tanggal</Label>
-              <Input id="from" name="from" type="date" defaultValue={from ?? ""} />
+              <Input
+                id="from"
+                name="from"
+                type="date"
+                defaultValue={range === "custom" ? searchParams.from ?? "" : ""}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="to">Sampai tanggal</Label>
-              <Input id="to" name="to" type="date" defaultValue={to ?? ""} />
+              <Input
+                id="to"
+                name="to"
+                type="date"
+                defaultValue={range === "custom" ? searchParams.to ?? "" : ""}
+              />
             </div>
             <div className="flex items-end gap-2">
               <button type="submit" className={buttonVariants({})}>
@@ -141,61 +179,58 @@ export default async function AuditLogPage({
               </Link>
             </div>
           </form>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Rentang aktif: {formatDateLabel(displayFrom)} – {formatDateLabel(displayTo)}.
+            {range === "custom"
+              ? " Isi tanggal untuk menampilkan rentang khusus."
+              : " Ubah ke custom untuk melihat periode lainnya."}
+          </p>
         </CardContent>
       </Card>
-      <Card>
-        <CardHeader>
-          <CardTitle>Aktivitas Terbaru</CardTitle>
-          <CardDescription>Menampilkan {logs.length} dari {total} catatan.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {logs.map((log) => (
-            <div
-              key={log.id}
-              className="flex flex-col gap-1 rounded-md border border-border/60 bg-card px-3 py-2 text-sm"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">{log.action}</Badge>
-                <span className="font-medium">{log.entity}</span>
-                <span className="text-muted-foreground">#{log.entityId}</span>
-                <span className="text-muted-foreground">
-                  {new Date(log.createdAt).toLocaleString("id-ID")}
-                </span>
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {log.user ? `${log.user.name ?? log.user.email} (${log.user.email})` : "Sistem"}
-              </div>
-              {log.metadata ? (
-                <pre className="overflow-x-auto rounded-md bg-muted px-2 py-1 text-xs">
-                  {JSON.stringify(log.metadata, null, 2)}
-                </pre>
-              ) : null}
-            </div>
-          ))}
-          {logs.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Belum ada aktivitas yang dicatat.</p>
-          ) : null}
-        </CardContent>
-      </Card>
-      {totalPages > 1 ? (
-        <nav className="flex items-center gap-2" aria-label="Pagination">
+
+      <AuditLogList
+        logs={logs.map((log) => ({
+          id: log.id,
+          createdAt: log.createdAt.toISOString(),
+          action: log.action,
+          entity: log.entity,
+          entityId: log.entityId,
+          metadata: log.metadata,
+          userName: log.user?.name ?? log.user?.email ?? "Sistem",
+          userEmail: log.user?.email ?? null,
+        }))}
+        total={total}
+      />
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-xs text-muted-foreground">
+          Halaman {currentPage} dari {totalPages}. Gunakan navigasi untuk melihat entri lainnya.
+        </p>
+        <div className="flex items-center gap-2">
           <Link
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-            href={`/dashboard/audit-log?${new URLSearchParams({ ...Object.fromEntries(baseParams.entries()), page: String(Math.max(1, currentPage - 1)) })}`}
+            aria-disabled={currentPage <= 1}
+            className={buttonVariants({
+              variant: "outline",
+              size: "sm",
+              className: currentPage <= 1 ? "pointer-events-none opacity-50" : undefined,
+            })}
+            href={`/dashboard/audit-log?${prevParams.toString()}`}
           >
             Sebelumnya
           </Link>
-          <span className="text-sm text-muted-foreground">
-            Halaman {currentPage} dari {totalPages}
-          </span>
           <Link
-            className={buttonVariants({ variant: "outline", size: "sm" })}
-            href={`/dashboard/audit-log?${new URLSearchParams({ ...Object.fromEntries(baseParams.entries()), page: String(Math.min(totalPages, currentPage + 1)) })}`}
+            aria-disabled={currentPage >= totalPages}
+            className={buttonVariants({
+              variant: "outline",
+              size: "sm",
+              className: currentPage >= totalPages ? "pointer-events-none opacity-50" : undefined,
+            })}
+            href={`/dashboard/audit-log?${nextParams.toString()}`}
           >
             Berikutnya
           </Link>
-        </nav>
-      ) : null}
+        </div>
+      </div>
     </div>
   );
 }

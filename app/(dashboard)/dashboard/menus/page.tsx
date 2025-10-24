@@ -1,50 +1,33 @@
 import { notFound } from "next/navigation";
 
 import { MenuItemForm } from "@/components/forms/menu-item-form";
-import { MenuTree, MenuTreeNode } from "@/components/menu/menu-tree";
+import { MenuBuilder } from "@/components/menu/menu-builder";
 import { MenuSelector } from "@/components/menu/menu-selector";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
+import { auth } from "@/auth";
+import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
+import type { RoleKey } from "@/lib/auth/permissions";
+import { buildMenuTree, flattenMenuTree } from "@/lib/menu/utils";
 
 const DEFAULT_MENU = "main";
 
 type MenusPageProps = {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-type MenuItemModel = Awaited<ReturnType<typeof prisma.menuItem.findMany>>[number];
-
-function buildTree(items: MenuItemModel[]): MenuTreeNode[] {
-  const map = new Map<string, MenuTreeNode>();
-  const roots: MenuTreeNode[] = [];
-
-  items.forEach((item) => {
-    map.set(item.id, {
-      id: item.id,
-      title: item.title,
-      slug: item.slug,
-      url: item.url,
-      order: item.order,
-      children: [],
-    });
-  });
-
-  items.forEach((item) => {
-    const node = map.get(item.id);
-    if (!node) return;
-    if (item.parentId && map.has(item.parentId)) {
-      map.get(item.parentId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  });
-
-  return roots;
-}
-
 export default async function MenusPage({ searchParams }: MenusPageProps) {
-  const menuParam = searchParams.menu;
+  const resolvedSearchParams = await searchParams;
+  const session = await auth();
+  const role = (session?.user?.role ?? "AUTHOR") as RoleKey;
+  if (!session?.user || !(["ADMIN", "EDITOR"] as RoleKey[]).includes(role)) {
+    return (
+      <DashboardUnauthorized description="Hanya Admin dan Editor yang dapat mengatur menu navigasi." />
+    );
+  }
+
+  const menuParam = resolvedSearchParams.menu;
   const selectedMenu = typeof menuParam === "string" && menuParam.length > 0 ? menuParam : DEFAULT_MENU;
 
   const [distinctMenus, menuItems, pages] = await Promise.all([
@@ -58,7 +41,20 @@ export default async function MenusPage({ searchParams }: MenusPageProps) {
     notFound();
   }
 
-  const tree = buildTree(menuItems);
+  const flatRecords = menuItems.map((item) => ({
+    id: item.id,
+    menu: item.menu,
+    title: item.title,
+    slug: item.slug,
+    url: item.url,
+    icon: item.icon,
+    order: item.order,
+    parentId: item.parentId,
+    pageId: item.pageId,
+  }));
+
+  const tree = buildMenuTree(flatRecords);
+  const parentOptions = flattenMenuTree(tree).map((item) => ({ id: item.id, title: item.title }));
 
   return (
     <div className="space-y-8">
@@ -76,25 +72,19 @@ export default async function MenusPage({ searchParams }: MenusPageProps) {
             <CardDescription>Urutan dan hierarki menu {selectedMenu}.</CardDescription>
           </CardHeader>
           <CardContent>
-            <MenuTree items={tree} />
+            <MenuBuilder
+              menu={selectedMenu}
+              items={tree}
+              pages={pages.map((page) => ({ id: page.id, title: page.title }))}
+            />
           </CardContent>
         </Card>
         <MenuItemForm
           menu={selectedMenu}
-          parents={menuItems.map((item) => ({ id: item.id, title: item.title }))}
+          parents={parentOptions}
           pages={pages.map((page) => ({ id: page.id, title: page.title }))}
         />
       </section>
-      <Card>
-        <CardHeader>
-          <CardTitle>Catatan</CardTitle>
-          <CardDescription>Fitur reorder dan visibilitas akan ditambahkan berikutnya.</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-1 text-sm text-muted-foreground">
-          <p>{`Menu aktif: ${selectedMenu}.`}</p>
-          <p>Menambahkan dukungan drag & drop akan mempermudah penyusunan ulang.</p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

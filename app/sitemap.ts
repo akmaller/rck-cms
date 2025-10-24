@@ -1,14 +1,14 @@
 import type { MetadataRoute } from "next";
 import { ArticleStatus } from "@prisma/client";
 
-import { siteConfig } from "@/config/site";
 import { prisma } from "@/lib/prisma";
-
-const BASE_URL = siteConfig.url.replace(/\/$/, "");
+import { getSiteConfig } from "@/lib/site-config/server";
 
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const config = await getSiteConfig();
+  const BASE_URL = config.url.replace(/\/$/, "");
   const [articles, pages, categories, tags] = await Promise.all([
     prisma.article.findMany({
       where: { status: ArticleStatus.PUBLISHED },
@@ -81,4 +81,3 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [...staticRoutes, ...articleRoutes, ...pageRoutes, ...categoryRoutes, ...tagRoutes];
 }
-

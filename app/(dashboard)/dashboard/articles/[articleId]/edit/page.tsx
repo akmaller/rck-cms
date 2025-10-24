@@ -1,13 +1,24 @@
 import { notFound } from "next/navigation";
 
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ArticleEditorShell } from "@/app/(dashboard)/dashboard/articles/_components/editor-shell";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 
-export default async function EditArticlePage({ params }: { params: { articleId: string } }) {
+type EditArticlePageProps = {
+  params: Promise<{ articleId: string }>;
+};
+
+export default async function EditArticlePage({ params }: EditArticlePageProps) {
+  const { articleId } = await params;
+  const session = await auth();
+  if (!session?.user) {
+    return null;
+  }
+
   const [article, media, tags, categories] = await Promise.all([
     prisma.article.findUnique({
-      where: { id: params.articleId },
+      where: { id: articleId },
       include: {
         featuredMedia: true,
         categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
@@ -60,6 +71,7 @@ export default async function EditArticlePage({ params }: { params: { articleId:
         mediaItems={mediaItems}
         allTags={allTags}
         allCategories={allCategories}
+        currentRole={(session.user.role ?? "AUTHOR") as "ADMIN" | "EDITOR" | "AUTHOR"}
         initialValues={{
           id: article.id,
           title: article.title,
@@ -68,8 +80,11 @@ export default async function EditArticlePage({ params }: { params: { articleId:
           featuredMediaId: article.featuredMediaId ?? null,
           tags: initialTags,
           categories: initialCategories,
+          status: article.status,
+          authorId: article.authorId,
         }}
-        submitLabel="Perbarui Artikel"
+        draftLabel="Simpan Draft"
+        publishLabel={article.status === "PUBLISHED" ? "Perbarui & Publikasikan" : "Publikasikan"}
       />
     </>
   );

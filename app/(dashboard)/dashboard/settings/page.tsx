@@ -1,50 +1,67 @@
-import Link from "next/link";
-
+import { auth } from "@/auth";
+import { ConfigForm, ConfigValues } from "@/components/forms/config-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
+import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
+import type { RoleKey } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma";
+import { CacheControls } from "./_components/cache-controls";
+import { BackupControls } from "./_components/backup-controls";
 
-const settingSections = [
-  {
-    title: "Informasi Umum",
-    description: "Atur nama situs, tagline, logo, dan metadata utama.",
-    href: "/dashboard/settings/general",
-  },
-  {
-    title: "Menu & Navigasi",
-    description: "Kelola struktur menu utama dan footer.",
-    href: "/dashboard/settings/navigation",
-  },
-  {
-    title: "Keamanan",
-    description: "Aktifkan autentikasi dua faktor dan pantau audit log.",
-    href: "/dashboard/settings/security",
-  },
-];
+export default async function SettingsIndexPage() {
+  const session = await auth();
+  const role = (session?.user?.role ?? "AUTHOR") as RoleKey;
+  if (!session?.user || role !== "ADMIN") {
+    return (
+      <DashboardUnauthorized description="Halaman pengaturan hanya dapat diakses oleh Administrator." />
+    );
+  }
 
-export default function SettingsIndexPage() {
+  const configRecord = await prisma.siteConfig.findUnique({ where: { key: "general" } });
+  const value = (configRecord?.value ?? {}) as ConfigValues;
+
+  const initialConfig: ConfigValues = {
+    siteName: value.siteName ?? "",
+    siteUrl: value.siteUrl ?? "",
+    logoUrl: value.logoUrl ?? "",
+    iconUrl: value.iconUrl ?? "",
+    tagline: value.tagline ?? "",
+    timezone: value.timezone ?? "UTC",
+    contactEmail: value.contactEmail ?? "",
+    cacheEnabled: value.cache?.enabled ?? true,
+    social: {
+      facebook: value.social?.facebook ?? "",
+      instagram: value.social?.instagram ?? "",
+      youtube: value.social?.youtube ?? "",
+      twitter: value.social?.twitter ?? "",
+    },
+    metadata: {
+      title: value.metadata?.title ?? "",
+      description: value.metadata?.description ?? "",
+      keywords: value.metadata?.keywords ?? [],
+    },
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <DashboardHeading
-        heading="Pengaturan Situs"
-        description="Sesuaikan konfigurasi global untuk Roemah Cita CMS."
+        heading="Informasi Umum"
+        description="Sesuaikan identitas, metadata, dan kontak utama situs."
       />
-      <div className="grid gap-4 md:grid-cols-3">
-        {settingSections.map((section) => (
-          <Card key={section.href} className="hover:border-primary/40">
-            <CardHeader>
-              <CardTitle className="text-lg">
-                <Link href={section.href}>{section.title}</Link>
-              </CardTitle>
-              <CardDescription>{section.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Link href={section.href} className="text-sm font-medium text-primary">
-                Atur sekarang →
-              </Link>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <ConfigForm initialConfig={initialConfig} />
+      <CacheControls />
+      <BackupControls />
+      <Card>
+        <CardHeader>
+          <CardTitle>Panduan</CardTitle>
+          <CardDescription>Ikuti rekomendasi berikut agar tampilan konsisten.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>• Gunakan logo berformat SVG/PNG transparan untuk hasil terbaik.</p>
+          <p>• Pastikan metadata title dan description singkat serta jelas.</p>
+          <p>• Tambahkan kata kunci maksimal 10 item, dipisahkan koma.</p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

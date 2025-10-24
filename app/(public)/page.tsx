@@ -8,7 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { siteConfig } from "@/config/site";
+import { getSiteConfig } from "@/lib/site-config/server";
 
 const highlightStats = [
   { label: "Artikel Terbit", value: "128" },
@@ -16,21 +16,20 @@ const highlightStats = [
   { label: "Kategori", value: "9" },
 ];
 
-export default function HomePage() {
+export default async function HomePage() {
+  const config = await getSiteConfig();
   return (
     <div className="flex flex-col gap-12">
       <section className="grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:items-center">
         <div className="space-y-6">
           <span className="rounded-full border border-border bg-card px-3 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Konten kreatif lokal
+            {config.tagline ?? "Konten kreatif lokal"}
           </span>
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            {siteConfig.name} untuk mengelola cerita dan karya Roemah Cita.
+            {config.name} untuk mengelola cerita dan karya Roemah Cita.
           </h1>
           <p className="text-lg text-muted-foreground">
-            Dashboard modern untuk tim redaksi, lengkap dengan manajemen artikel, media,
-            dan konfigurasi situs. Editor Tiptap, dukungan multi-penulis, serta keamanan
-            enterprise siap pakai.
+            {config.metadata.description ?? config.description}
           </p>
           <div className="flex flex-wrap gap-3">
             <Button size="lg" asChild>

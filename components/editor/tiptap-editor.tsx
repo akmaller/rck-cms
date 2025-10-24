@@ -1,20 +1,37 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
-import Image from "@tiptap/extension-image";
+import Image, { type SetImageOptions } from "@tiptap/extension-image";
 import { Bold, Italic, List, ListOrdered, Quote, Heading2, Heading3, Heading4, Minus, Link as LinkIcon, Image as ImageIcon, Code, Strikethrough } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import type { MediaItem } from "@/components/media/media-grid";
+import { ImageInsertDialog } from "@/components/editor/image-insert-dialog";
 
 export type TiptapEditorProps = {
   value?: Record<string, unknown>;
   onChange?: (json: Record<string, unknown>) => void;
   placeholder?: string;
+  mediaItems?: MediaItem[];
 };
+
+const CustomImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      style: {
+        default: null,
+      },
+      "data-width": {
+        default: null,
+      },
+    };
+  },
+});
 
 const editorExtensions = [
   StarterKit.configure({
@@ -24,16 +41,18 @@ const editorExtensions = [
     blockquote: {},
     codeBlock: {},
     strike: {},
+    link: false,
   }),
   Link.configure({
     openOnClick: false,
     autolink: true,
     linkOnPaste: true,
   }),
-  Image.configure({ inline: false, allowBase64: true }),
+  CustomImage.configure({ inline: false, allowBase64: true }),
 ];
 
-export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps) {
+export function TiptapEditor({ value, onChange, placeholder, mediaItems = [] }: TiptapEditorProps) {
+  const [isImageDialogOpen, setIsImageDialogOpen] = useState(false);
   const editor = useEditor({
     immediatelyRender: false,
     extensions: editorExtensions,
@@ -73,10 +92,38 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
 
   const insertImage = useCallback(() => {
     if (!editor) return;
-    const url = window.prompt("URL gambar");
-    if (!url) return;
-    editor.chain().focus().setImage({ src: url }).run();
+    setIsImageDialogOpen(true);
   }, [editor]);
+
+  const handleInsertImage = useCallback(
+    (data: { src: string; alt?: string; width?: string }) => {
+      if (!editor) return;
+      const imageOptions: SetImageOptions = {
+        src: data.src,
+      };
+      if (data.alt) {
+        imageOptions.alt = data.alt;
+        imageOptions.title = data.alt;
+      }
+
+      const chain = editor.chain().focus().setImage(imageOptions);
+
+      if (data.width && data.width !== "auto") {
+        chain.updateAttributes("image", {
+          style: `display:block;margin-left:auto;margin-right:auto;width:${data.width};`,
+          "data-width": data.width,
+        } as Record<string, unknown>);
+      } else {
+        chain.updateAttributes("image", {
+          style: "display:block;margin-left:auto;margin-right:auto;",
+          "data-width": null,
+        } as Record<string, unknown>);
+      }
+
+      chain.run();
+    },
+    [editor]
+  );
 
   if (!editor) {
     return (
@@ -178,6 +225,15 @@ export function TiptapEditor({ value, onChange, placeholder }: TiptapEditorProps
         </ToolbarButton>
       </div>
       <EditorContent editor={editor} className="px-3 py-4" />
+      <ImageInsertDialog
+        open={isImageDialogOpen}
+        onOpenChange={setIsImageDialogOpen}
+        onInsert={(image) => {
+          handleInsertImage(image);
+          setIsImageDialogOpen(false);
+        }}
+        initialItems={mediaItems}
+      />
     </div>
   );
 }

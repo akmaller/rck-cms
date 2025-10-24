@@ -1,11 +1,22 @@
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
 import { CategoryForm } from "@/components/forms/category-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { CategoryList } from "@/components/taxonomies/category-list";
+import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
+import type { RoleKey } from "@/lib/auth/permissions";
 
 export default async function TaxonomiesPage() {
+  const session = await auth();
+  const role = (session?.user?.role ?? "AUTHOR") as RoleKey;
+  if (!session?.user || !(["ADMIN", "EDITOR"] as RoleKey[]).includes(role)) {
+    return (
+      <DashboardUnauthorized description="Hanya Admin dan Editor yang dapat mengatur kategori dan tag." />
+    );
+  }
+
   const categories = await prisma.category.findMany({
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { articles: true } } },

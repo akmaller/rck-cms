@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 
 import { loginAction } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,7 @@ function SubmitButton() {
 }
 
 export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
-  const [state, formAction] = useFormState(loginAction, {});
+  const [state, formAction] = useActionState(loginAction, {});
 
   return (
     <form action={formAction} className="space-y-4">
@@ -35,18 +36,6 @@ export function LoginForm({ callbackUrl }: { callbackUrl?: string }) {
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
         <Input id="password" name="password" type="password" required autoComplete="current-password" />
-      </div>
-      <div className="space-y-2">
-        <Label htmlFor="twoFactorCode">
-          Kode 2FA <span className="text-muted-foreground">(opsional)</span>
-        </Label>
-        <Input
-          id="twoFactorCode"
-          name="twoFactorCode"
-          placeholder="123456"
-          inputMode="numeric"
-          pattern="[0-9]{6}"
-        />
       </div>
       {state?.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
       <input type="hidden" name="redirectTo" value={callbackUrl ?? ""} />

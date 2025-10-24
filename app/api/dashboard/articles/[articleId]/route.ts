@@ -34,10 +34,11 @@ async function fetchArticle(articleId: string) {
 
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { articleId: string } }
+  context: { params: Promise<{ articleId: string }> }
 ) {
+  const { articleId } = await context.params;
   const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
-  const article = await fetchArticle(params.articleId);
+  const article = await fetchArticle(articleId);
 
   if (!article) {
     return NextResponse.json({ error: "Artikel tidak ditemukan" }, { status: 404 });
@@ -66,8 +67,12 @@ export async function GET(
   });
 }
 
-export async function PATCH(request: NextRequest, { params }: { params: { articleId: string } }) {
-  const session = await assertArticleOwnership(params.articleId);
+export async function PATCH(
+  request: NextRequest,
+  context: { params: Promise<{ articleId: string }> }
+) {
+  const { articleId } = await context.params;
+  const session = await assertArticleOwnership(articleId);
   const rateKey = `article_mutation:${session.user.id}`;
 
   if (isRateLimited(rateKey, MUTATION_LIMIT, MUTATION_WINDOW_MS)) {
@@ -89,7 +94,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { articl
 
   const data = parsed.data;
 
-  const article = await fetchArticle(params.articleId);
+  const article = await fetchArticle(articleId);
   if (!article) {
     return NextResponse.json({ error: "Artikel tidak ditemukan" }, { status: 404 });
   }
@@ -251,9 +256,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { articl
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { articleId: string } }
+  context: { params: Promise<{ articleId: string }> }
 ) {
-  const session = await assertArticleOwnership(params.articleId);
+  const { articleId } = await context.params;
+  const session = await assertArticleOwnership(articleId);
   const rateKey = `article_mutation:${session.user.id}`;
 
   if (isRateLimited(rateKey, MUTATION_LIMIT, MUTATION_WINDOW_MS)) {
@@ -264,7 +270,7 @@ export async function DELETE(
   }
 
   try {
-    await prisma.article.delete({ where: { id: params.articleId } });
+    await prisma.article.delete({ where: { id: articleId } });
   } catch {
     return NextResponse.json({ error: "Artikel tidak ditemukan" }, { status: 404 });
   }
@@ -272,7 +278,7 @@ export async function DELETE(
   await writeAuditLog({
     action: "ARTICLE_DELETE",
     entity: "Article",
-    entityId: params.articleId,
+    entityId: articleId,
   });
 
   return NextResponse.json({ message: "Artikel dihapus" });

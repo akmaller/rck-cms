@@ -1,8 +1,11 @@
+import type { RoleKey } from "@/lib/auth/permissions";
+
 export type NavItem = {
   name: string;
   href: string;
   description?: string;
   external?: boolean;
+  roles?: RoleKey[];
 };
 
 export const publicNavigation: NavItem[] = [
@@ -14,12 +17,13 @@ export const publicNavigation: NavItem[] = [
 ];
 
 export const dashboardNavigation: NavItem[] = [
-  { name: "Dasbor", href: "/dashboard" },
-  { name: "Artikel", href: "/dashboard/articles" },
-  { name: "Kategori & Tag", href: "/dashboard/taxonomies" },
-  { name: "Media", href: "/dashboard/media" },
-  { name: "Menu", href: "/dashboard/menus" },
-  { name: "Halaman", href: "/dashboard/pages" },
-  { name: "Pengguna", href: "/dashboard/users" },
-  { name: "Konfigurasi", href: "/dashboard/settings" },
+  { name: "Dasbor", href: "/dashboard", roles: ["ADMIN", "EDITOR", "AUTHOR"] },
+  { name: "Artikel", href: "/dashboard/articles", roles: ["ADMIN", "EDITOR", "AUTHOR"] },
+  { name: "Kategori & Tag", href: "/dashboard/taxonomies", roles: ["ADMIN", "EDITOR"] },
+  { name: "Media", href: "/dashboard/media", roles: ["ADMIN", "EDITOR"] },
+  { name: "Menu", href: "/dashboard/menus", roles: ["ADMIN", "EDITOR"] },
+  { name: "Halaman", href: "/dashboard/pages", roles: ["ADMIN", "EDITOR"] },
+  { name: "Pengguna", href: "/dashboard/users", roles: ["ADMIN"] },
+  { name: "Log Aktivitas", href: "/dashboard/audit-log", roles: ["ADMIN"] },
+  { name: "Konfigurasi", href: "/dashboard/settings", roles: ["ADMIN"] },
 ];

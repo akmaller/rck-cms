@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
-import { deleteMediaFile, saveMediaFile } from "@/lib/storage/media";
+import { deleteMediaFile, deriveThumbnailUrl, saveMediaFile } from "@/lib/storage/media";
 import { writeAuditLog } from "@/lib/audit/log";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -40,8 +40,10 @@ export async function uploadMedia(formData: FormData) {
       title: parsed.data.title ?? file.name ?? "Media",
       fileName: saved.fileName,
       url: saved.url,
-      mimeType: file.type || "application/octet-stream",
-      size: Number(file.size) || 0,
+      mimeType: "image/webp",
+      size: saved.size,
+      width: saved.width,
+      height: saved.height,
       storageType: saved.storageType,
       createdById: session.user.id,
     },
@@ -55,7 +57,14 @@ export async function uploadMedia(formData: FormData) {
   });
 
   revalidatePath("/dashboard/media");
-  return { success: true };
+  return {
+    success: true,
+    data: {
+      id: media.id,
+      url: media.url,
+      thumbnailUrl: deriveThumbnailUrl(media.url) ?? undefined,
+    },
+  };
 }
 
 export async function deleteMedia(id: string) {
