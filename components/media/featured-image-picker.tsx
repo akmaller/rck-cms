@@ -220,8 +220,13 @@ export function FeaturedImagePicker({
     fileInputRef.current?.click();
   };
 
-  const handleDescriptionSubmit = async (event: FormEvent) => {
+  const handleDescriptionSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    event.stopPropagation();
+    const nativeEvent = event.nativeEvent;
+    if (typeof nativeEvent.stopImmediatePropagation === "function") {
+      nativeEvent.stopImmediatePropagation();
+    }
     if (!selectedMedia) return;
     setSavingDescription(true);
     setSaveSuccess(false);
@@ -281,7 +286,7 @@ export function FeaturedImagePicker({
 
       {isOpen ? (
         <Modal onClose={handleClose}>
-          <div className="flex w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-background shadow-2xl max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-4rem)]">
+          <div className="flex w-full max-w-5xl flex-col rounded-xl bg-background shadow-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto md:max-h-[calc(100dvh-4rem)] md:overflow-hidden">
             <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold">Media Library</h2>
@@ -293,7 +298,7 @@ export function FeaturedImagePicker({
                 Tutup
               </Button>
             </div>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row md:divide-x md:divide-border">
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto md:flex-row md:divide-x md:divide-border md:overflow-hidden">
               <div className="flex-1 min-h-0">
                 <div className="flex h-full min-h-0 flex-col">
                   <div

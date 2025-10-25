@@ -5,6 +5,9 @@ import { revalidatePath } from "next/cache";
 import { requireAuth } from "@/lib/auth/permissions";
 import { generateTwoFactorSecret, verifyTwoFactorToken } from "@/lib/auth/totp";
 import { prisma } from "@/lib/prisma";
+import { securityPolicySchema } from "@/lib/validators/security";
+import { updateSecurityPolicy } from "@/lib/security/policy";
+import { unblockIp } from "@/lib/security/ip-block";
 
 const SETUP_EXPIRATION_MINUTES = 15;
 
@@ -85,4 +88,47 @@ export async function disableTwoFactor() {
   revalidatePath("/dashboard/settings/security");
   revalidatePath("/dashboard/profile");
   return { success: true, message: "Autentikasi dua faktor dinonaktifkan." };
+}
+
+export async function updateSecurityPolicyAction(formData: FormData) {
+  const session = await requireAuth();
+  if ((session.user.role ?? "") !== "ADMIN") {
+    return { success: false, message: "Hanya administrator yang dapat mengubah kebijakan keamanan." };
+  }
+
+  const parsed = securityPolicySchema.safeParse({
+    loginMaxAttempts: formData.get("loginMaxAttempts"),
+    loginWindowMinutes: formData.get("loginWindowMinutes"),
+    pageMaxVisits: formData.get("pageMaxVisits"),
+    pageWindowMinutes: formData.get("pageWindowMinutes"),
+    apiMaxRequests: formData.get("apiMaxRequests"),
+    apiWindowMinutes: formData.get("apiWindowMinutes"),
+    blockDurationMinutes: formData.get("blockDurationMinutes"),
+  });
+
+  if (!parsed.success) {
+    return { success: false, message: parsed.error.issues[0]?.message ?? "Data tidak valid." };
+  }
+
+  const data = parsed.data;
+  await updateSecurityPolicy({
+    login: { maxAttempts: data.loginMaxAttempts, windowMinutes: data.loginWindowMinutes },
+    page: { maxVisits: data.pageMaxVisits, windowMinutes: data.pageWindowMinutes },
+    api: { maxRequests: data.apiMaxRequests, windowMinutes: data.apiWindowMinutes },
+    block: { durationMinutes: data.blockDurationMinutes },
+  });
+
+  revalidatePath("/dashboard/settings/security");
+  return { success: true, message: "Kebijakan keamanan diperbarui." };
+}
+
+export async function unblockIpAction(ip: string) {
+  const session = await requireAuth();
+  if ((session.user.role ?? "") !== "ADMIN") {
+    return { success: false, message: "Tidak diizinkan." };
+  }
+
+  await unblockIp(ip);
+  revalidatePath("/dashboard/settings/security");
+  return { success: true, message: "Alamat IP telah dilepaskan." };
 }

@@ -54,6 +54,10 @@ export type ConfigValues = {
     description?: string;
     keywords?: string[];
   };
+  registration?: {
+    enabled?: boolean;
+    autoApprove?: boolean;
+  };
 };
 
 type ConfigFormProps = {
@@ -67,6 +71,12 @@ export function ConfigForm({ initialConfig }: ConfigFormProps) {
   const [iconUrl, setIconUrl] = useState(initialConfig.iconUrl ?? "");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingIcon, setUploadingIcon] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState(
+    initialConfig.registration?.enabled ?? true
+  );
+  const [registrationAutoApprove, setRegistrationAutoApprove] = useState(
+    initialConfig.registration?.autoApprove ?? false
+  );
 
   const keywordsString = useMemo(
     () => initialConfig.metadata?.keywords?.join(", ") ?? "",
@@ -348,6 +358,62 @@ export function ConfigForm({ initialConfig }: ConfigFormProps) {
                 placeholder="pisahkan dengan koma, contoh: budaya, kuliner"
               />
               <p className="text-xs text-muted-foreground">Maksimal 10 kata kunci, dipisahkan koma.</p>
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className="text-sm font-semibold">Registrasi Penulis Publik</h3>
+            <p className="text-xs text-muted-foreground">
+              Tentukan apakah publik dapat mendaftar sebagai penulis dan apakah akun baru otomatis diizinkan menulis setelah aktivasi email.
+            </p>
+            <div className="space-y-2 rounded-md border border-border/60 bg-muted/10 p-3">
+              <div className="flex items-start gap-3">
+                <input type="hidden" name="registration.enabled" value="false" />
+                <input
+                  id="registration.enabled"
+                  name="registration.enabled"
+                  type="checkbox"
+                  value="true"
+                  checked={registrationEnabled}
+                  onChange={(event) => {
+                    const enabled = event.target.checked;
+                    setRegistrationEnabled(enabled);
+                    if (!enabled) {
+                      setRegistrationAutoApprove(false);
+                    }
+                  }}
+                  className="mt-1 h-4 w-4"
+                />
+                <div>
+                  <Label htmlFor="registration.enabled" className="text-sm font-medium">
+                    Izinkan registrasi mandiri publik
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Jika dinonaktifkan, tautan registrasi tidak ditampilkan dan pendaftaran ditolak.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3 pl-7">
+                <input type="hidden" name="registration.autoApprove" value="false" />
+                <input
+                  id="registration.autoApprove"
+                  name="registration.autoApprove"
+                  type="checkbox"
+                  value="true"
+                  checked={registrationAutoApprove}
+                  onChange={(event) => setRegistrationAutoApprove(event.target.checked)}
+                  disabled={!registrationEnabled}
+                  className="mt-1 h-4 w-4"
+                />
+                <div>
+                  <Label htmlFor="registration.autoApprove" className="text-sm font-medium">
+                    Otomatis izinkan menulis setelah aktivasi email
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Jika dimatikan, penulis baru harus menunggu persetujuan admin/editor sebelum bisa menulis artikel.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
 

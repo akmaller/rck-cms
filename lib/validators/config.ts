@@ -50,6 +50,12 @@ export const siteConfigSchema = z.object({
       enabled: z.boolean().optional(),
     })
     .optional(),
+  registration: z
+    .object({
+      enabled: z.boolean().optional(),
+      autoApprove: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export type SiteConfigInput = z.infer<typeof siteConfigSchema>;

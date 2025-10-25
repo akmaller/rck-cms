@@ -1,15 +1,17 @@
 import { notFound } from "next/navigation";
 
-import { MenuItemForm } from "@/components/forms/menu-item-form";
-import { MenuBuilder } from "@/components/menu/menu-builder";
-import { MenuSelector } from "@/components/menu/menu-selector";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { prisma } from "@/lib/prisma";
+import { ArticleStatus } from "@prisma/client";
+
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { auth } from "@/auth";
 import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
 import type { RoleKey } from "@/lib/auth/permissions";
 import { buildMenuTree, flattenMenuTree } from "@/lib/menu/utils";
+import { MenuItemForm } from "@/components/forms/menu-item-form";
+import { MenuBuilder } from "@/components/menu/menu-builder";
+import { MenuSelector } from "@/components/menu/menu-selector";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { prisma } from "@/lib/prisma";
 
 const DEFAULT_MENU = "main";
 
@@ -30,10 +32,16 @@ export default async function MenusPage({ searchParams }: MenusPageProps) {
   const menuParam = resolvedSearchParams.menu;
   const selectedMenu = typeof menuParam === "string" && menuParam.length > 0 ? menuParam : DEFAULT_MENU;
 
-  const [distinctMenus, menuItems, pages] = await Promise.all([
+  const [distinctMenus, menuItems, pages, categories, albums] = await Promise.all([
     prisma.menuItem.findMany({ distinct: ["menu"], select: { menu: true }, orderBy: { menu: "asc" } }),
     prisma.menuItem.findMany({ where: { menu: selectedMenu }, orderBy: [{ parentId: "asc" }, { order: "asc" }] }),
     prisma.page.findMany({ select: { id: true, title: true } }),
+    prisma.category.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, slug: true } }),
+    prisma.album.findMany({
+      where: { status: ArticleStatus.PUBLISHED },
+      orderBy: { title: "asc" },
+      select: { id: true, title: true },
+    }),
   ]);
 
   const menuNames = Array.from(new Set([selectedMenu, ...distinctMenus.map((item) => item.menu), "main", "footer"]));
@@ -66,7 +74,7 @@ export default async function MenusPage({ searchParams }: MenusPageProps) {
         <MenuSelector menus={menuNames} />
       </div>
       <section className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
-        <Card>
+        <Card className="card-soft">
           <CardHeader>
             <CardTitle>Struktur Menu</CardTitle>
             <CardDescription>Urutan dan hierarki menu {selectedMenu}.</CardDescription>
@@ -76,6 +84,12 @@ export default async function MenusPage({ searchParams }: MenusPageProps) {
               menu={selectedMenu}
               items={tree}
               pages={pages.map((page) => ({ id: page.id, title: page.title }))}
+              categories={categories.map((category) => ({
+                id: category.id,
+                name: category.name,
+                slug: category.slug,
+              }))}
+              albums={albums.map((album) => ({ id: album.id, title: album.title }))}
             />
           </CardContent>
         </Card>
@@ -83,6 +97,12 @@ export default async function MenusPage({ searchParams }: MenusPageProps) {
           menu={selectedMenu}
           parents={parentOptions}
           pages={pages.map((page) => ({ id: page.id, title: page.title }))}
+          categories={categories.map((category) => ({
+            id: category.id,
+            name: category.name,
+            slug: category.slug,
+          }))}
+          albums={albums.map((album) => ({ id: album.id, title: album.title }))}
         />
       </section>
     </div>

@@ -76,37 +76,39 @@ export function DashboardSidebar({
   }, [isOpen]);
 
   const renderNavigation = (onNavigate?: () => void) => (
-    <nav className="flex flex-1 flex-col gap-1 text-sm">
-      {navigationItems.length === 0 ? (
-        <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-          Tidak ada menu yang tersedia untuk peran Anda.
-        </p>
-      ) : null}
-      {navigationItems.map((item) => {
-        const isActive =
-          item.href === "/dashboard"
-            ? pathname === item.href
-            : pathname.startsWith(item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center rounded-md px-3 py-2 transition-colors hover:bg-accent hover:text-accent-foreground",
-              isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground"
-            )}
-          >
-            {item.name}
-          </Link>
-        );
-      })}
-    </nav>
+    <div className="flex-1 overflow-hidden">
+      <nav className="flex min-h-0 flex-col gap-1 overflow-y-auto pr-1 text-sm">
+        {navigationItems.length === 0 ? (
+          <p className="rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+            Tidak ada menu yang tersedia untuk peran Anda.
+          </p>
+        ) : null}
+        {navigationItems.map((item) => {
+          const isActive =
+            item.href === "/dashboard"
+              ? pathname === item.href
+              : pathname.startsWith(item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              onClick={onNavigate}
+              className={cn(
+                "flex items-center rounded-md px-3 py-2 transition-colors hover:bg-accent hover:text-accent-foreground",
+                isActive ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+              )}
+            >
+              {item.name}
+            </Link>
+          );
+        })}
+      </nav>
+    </div>
   );
 
   return (
     <>
-      <aside className="hidden min-h-screen w-64 flex-col border-r border-border bg-card/40 p-4 md:flex">
+      <aside className="hidden h-screen w-64 flex-col border-r border-border bg-card/40 p-4 md:sticky md:top-0 md:flex">
         <div className="mb-6 flex items-center gap-3">
           {siteConfig.logoUrl ? (
             <Image src={siteConfig.logoUrl} alt={siteConfig.name} width={32} height={32} className="h-8 w-8 rounded" />
@@ -119,7 +121,7 @@ export function DashboardSidebar({
           </div>
         </div>
         {renderNavigation()}
-        <div className="mt-8 space-y-4 border-t border-border/60 pt-4">
+        <div className="mt-auto space-y-4 border-t border-border/60 pt-4">
           <DashboardThemeToggle />
           <Link
             href="/dashboard/profile"
@@ -153,7 +155,7 @@ export function DashboardSidebar({
         id="dashboard-mobile-sidebar"
         ref={mobileSidebarRef}
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 transform flex-col overflow-y-auto border-r border-border bg-card/95 p-4 shadow-lg backdrop-blur transition-transform duration-200 md:hidden",
+          "fixed inset-y-0 left-0 z-50 flex w-64 transform flex-col overflow-hidden border-r border-border bg-card/95 p-4 shadow-lg backdrop-blur transition-transform duration-200 md:hidden",
           isOpen ? "translate-x-0" : "-translate-x-full"
         )}
         aria-label="Navigasi dashboard"
@@ -178,7 +180,7 @@ export function DashboardSidebar({
           </Button>
         </div>
         {renderNavigation(onClose)}
-        <div className="mt-8 space-y-4 border-t border-border/60 pt-4">
+        <div className="mt-auto space-y-4 border-t border-border/60 pt-4">
           <DashboardThemeToggle />
           <Link
             href="/dashboard/profile"

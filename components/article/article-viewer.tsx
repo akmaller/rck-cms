@@ -2,6 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Fragment, type JSX, type ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
+
 type TiptapMark = {
   type: string;
   attrs?: Record<string, unknown>;
@@ -19,6 +21,36 @@ type ArticleViewerProps = {
   content: unknown;
 };
 
+function sanitizeHref(value: unknown): string {
+  if (typeof value !== "string") {
+    return "#";
+  }
+  const trimmed = value.trim();
+  if (trimmed.startsWith("/")) {
+    return trimmed;
+  }
+  const lower = trimmed.toLowerCase();
+  if (/^(https?:|mailto:|tel:)/.test(lower)) {
+    return trimmed;
+  }
+  return "#";
+}
+
+function sanitizeImageSrc(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const lower = trimmed.toLowerCase();
+  if (trimmed.startsWith("/") || lower.startsWith("https://") || lower.startsWith("http://") || lower.startsWith("data:image") || lower.startsWith("blob:")) {
+    return trimmed;
+  }
+  return null;
+}
+
 function applyMarks(text: ReactNode, marks: TiptapMark[] = []) {
   return marks.reduce((acc, mark, index) => {
     switch (mark.type) {
@@ -34,12 +66,21 @@ function applyMarks(text: ReactNode, marks: TiptapMark[] = []) {
             {acc}
           </code>
         );
-      case "link":
+      case "link": {
+        const href = sanitizeHref(mark.attrs?.href);
+        const isExternal = href.startsWith('http');
         return (
-          <Link key={`link-${index}`} href={(mark.attrs?.href as string) ?? "#"} className="text-primary underline">
+          <Link
+            key={`link-${index}`}
+            href={href}
+            className="text-primary underline"
+            rel={isExternal ? 'noopener noreferrer' : undefined}
+            target={isExternal ? '_blank' : undefined}
+          >
             {acc}
           </Link>
         );
+      }
       default:
         return acc;
     }
@@ -49,6 +90,47 @@ function applyMarks(text: ReactNode, marks: TiptapMark[] = []) {
 function renderNodes(nodes: TiptapNode[] | undefined, keyPrefix = "node" ): ReactNode[] {
   if (!nodes) return [];
   return nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`));
+}
+
+function resolveWidthAttributes(value: unknown): { widthPx: number | null; widthPercent: string | null } {
+  const fallbackPercent = "50%";
+
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    if (value <= 100) {
+      return { widthPx: null, widthPercent: fallbackPercent };
+    }
+    return { widthPx: value, widthPercent: null };
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return { widthPx: null, widthPercent: fallbackPercent };
+    }
+
+    const numeric = Number(trimmed.replace(/%$/, ""));
+    if (!Number.isNaN(numeric) && numeric > 0) {
+      if (numeric <= 100) {
+        return { widthPx: null, widthPercent: fallbackPercent };
+      }
+      return { widthPx: numeric, widthPercent: null };
+    }
+  }
+
+  return { widthPx: null, widthPercent: fallbackPercent };
+}
+
+function resolveHeightAttribute(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const numeric = Number(value.trim());
+    if (!Number.isNaN(numeric) && numeric > 0) {
+      return numeric;
+    }
+  }
+  return null;
 }
 
 function renderNode(node: TiptapNode, key: string): ReactNode {
@@ -104,26 +186,35 @@ function renderNode(node: TiptapNode, key: string): ReactNode {
       return <hr key={key} className="my-6 border-border" />;
     case "hardBreak":
       return <br key={key} />;
-    case "image":
-      if (node.attrs?.src && typeof node.attrs.src === "string") {
-        const imageTitle =
-          node.attrs && typeof node.attrs.title === "string" ? node.attrs.title : undefined;
-        return (
-          <div key={key} className="my-4 overflow-hidden rounded-md border border-border/60">
-            <Image
-              src={node.attrs.src}
-              alt={(node.attrs.alt as string) ?? ""}
-              width={node.attrs.width ? Number(node.attrs.width) : 800}
-              height={node.attrs.height ? Number(node.attrs.height) : 450}
-              className="h-auto w-full object-cover"
-            />
-            {imageTitle ? (
-              <p className="bg-muted px-3 py-2 text-xs text-muted-foreground">{imageTitle}</p>
-            ) : null}
-          </div>
-        );
+    case "image": {
+      const src = sanitizeImageSrc(node.attrs?.src);
+      if (!src) {
+        return null;
       }
-      return null;
+      const { widthPx, widthPercent } = resolveWidthAttributes(node.attrs?.width);
+      const height = resolveHeightAttribute(node.attrs?.height) ?? 450;
+      const width = widthPx ?? 800;
+      const alt = typeof node.attrs?.alt === "string" ? node.attrs.alt : "";
+      const wrapperStyle = widthPercent ? { width: widthPercent } : undefined;
+      return (
+        <div
+          key={key}
+          className={cn(
+            "my-4 overflow-hidden rounded-md border border-border/60",
+            widthPercent ? "mx-auto" : undefined
+          )}
+          style={wrapperStyle}
+        >
+          <Image
+            src={src}
+            alt={alt}
+            width={width}
+            height={height}
+            className="h-auto w-full object-cover"
+          />
+        </div>
+      );
+    }
     default:
       return node.content ? <Fragment key={key}>{renderNodes(node.content, key)}</Fragment> : null;
   }

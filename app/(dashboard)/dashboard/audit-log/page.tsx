@@ -42,16 +42,17 @@ function formatDateLabel(date?: Date) {
   });
 }
 
-export default async function AuditLogPage({
-  searchParams,
-}: {
-  searchParams: {
+type AuditLogPageProps = {
+  searchParams: Promise<{
     page?: string;
     range?: string;
     from?: string;
     to?: string;
-  };
-}) {
+  }>;
+};
+
+export default async function AuditLogPage({ searchParams }: AuditLogPageProps) {
+  const resolvedParams = await searchParams;
   const session = await auth();
   const role = (session?.user?.role ?? "AUTHOR") as RoleKey;
 
@@ -60,13 +61,13 @@ export default async function AuditLogPage({
   }
 
   const now = new Date();
-  const rawRange = (searchParams.range ?? "week") as RangeOption;
+  const rawRange = (resolvedParams.range ?? "week") as RangeOption;
   const range: RangeOption = ["week", "month", "custom"].includes(rawRange)
     ? rawRange
     : "week";
 
-  const customFrom = parseDate(searchParams.from);
-  const customTo = parseDate(searchParams.to);
+  const customFrom = parseDate(resolvedParams.from);
+  const customTo = parseDate(resolvedParams.to);
 
   let fromDate: Date | undefined;
   let toDate: Date | undefined;
@@ -92,7 +93,7 @@ export default async function AuditLogPage({
         : undefined,
   };
 
-  const currentPage = Math.max(1, Number(searchParams.page ?? 1));
+  const currentPage = Math.max(1, Number(resolvedParams.page ?? 1));
 
   const [logs, total] = await Promise.all([
     prisma.auditLog.findMany({
@@ -114,8 +115,8 @@ export default async function AuditLogPage({
   const baseParams = new URLSearchParams();
   baseParams.set("range", range);
   if (range === "custom") {
-    if (searchParams.from) baseParams.set("from", searchParams.from);
-    if (searchParams.to) baseParams.set("to", searchParams.to);
+    if (resolvedParams.from) baseParams.set("from", resolvedParams.from);
+    if (resolvedParams.to) baseParams.set("to", resolvedParams.to);
   }
 
   const prevParams = new URLSearchParams(baseParams);
@@ -158,7 +159,7 @@ export default async function AuditLogPage({
                 id="from"
                 name="from"
                 type="date"
-                defaultValue={range === "custom" ? searchParams.from ?? "" : ""}
+                defaultValue={range === "custom" ? resolvedParams.from ?? "" : ""}
               />
             </div>
             <div className="space-y-2">
@@ -167,7 +168,7 @@ export default async function AuditLogPage({
                 id="to"
                 name="to"
                 type="date"
-                defaultValue={range === "custom" ? searchParams.to ?? "" : ""}
+                defaultValue={range === "custom" ? resolvedParams.to ?? "" : ""}
               />
             </div>
             <div className="flex items-end gap-2">

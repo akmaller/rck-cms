@@ -5,72 +5,13 @@ import { z } from "zod";
 
 import { verifyPassword } from "@/lib/auth/password";
 import { verifyTwoFactorToken } from "@/lib/auth/totp";
-import { isRateLimited, resetRateLimit } from "@/lib/rate-limit";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit/log";
-
-type DerivedDeviceInfo = {
-  userAgent: string;
-  browser?: string;
-  os?: string;
-  deviceType: "desktop" | "mobile" | "tablet" | "bot" | "unknown";
-};
-
-function deriveDeviceInfo(userAgentHeader: string | null | undefined): DerivedDeviceInfo {
-  if (!userAgentHeader) {
-    return { userAgent: "unknown", deviceType: "unknown" };
-  }
-
-  const userAgent = userAgentHeader.trim();
-  if (!userAgent) {
-    return { userAgent: "unknown", deviceType: "unknown" };
-  }
-
-  const uaLower = userAgent.toLowerCase();
-
-  let deviceType: DerivedDeviceInfo["deviceType"] = "desktop";
-  if (/bot|crawl|spider|slurp|mediapartners/i.test(userAgent)) {
-    deviceType = "bot";
-  } else if (/tablet|ipad|playbook|silk/i.test(userAgent)) {
-    deviceType = "tablet";
-  } else if (/mobi|iphone|android/i.test(userAgent)) {
-    deviceType = "mobile";
-  }
-
-  const browserDetectors: Array<{ pattern: RegExp; name: string }> = [
-    { pattern: /edg\/([\d.]+)/i, name: "Edge" },
-    { pattern: /chrome\/([\d.]+)/i, name: "Chrome" },
-    { pattern: /safari\/([\d.]+)/i, name: "Safari" },
-    { pattern: /firefox\/([\d.]+)/i, name: "Firefox" },
-    { pattern: /opr\/([\d.]+)/i, name: "Opera" },
-    { pattern: /msie\s([\d.]+)/i, name: "IE" },
-    { pattern: /trident\/.*rv:([\d.]+)/i, name: "IE" },
-  ];
-
-  const browserMatch = browserDetectors.find(({ pattern }) => pattern.test(userAgent));
-  const browser = browserMatch ? browserMatch.name : undefined;
-
-  let os: string | undefined;
-  if (/windows nt 10/i.test(userAgent)) os = "Windows 10";
-  else if (/windows nt 11/i.test(userAgent)) os = "Windows 11";
-  else if (/windows nt 6\.3/i.test(userAgent)) os = "Windows 8.1";
-  else if (/windows nt 6\.2/i.test(userAgent)) os = "Windows 8";
-  else if (/windows nt 6\.1/i.test(userAgent)) os = "Windows 7";
-  else if (/mac os x 10[_\.]15/i.test(userAgent)) os = "macOS Catalina";
-  else if (/mac os x 10[_\.]14/i.test(userAgent)) os = "macOS Mojave";
-  else if (/mac os x/i.test(userAgent)) os = "macOS";
-  else if (/iphone|ipad|ipod/i.test(userAgent)) os = "iOS";
-  else if (/android/i.test(userAgent)) os = "Android";
-  else if (/linux/i.test(uaLower)) os = "Linux";
-  else if (/cros/i.test(userAgent)) os = "Chrome OS";
-
-  return {
-    userAgent,
-    browser,
-    os,
-    deviceType,
-  };
-}
+import { deriveDeviceInfo } from "@/lib/device-info";
+import { getSecurityPolicy } from "@/lib/security/policy";
+import { clearRateLimit, enforceRateLimit } from "@/lib/security/rate-limit";
+import { extractClientIp, isIpBlocked } from "@/lib/security/ip-block";
+import { logSecurityIncident } from "@/lib/security/activity-log";
 
 const credentialsSchema = z
   .object({
@@ -86,7 +27,7 @@ const credentialsSchema = z
     return Boolean(data.email && data.password);
   }, { message: "Kredensial tidak valid" });
 
-export const authConfig = {
+export const authConfig: NextAuthConfig = {
   adapter: PrismaAdapter(prisma),
   session: {
     strategy: "jwt",
@@ -104,10 +45,29 @@ export const authConfig = {
         }
 
         const { email, password, twoFactorCode, twoFactorToken } = parsed.data;
-        const forwardedFor = request?.headers?.get("x-forwarded-for") ?? "";
-        const ipFromHeader = forwardedFor.split(",")[0]?.trim();
-        const ip = ipFromHeader || "unknown";
+        const ip = extractClientIp({
+          headers: request?.headers ?? new Headers(),
+          ip: (request as { ip?: string | null } | undefined)?.ip ?? null,
+        });
         const deviceInfo = deriveDeviceInfo(request?.headers?.get("user-agent"));
+
+        const securityPolicy = await getSecurityPolicy();
+        const blockDurationMs = Math.max(1, securityPolicy.block.durationMinutes) * 60_000;
+
+        const activeBlock = await isIpBlocked(ip, "login");
+        if (activeBlock?.blockedUntil && activeBlock.blockedUntil > new Date()) {
+          await logSecurityIncident({
+            category: "login",
+            source: "auth",
+            description: "Percobaan login dari IP yang sedang diblokir.",
+            ip,
+            metadata: {
+              blockedUntil: activeBlock.blockedUntil,
+              email: email ?? null,
+            },
+          });
+          throw new Error("Akses diblokir sementara. Coba lagi nanti.");
+        }
 
         if (twoFactorToken) {
           const pendingToken = await prisma.twoFactorToken.findUnique({
@@ -130,25 +90,42 @@ export const authConfig = {
             throw new Error("2FA tidak tersedia untuk akun ini.");
           }
 
+          if (!user.emailVerified) {
+            await prisma.twoFactorToken.delete({ where: { id: pendingToken.id } });
+            throw new Error("Akun Anda belum aktif. Silakan cek email untuk aktivasi.");
+          }
+
           if (!twoFactorCode) {
             throw new Error("Kode 2FA diperlukan");
           }
 
+          const loginIdentifier = `${ip}:${user.email ?? user.id}`;
+
           const isValid2FA = verifyTwoFactorToken(twoFactorCode, user.twoFactorSecret);
           if (!isValid2FA) {
+            const limitResult = await enforceRateLimit({
+              type: "login",
+              identifier: loginIdentifier,
+              limit: Math.max(1, securityPolicy.login.maxAttempts),
+              windowMs: Math.max(1, securityPolicy.login.windowMinutes) * 60_000,
+              blockDurationMs,
+              ip,
+              reason: "Terlalu banyak percobaan login",
+              metadata: { stage: "2fa", email: user.email },
+            });
+            if (!limitResult.allowed) {
+              throw new Error("Terlalu banyak percobaan login. Coba lagi nanti.");
+            }
             throw new Error("Kode 2FA tidak valid");
           }
 
-          await prisma.$transaction([
-            prisma.twoFactorToken.delete({ where: { id: pendingToken.id } }),
-            prisma.user.update({
-              where: { id: user.id },
-              data: { lastLoginAt: new Date() },
-            }),
-          ]);
+          await prisma.twoFactorToken.deleteMany({ where: { id: pendingToken.id } });
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { lastLoginAt: new Date() },
+          });
 
-          const rateLimitKeyTwoFactor = `login:${ip}:${user.email ?? "unknown"}`;
-          resetRateLimit(rateLimitKeyTwoFactor);
+          await clearRateLimit("login", loginIdentifier);
 
           await writeAuditLog({
             action: "USER_LOGIN",
@@ -173,24 +150,51 @@ export const authConfig = {
 
         const emailForPassword = email!;
         const passwordForCheck = password!;
-        const rateLimitKey = `login:${ip}:${emailForPassword}`;
-
-        if (isRateLimited(rateLimitKey, 5, 60_000)) {
-          throw new Error("Terlalu banyak percobaan login. Coba lagi setelah 1 menit.");
-        }
+        const loginIdentifier = `${ip}:${emailForPassword.toLowerCase()}`;
 
         const user = await prisma.user.findUnique({ where: { email: emailForPassword } });
 
         if (!user || !user.passwordHash) {
+          const limitResult = await enforceRateLimit({
+            type: "login",
+            identifier: loginIdentifier,
+            limit: Math.max(1, securityPolicy.login.maxAttempts),
+            windowMs: Math.max(1, securityPolicy.login.windowMinutes) * 60_000,
+            blockDurationMs,
+            ip,
+            reason: "Terlalu banyak percobaan login",
+            metadata: { email: emailForPassword, stage: "credentials" },
+          });
+          if (!limitResult.allowed) {
+            throw new Error("Terlalu banyak percobaan login. Coba lagi nanti.");
+          }
           throw new Error("Email atau password salah");
         }
 
         const isValidPassword = await verifyPassword(passwordForCheck, user.passwordHash);
         if (!isValidPassword) {
+          const limitResult = await enforceRateLimit({
+            type: "login",
+            identifier: loginIdentifier,
+            limit: Math.max(1, securityPolicy.login.maxAttempts),
+            windowMs: Math.max(1, securityPolicy.login.windowMinutes) * 60_000,
+            blockDurationMs,
+            ip,
+            reason: "Terlalu banyak percobaan login",
+            metadata: { email: emailForPassword, stage: "credentials" },
+          });
+          if (!limitResult.allowed) {
+            throw new Error("Terlalu banyak percobaan login. Coba lagi nanti.");
+          }
           throw new Error("Email atau password salah");
         }
 
+        if (!user.emailVerified) {
+          throw new Error("Akun Anda belum aktif. Silakan cek email untuk aktivasi.");
+        }
+
         if (user.twoFactorEnabled) {
+          await clearRateLimit("login", loginIdentifier);
           throw new Error("Kode 2FA diperlukan");
         }
 
@@ -199,7 +203,7 @@ export const authConfig = {
           data: { lastLoginAt: new Date() },
         });
 
-        resetRateLimit(rateLimitKey);
+        await clearRateLimit("login", loginIdentifier);
 
         await writeAuditLog({
           action: "USER_LOGIN",
@@ -254,4 +258,4 @@ export const authConfig = {
       return allowedRoles.has((auth.user as { role?: string }).role ?? "");
     },
   },
-} satisfies NextAuthConfig;
+};

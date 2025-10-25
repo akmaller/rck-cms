@@ -12,10 +12,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { UserEditForm } from "./user-edit-form";
 
 type UserEditPageProps = {
-  params: { userId: string };
+  params: Promise<{ userId: string }>;
 };
 
 export default async function UserEditPage({ params }: UserEditPageProps) {
+  const { userId } = await params;
   const session = await auth();
   const role = (session?.user?.role ?? "AUTHOR") as RoleKey;
 
@@ -26,13 +27,16 @@ export default async function UserEditPage({ params }: UserEditPageProps) {
   }
 
   const user = await prisma.user.findUnique({
-    where: { id: params.userId },
+    where: { id: userId },
     select: {
       id: true,
       name: true,
       email: true,
       role: true,
       createdAt: true,
+      emailVerified: true,
+      canPublish: true,
+      twoFactorEnabled: true,
     },
   });
 
@@ -70,6 +74,9 @@ export default async function UserEditPage({ params }: UserEditPageProps) {
         initialEmail={user.email}
         initialRole={user.role}
         createdAt={user.createdAt.toISOString()}
+        initialEmailVerified={Boolean(user.emailVerified)}
+        initialCanPublish={Boolean(user.canPublish)}
+        initialTwoFactorEnabled={Boolean(user.twoFactorEnabled)}
       />
     </div>
   );

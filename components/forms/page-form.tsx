@@ -113,7 +113,11 @@ export function PageForm({
     [content, excerpt, featuredMedia?.id, serializePageState, slug, title]
   );
 
-  const isDirty = initialSnapshotRef.current !== currentSnapshot;
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    setIsDirty(initialSnapshotRef.current !== currentSnapshot);
+  }, [currentSnapshot]);
 
   const handleSaveAndExit = useCallback(
     async (targetUrl: string | null) => {

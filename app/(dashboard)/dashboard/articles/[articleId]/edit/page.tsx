@@ -16,6 +16,8 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
     return null;
   }
 
+  const role = (session.user.role ?? "AUTHOR") as "ADMIN" | "EDITOR" | "AUTHOR";
+
   const [article, media, tags, categories] = await Promise.all([
     prisma.article.findUnique({
       where: { id: articleId },
@@ -61,6 +63,22 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
   const initialTags = article.tags.map((entry) => entry.tag.name);
   const initialCategories = article.categories.map((entry) => entry.category.name);
 
+  let canPublishContent = role !== "AUTHOR";
+  if (role === "AUTHOR") {
+    canPublishContent = false;
+    try {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: session.user.id },
+      });
+      if (userRecord) {
+        canPublishContent = Boolean(userRecord.canPublish);
+      }
+    } catch (error) {
+      console.error("Gagal mengambil status publish penulis", error);
+      canPublishContent = false;
+    }
+  }
+
   return (
     <>
       <DashboardHeading
@@ -71,7 +89,7 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
         mediaItems={mediaItems}
         allTags={allTags}
         allCategories={allCategories}
-        currentRole={(session.user.role ?? "AUTHOR") as "ADMIN" | "EDITOR" | "AUTHOR"}
+        currentRole={role}
         initialValues={{
           id: article.id,
           title: article.title,
@@ -85,6 +103,7 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
         }}
         draftLabel="Simpan Draft"
         publishLabel={article.status === "PUBLISHED" ? "Perbarui & Publikasikan" : "Publikasikan"}
+        canPublishContent={canPublishContent}
       />
     </>
   );

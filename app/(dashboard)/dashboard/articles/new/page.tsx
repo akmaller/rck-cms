@@ -9,11 +9,29 @@ export default async function NewArticlePage() {
     return null;
   }
 
+  const role = (session.user.role ?? "AUTHOR") as "ADMIN" | "EDITOR" | "AUTHOR";
+
   const [media, tags, categories] = await Promise.all([
     prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
     prisma.category.findMany({ orderBy: { name: "asc" } }),
   ]);
+
+  let canPublishContent = role !== "AUTHOR";
+  if (role === "AUTHOR") {
+    canPublishContent = false;
+    try {
+      const userRecord = await prisma.user.findUnique({
+        where: { id: session.user.id },
+      });
+      if (userRecord) {
+        canPublishContent = Boolean(userRecord.canPublish);
+      }
+    } catch (error) {
+      console.error("Gagal mengambil status publish penulis", error);
+      canPublishContent = false;
+    }
+  }
 
   const mediaItems = media.map((item) => ({
     id: item.id,
@@ -37,9 +55,10 @@ export default async function NewArticlePage() {
         mediaItems={mediaItems}
         allTags={allTags}
         allCategories={allCategories}
-        currentRole={(session.user.role ?? "AUTHOR") as "ADMIN" | "EDITOR" | "AUTHOR"}
+        currentRole={role}
         draftLabel="Simpan Draft"
         publishLabel="Publikasikan"
+        canPublishContent={canPublishContent}
       />
     </>
   );

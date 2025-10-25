@@ -20,16 +20,20 @@ model User {
   avatarUrl              String?
   role                   UserRole               @default(AUTHOR)
   bio                    String?
+  emailVerified          DateTime?
+  canPublish             Boolean                @default(true)
   twoFactorEnabled       Boolean                @default(false)
   twoFactorSecret        String?
   lastLoginAt            DateTime?
   theme                  UserTheme              @default(LIGHT)
+  socialLinks            Json                   @default("{}")
   createdAt              DateTime               @default(now())
   updatedAt              DateTime               @updatedAt
   accounts               Account[]
   articles               Article[]              @relation("ArticleAuthor")
   auditLogs              AuditLog[]
   media                  Media[]
+  albums                 Album[]
   pages                  Page[]                 @relation("PageAuthor")
   sessions               Session[]
   twoFactorConfirmations TwoFactorConfirmation?
@@ -71,6 +75,7 @@ model Media {
   createdById String?
   description String?
   article     Article[]
+  albumImages AlbumImage[]
   createdBy   User?     @relation(fields: [createdById], references: [id])
   pages       Page[]    @relation("PageFeaturedMedia")
 
@@ -119,6 +124,37 @@ model ArticleTag {
   @@id([articleId, tagId])
 }
 
+model Album {
+  id           String        @id @default(cuid())
+  title        String
+  description  String?
+  status       ArticleStatus @default(DRAFT)
+  publishedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  createdById  String
+  createdBy    User          @relation(fields: [createdById], references: [id])
+  images       AlbumImage[]
+
+  @@index([status, createdAt])
+  @@index([createdById])
+}
+
+model AlbumImage {
+  id        String   @id @default(cuid())
+  albumId   String
+  mediaId   String
+  position  Int      @default(0)
+  caption   String?
+  createdAt DateTime @default(now())
+  album     Album    @relation(fields: [albumId], references: [id], onDelete: Cascade)
+  media     Media    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@unique([albumId, mediaId])
+  @@index([albumId])
+  @@index([mediaId])
+}
+
 model Page {
   id              String        @id @default(cuid())
   title           String
@@ -163,6 +199,66 @@ model MenuItem {
 
   @@index([menu])
   @@index([parentId])
+}
+
+model VisitLog {
+  id         String   @id @default(cuid())
+  path       String
+  url        String?
+  referrer   String?
+  ip         String?
+  userAgent  String?
+  browser    String?
+  os         String?
+  deviceType String
+  createdAt  DateTime @default(now())
+
+  @@index([path, createdAt])
+  @@index([createdAt])
+}
+
+model BlockedIp {
+  id           String   @id @default(cuid())
+  ip           String   @unique
+  reason       String?
+  category     String?
+  blockedUntil DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model RateLimitRecord {
+  id          String   @id @default(cuid())
+  type        String
+  identifier  String
+  windowStart DateTime
+  count       Int      @default(0)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([type, identifier, windowStart])
+}
+
+model SecurityPolicy {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SecurityIncident {
+  id          String   @id @default(cuid())
+  category    String
+  ip          String?
+  source      String?
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([category, createdAt])
+  @@index([ip])
 }
 
 model AuditLog {

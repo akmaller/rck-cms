@@ -16,7 +16,7 @@ export function DashboardThemeToggle() {
   const isDark = theme === "DARK";
 
   return (
-    <div className="flex flex-col gap-1.5">
+    <div>
       <Button
         type="button"
         variant="outline"
@@ -37,9 +37,6 @@ export function DashboardThemeToggle() {
         {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         {isPending ? "Mengatur..." : isDark ? "Mode Terang" : "Mode Gelap"}
       </Button>
-      <p className="text-xs text-muted-foreground">
-        Tampilan tema akan mengikuti preferensi Anda di setiap kunjungan.
-      </p>
     </div>
   );
 }

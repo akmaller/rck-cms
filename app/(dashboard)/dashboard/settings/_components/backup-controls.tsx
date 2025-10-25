@@ -20,6 +20,7 @@ export function BackupControls() {
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(SECTION_OPTIONS.map((option) => option.value))
   );
+  const [format, setFormat] = useState<"json" | "sql">("json");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const toggleSelection = (value: string) => {
@@ -39,8 +40,11 @@ export function BackupControls() {
     if (values.length === 0) {
       return null;
     }
-    return `/api/dashboard/backup/export?types=${values.join(",")}`;
-  }, [selected]);
+    const params = new URLSearchParams();
+    params.set("types", values.join(","));
+    params.set("format", format);
+    return `/api/dashboard/backup/export?${params.toString()}`;
+  }, [selected, format]);
 
   return (
     <div className="space-y-4 rounded-lg border border-border bg-card p-4">
@@ -69,6 +73,32 @@ export function BackupControls() {
         ))}
       </div>
 
+      <div className="space-y-2">
+        <p className="text-sm font-semibold text-foreground">Format file</p>
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="backup-format"
+              value="json"
+              checked={format === "json"}
+              onChange={() => setFormat("json")}
+            />
+            <span>JSON (.json)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="radio"
+              name="backup-format"
+              value="sql"
+              checked={format === "sql"}
+              onChange={() => setFormat("sql")}
+            />
+            <span>SQL (.sql)</span>
+          </label>
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
@@ -79,11 +109,11 @@ export function BackupControls() {
               notifyError("Pilih minimal satu kategori data untuk di-backup.");
               return;
             }
-            notifyInfo("Menyiapkan ekspor...");
+            notifyInfo(`Menyiapkan ekspor (${format.toUpperCase()})...`);
             window.open(exportUrl, "_blank", "noopener,noreferrer");
           }}
         >
-          Unduh Backup (.json)
+          Unduh Backup ({format.toUpperCase()})
         </Button>
         <form
           className="flex flex-wrap items-center gap-2"
@@ -102,7 +132,7 @@ export function BackupControls() {
                 notifyError(result.message ?? "Gagal mengimpor backup.");
                 return;
               }
-              notifySuccess(result.message ?? "Backup berhasil diimpor (konfigurasi situs).");
+              notifySuccess(result.message ?? "Backup berhasil diimpor.");
               if (fileInputRef.current) {
                 fileInputRef.current.value = "";
               }
@@ -113,7 +143,7 @@ export function BackupControls() {
             ref={fileInputRef}
             type="file"
             name="backupFile"
-            accept=".json,application/json"
+            accept=".json,.sql,application/json,application/sql,text/plain"
             className="block w-60 text-xs text-muted-foreground file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground hover:file:bg-accent hover:file:text-accent-foreground"
           />
           <Button type="submit" disabled={isImporting}>
@@ -122,8 +152,8 @@ export function BackupControls() {
         </form>
       </div>
       <p className="text-xs text-muted-foreground">
-        Ekspor menyertakan seluruh konten tabel yang dipilih. Impor saat ini hanya mendukung pengembalian konfigurasi
-        situs (site config).
+        Ekspor menyertakan seluruh konten tabel yang dipilih. Impor kini dapat memulihkan seluruh data dari file JSON
+        atau SQL hasil ekspor sebelumnya.
       </p>
     </div>
   );

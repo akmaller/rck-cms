@@ -10,6 +10,7 @@ import { requireAuth } from "@/lib/auth/permissions";
 import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit/log";
+import { AUTHOR_SOCIAL_FIELDS, AUTHOR_SOCIAL_KEYS, type AuthorSocialKey } from "@/lib/authors/social-links";
 
 const profileUpdateSchema = z.object({
   name: z
@@ -54,10 +55,41 @@ export async function updateProfile(formData: FormData) {
   const userId = session.user.id;
 
   const rawBio = formData.get("bio");
+  const socialLabelMap = new Map(AUTHOR_SOCIAL_FIELDS.map((field) => [field.key, field.label] as const));
+  const socialLinksPayload: Partial<Record<AuthorSocialKey, string>> = {};
+
+  for (const key of AUTHOR_SOCIAL_KEYS) {
+    const rawValue = formData.get(`socialLinks.${key}`);
+    if (typeof rawValue !== "string") {
+      continue;
+    }
+    const trimmedValue = rawValue.trim();
+    if (!trimmedValue) {
+      continue;
+    }
+    if (trimmedValue.length > 250) {
+      const label = socialLabelMap.get(key) ?? key;
+      return { success: false, message: `Tautan ${label} terlalu panjang (maksimal 250 karakter).` };
+    }
+    try {
+      // Ensure the value is an absolute URL.
+      new URL(trimmedValue);
+    } catch {
+      const label = socialLabelMap.get(key) ?? key;
+      return { success: false, message: `Tautan ${label} harus berupa URL yang valid.` };
+    }
+    socialLinksPayload[key] = trimmedValue;
+  }
+
+  const sanitizedSocialLinks = Object.fromEntries(
+    Object.entries(socialLinksPayload).map(([key, value]) => [key, value])
+  );
+
   const payload = {
     name: formData.get("name"),
     email: formData.get("email"),
     bio: typeof rawBio === "string" && rawBio.trim().length > 0 ? rawBio : null,
+    socialLinks: sanitizedSocialLinks,
   };
 
   const parsed = profileUpdateSchema.safeParse(payload);
@@ -93,6 +125,7 @@ export async function updateProfile(formData: FormData) {
         name: parsed.data.name,
         email: parsed.data.email,
         bio: parsed.data.bio ?? null,
+        socialLinks: sanitizedSocialLinks,
       },
     });
 
@@ -100,10 +133,15 @@ export async function updateProfile(formData: FormData) {
       action: "USER_UPDATE",
       entity: "User",
       entityId: userId,
-      metadata: { scope: "profile", email: parsed.data.email },
+      metadata: {
+        scope: "profile",
+        email: parsed.data.email,
+        socialLinks: Object.keys(sanitizedSocialLinks),
+      },
     });
 
     revalidatePath("/dashboard/profile");
+    revalidatePath(`/authors/${userId}`);
 
     return { success: true, message: "Profil berhasil diperbarui." };
   } catch (error) {

@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ArticleStatus, Prisma } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
@@ -7,12 +9,47 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { prisma } from "@/lib/prisma";
+import { getSiteConfig } from "@/lib/site-config/server";
+import { createMetadata } from "@/lib/seo/metadata";
+import { logPageView } from "@/lib/visits/log-page-view";
 
 const PAGE_SIZE = 10;
 
 type SearchPageProps = {
-  searchParams: { q?: string; page?: string };
+  searchParams: Promise<{ q?: string; page?: string }>;
 };
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string; page?: string }>;
+}): Promise<Metadata> {
+  const resolved = await searchParams;
+  const query = (resolved?.q ?? "").trim();
+  const currentPage = Math.max(1, Number(resolved?.page ?? 1));
+  const config = await getSiteConfig();
+
+  if (!query) {
+    return createMetadata({
+      config,
+      title: "Pencarian Konten",
+      description: `Cari artikel dan halaman dari ${config.name}.`,
+      path: "/search",
+    });
+  }
+
+  const path = currentPage > 1
+    ? `/search?q=${encodeURIComponent(query)}&page=${currentPage}`
+    : `/search?q=${encodeURIComponent(query)}`;
+
+  return createMetadata({
+    config,
+    title: `Pencarian: ${query}`,
+    description: `Hasil pencarian untuk “${query}” di ${config.name}.`,
+    path,
+    keywords: [query],
+  });
+}
 
 function buildPaginationLinks({
   current,
@@ -37,34 +74,45 @@ function buildPaginationLinks({
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
-  const query = (searchParams.q ?? "").trim();
-  const currentPage = Math.max(1, Number(searchParams.page ?? 1));
+  const resolved = await searchParams;
+  const query = (resolved.q ?? "").trim();
+  const currentPage = Math.max(1, Number(resolved.page ?? 1));
+
+  const queryParams = new URLSearchParams();
+  if (query) queryParams.set("q", query);
+  if (resolved.page && resolved.page !== "1") {
+    queryParams.set("page", resolved.page);
+  }
+  const pathWithQuery = queryParams.toString() ? `/search?${queryParams.toString()}` : "/search";
+  const headerList = await headers();
+  const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const userAgent = headerList.get("user-agent");
+  const referrer = headerList.get("referer");
+  const protocol = headerList.get("x-forwarded-proto") ?? "https";
+  const host = headerList.get("host");
+  const url = host ? `${protocol}://${host}${pathWithQuery}` : undefined;
+
+  await logPageView({ path: pathWithQuery, url, referrer, ip, userAgent });
 
   if (!query) {
-    const params = new URLSearchParams(searchParams as Record<string, string>);
-    params.delete("page");
-    if (!params.has("q")) {
-      return (
-        <section className="space-y-6">
-          <div>
-            <h1 className="text-3xl font-semibold tracking-tight">Pencarian Konten</h1>
-            <p className="text-muted-foreground">Cari artikel berdasarkan judul dan ringkasan.</p>
-          </div>
-          <SearchForm defaultValue="" />
-        </section>
-      );
-    }
+    return (
+      <section className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">Pencarian Konten</h1>
+          <p className="text-muted-foreground">Cari artikel berdasarkan judul dan ringkasan.</p>
+        </div>
+        <SearchForm defaultValue="" />
+      </section>
+    );
   }
 
-  const where: Prisma.ArticleWhereInput = query
-    ? {
-        status: ArticleStatus.PUBLISHED,
-        OR: [
-          { title: { contains: query, mode: Prisma.QueryMode.insensitive } },
-          { excerpt: { contains: query, mode: Prisma.QueryMode.insensitive } },
-        ],
-      }
-    : { status: ArticleStatus.PUBLISHED };
+  const where: Prisma.ArticleWhereInput = {
+    status: ArticleStatus.PUBLISHED,
+    OR: [
+      { title: { contains: query, mode: Prisma.QueryMode.insensitive } },
+      { excerpt: { contains: query, mode: Prisma.QueryMode.insensitive } },
+    ],
+  };
 
   const [articles, totalCount] = await Promise.all([
     prisma.article.findMany({

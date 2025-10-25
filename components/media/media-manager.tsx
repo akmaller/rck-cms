@@ -10,6 +10,7 @@ import {
   useState,
   type ChangeEvent,
   type DragEvent,
+  type FormEvent,
   type MouseEvent,
 } from "react";
 
@@ -18,6 +19,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { notifyError, notifyInfo, notifySuccess } from "@/lib/notifications/client";
+
+type MediaUploader = {
+  id: string;
+  name: string | null;
+  email: string | null;
+};
 
 export type MediaManagerItem = {
   id: string;
@@ -31,16 +38,86 @@ export type MediaManagerItem = {
   height?: number | null;
   createdAt: string;
   fileName: string;
+  createdBy: MediaUploader | null;
 };
 
-type MediaManagerProps = {
+type MediaManagerMeta = {
+  page: number;
+  perPage: number;
+  total: number;
+  totalPages: number;
+  filters: {
+    uploadedBy: string | null;
+    dateFrom: string | null;
+    dateTo: string | null;
+  };
+};
+
+export type MediaManagerProps = {
   initialItems: MediaManagerItem[];
+  initialMeta: MediaManagerMeta;
+  initialSearch?: string;
+  uploaderOptions: MediaUploader[];
+  currentUserId: string;
+  canViewAllUsers: boolean;
 };
 
 type ModalProps = {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
+};
+
+type AppliedQuery = {
+  page: number;
+  search: string;
+  uploadedBy: string;
+  dateFrom: string;
+  dateTo: string;
+  refreshToken: number;
+};
+
+type FilterDraft = {
+  search: string;
+  uploadedBy: string;
+  dateFrom: string;
+  dateTo: string;
+};
+
+type MediaApiResponseItem = {
+  id: string;
+  title?: string | null;
+  description?: string | null;
+  url: string;
+  thumbnailUrl?: string | null;
+  mimeType?: string | null;
+  size?: number | null;
+  width?: number | null;
+  height?: number | null;
+  createdAt: string | Date;
+  fileName?: string | null;
+  createdBy?:
+    | {
+        id: string;
+        name: string | null;
+        email: string | null;
+      }
+    | null;
+};
+
+type MediaListResponse = {
+  data: MediaApiResponseItem[];
+  meta: {
+    page: number;
+    perPage: number;
+    total: number;
+    totalPages: number;
+    filters?: {
+      uploadedBy?: string | null;
+      dateFrom?: string | null;
+      dateTo?: string | null;
+    };
+  };
 };
 
 function formatSize(bytes: number) {
@@ -57,6 +134,29 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   });
+}
+
+function mapResponseItem(data: MediaApiResponseItem): MediaManagerItem {
+  return {
+    id: data.id,
+    title: data.title ?? "Tanpa judul",
+    description: data.description ?? null,
+    url: data.url,
+    thumbnailUrl: data.thumbnailUrl ?? data.url,
+    mimeType: data.mimeType ?? "image/webp",
+    size: data.size ?? 0,
+    width: data.width ?? null,
+    height: data.height ?? null,
+    createdAt: new Date(data.createdAt).toISOString(),
+    fileName: data.fileName ?? data.title ?? "media",
+    createdBy: data.createdBy
+      ? {
+          id: data.createdBy.id,
+          name: data.createdBy.name ?? null,
+          email: data.createdBy.email ?? null,
+        }
+      : null,
+  };
 }
 
 function Modal({ open, onClose, children }: ModalProps) {
@@ -84,9 +184,39 @@ function Modal({ open, onClose, children }: ModalProps) {
   );
 }
 
-export function MediaManager({ initialItems }: MediaManagerProps) {
+export function MediaManager({
+  initialItems,
+  initialMeta,
+  initialSearch = "",
+  uploaderOptions,
+  currentUserId,
+  canViewAllUsers,
+}: MediaManagerProps) {
+  const perPage = initialMeta.perPage;
+  const initialUploadedBy = canViewAllUsers
+    ? initialMeta.filters.uploadedBy ?? "me"
+    : "me";
+  const initialDateFrom = initialMeta.filters.dateFrom ?? "";
+  const initialDateTo = initialMeta.filters.dateTo ?? "";
+
   const [items, setItems] = useState<MediaManagerItem[]>(initialItems);
-  const [search, setSearch] = useState("");
+  const [meta, setMeta] = useState<MediaManagerMeta>(initialMeta);
+  const [query, setQuery] = useState<AppliedQuery>({
+    page: initialMeta.page,
+    search: initialSearch,
+    uploadedBy: initialUploadedBy,
+    dateFrom: initialDateFrom,
+    dateTo: initialDateTo,
+    refreshToken: 0,
+  });
+  const [draft, setDraft] = useState<FilterDraft>({
+    search: initialSearch,
+    uploadedBy: initialUploadedBy,
+    dateFrom: initialDateFrom,
+    dateTo: initialDateTo,
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
@@ -97,17 +227,118 @@ export function MediaManager({ initialItems }: MediaManagerProps) {
   const [deleting, setDeleting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const firstLoadRef = useRef(true);
 
-  const filteredItems = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) {
-      return items;
+  const uploaderChoices = useMemo(() => {
+    const dedup = new Set<string>();
+    const options: Array<{ value: string; label: string }> = [
+      { value: "me", label: "Media saya" },
+    ];
+    if (canViewAllUsers) {
+      options.push({ value: "all", label: "Semua pengguna" });
+      uploaderOptions.forEach((user) => {
+        if (!user?.id || dedup.has(user.id)) {
+          return;
+        }
+        dedup.add(user.id);
+        const labelSource = user.name ?? user.email ?? "Pengguna tanpa nama";
+        options.push({
+          value: user.id,
+          label: user.id === currentUserId ? `${labelSource} (Anda)` : labelSource,
+        });
+      });
     }
-    return items.filter((item) => {
-      const haystack = `${item.title ?? ""} ${item.description ?? ""}`.toLowerCase();
-      return haystack.includes(query);
-    });
-  }, [items, search]);
+    return options;
+  }, [uploaderOptions, currentUserId, canViewAllUsers]);
+
+  const {
+    page,
+    search,
+    uploadedBy,
+    dateFrom,
+    dateTo,
+    refreshToken,
+  } = query;
+
+  useEffect(() => {
+    if (firstLoadRef.current) {
+      firstLoadRef.current = false;
+      return;
+    }
+
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+    params.set("page", String(page));
+    params.set("perPage", String(perPage));
+    if (search.trim()) {
+      params.set("search", search.trim());
+    }
+    if (uploadedBy && (canViewAllUsers || uploadedBy === "me")) {
+      params.set("uploadedBy", uploadedBy);
+    }
+    if (dateFrom) {
+      params.set("dateFrom", dateFrom);
+    }
+    if (dateTo) {
+      params.set("dateTo", dateTo);
+    }
+
+    setIsLoading(true);
+    setError(null);
+
+    fetch(`/api/dashboard/media?${params.toString()}`, {
+      credentials: "include",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          const data = await response.json().catch(() => null);
+          throw new Error(data?.error ?? "Gagal memuat data media.");
+        }
+        return response.json() as Promise<MediaListResponse>;
+      })
+      .then((json) => {
+        if (controller.signal.aborted) return;
+        const responseTotalPages = json.meta?.totalPages ?? 0;
+        if (responseTotalPages > 0 && page > responseTotalPages) {
+          setQuery((prev) => ({
+            ...prev,
+            page: responseTotalPages,
+          }));
+          return;
+        }
+        const mapped = (json.data ?? []).map((item) => mapResponseItem(item));
+        setItems(mapped);
+        setMeta({
+          page: json.meta?.page ?? page,
+          perPage: json.meta?.perPage ?? perPage,
+          total: json.meta?.total ?? mapped.length,
+          totalPages: json.meta?.totalPages ?? 1,
+          filters: {
+            uploadedBy: canViewAllUsers
+              ? json.meta?.filters?.uploadedBy ?? uploadedBy
+              : "me",
+            dateFrom: json.meta?.filters?.dateFrom ?? null,
+            dateTo: json.meta?.filters?.dateTo ?? null,
+          },
+        });
+        setSelectedItem((prev) => (prev ? mapped.find((item) => item.id === prev.id) ?? prev : null));
+      })
+      .catch((fetchError: unknown) => {
+        if (controller.signal.aborted) return;
+        const message =
+          fetchError instanceof Error ? fetchError.message : "Terjadi kesalahan saat memuat media.";
+        setError(message);
+        notifyError(message);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setIsLoading(false);
+        }
+      });
+
+    return () => controller.abort();
+  }, [page, perPage, search, uploadedBy, dateFrom, dateTo, refreshToken, canViewAllUsers]);
 
   const openModal = useCallback((item: MediaManagerItem) => {
     setSelectedItem(item);
@@ -149,20 +380,8 @@ export function MediaManager({ initialItems }: MediaManagerProps) {
         const data = await response.json().catch(() => null);
         throw new Error(data?.error ?? "Gagal menyimpan perubahan");
       }
-      const json = await response.json();
-      const updated: MediaManagerItem = {
-        id: json.data.id,
-        title: json.data.title,
-        description: json.data.description,
-        url: json.data.url,
-        thumbnailUrl: json.data.thumbnailUrl ?? selectedItem.thumbnailUrl ?? undefined,
-        mimeType: json.data.mimeType,
-        size: json.data.size,
-        width: json.data.width ?? selectedItem.width ?? null,
-        height: json.data.height ?? selectedItem.height ?? null,
-        createdAt: new Date(json.data.createdAt).toISOString(),
-        fileName: json.data.fileName,
-      };
+      const json: { data: MediaApiResponseItem } = await response.json();
+      const updated = mapResponseItem(json.data);
       refreshItem(updated);
       notifySuccess("Perubahan media tersimpan.");
     } catch (error) {
@@ -191,7 +410,15 @@ export function MediaManager({ initialItems }: MediaManagerProps) {
         throw new Error(data?.error ?? "Gagal menghapus media");
       }
       setItems((prev) => prev.filter((item) => item.id !== selectedItem.id));
+      setMeta((prev) => ({
+        ...prev,
+        total: Math.max(prev.total - 1, 0),
+      }));
       setSelectedItem(null);
+      setQuery((prev) => ({
+        ...prev,
+        refreshToken: prev.refreshToken + 1,
+      }));
       notifySuccess("Media dihapus.");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Gagal menghapus media";
@@ -238,23 +465,20 @@ export function MediaManager({ initialItems }: MediaManagerProps) {
 
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) {
-          const data = xhr.response?.data;
+          const data = xhr.response?.data as MediaApiResponseItem | undefined;
           if (data) {
-            const newItem: MediaManagerItem = {
-              id: data.id,
-              title: data.title,
-              description: data.description,
-              url: data.url,
-              thumbnailUrl: data.thumbnailUrl ?? data.url,
-              mimeType: data.mimeType,
-              size: data.size,
-              width: data.width ?? null,
-              height: data.height ?? null,
-              createdAt: new Date(data.createdAt).toISOString(),
-              fileName: data.fileName ?? file.name,
-            };
+            const newItem = mapResponseItem(data);
             setItems((prev) => [newItem, ...prev]);
+            setMeta((prev) => ({
+              ...prev,
+              total: prev.total + 1,
+            }));
             openModal(newItem);
+            setQuery((prev) => ({
+              ...prev,
+              page: 1,
+              refreshToken: prev.refreshToken + 1,
+            }));
             notifySuccess("Media berhasil diunggah.");
           }
           setUploadMessage("Unggahan selesai.");
@@ -302,6 +526,51 @@ export function MediaManager({ initialItems }: MediaManagerProps) {
     fileInputRef.current?.click();
   };
 
+  const handleApplyFilters = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const nextUploadedBy = canViewAllUsers ? draft.uploadedBy : "me";
+    setQuery((prev) => ({
+      ...prev,
+      page: 1,
+      search: draft.search.trim(),
+      uploadedBy: nextUploadedBy,
+      dateFrom: draft.dateFrom,
+      dateTo: draft.dateTo,
+    }));
+  };
+
+  const handleResetFilters = () => {
+    const defaults: FilterDraft = {
+      search: "",
+      uploadedBy: canViewAllUsers ? "me" : "me",
+      dateFrom: "",
+      dateTo: "",
+    };
+    setDraft(defaults);
+    setQuery((prev) => ({
+      ...prev,
+      page: 1,
+      search: "",
+      uploadedBy: "me",
+      dateFrom: "",
+      dateTo: "",
+    }));
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    const totalPages = meta.totalPages > 0 ? meta.totalPages : 1;
+    if (nextPage < 1 || nextPage > totalPages) {
+      return;
+    }
+    setQuery((prev) => ({
+      ...prev,
+      page: nextPage,
+    }));
+  };
+
+  const totalPagesDisplay = meta.totalPages > 0 ? meta.totalPages : 1;
+  const isEmpty = !isLoading && items.length === 0;
+
   return (
     <div className="space-y-6">
       <div
@@ -338,26 +607,96 @@ export function MediaManager({ initialItems }: MediaManagerProps) {
         {uploadMessage ? <p className="mt-2 text-xs text-muted-foreground">{uploadMessage}</p> : null}
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-muted-foreground">
-          Menampilkan {filteredItems.length} dari {items.length} media
-        </p>
-        <div className="sm:w-64">
-          <Input
-            placeholder="Cari berdasarkan judul atau deskripsi..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+      <form className="space-y-4" onSubmit={handleApplyFilters}>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="text-sm text-muted-foreground">
+            {isLoading ? (
+              <span>Sedang memuat media...</span>
+            ) : (
+              <span>
+                Menampilkan {items.length} media (halaman {meta.page} dari {totalPagesDisplay}) dari total{" "}
+                {meta.total} media.
+              </span>
+            )}
+          </div>
+          <div className="sm:w-64">
+            <Input
+              placeholder="Cari berdasarkan judul atau deskripsi..."
+              value={draft.search}
+              onChange={(event) => setDraft((prev) => ({ ...prev, search: event.target.value }))}
+            />
+          </div>
         </div>
-      </div>
 
-      {filteredItems.length === 0 ? (
+        <div className="grid gap-3 md:grid-cols-4">
+          <div className="space-y-2">
+            <Label htmlFor="uploadedBy">Diunggah oleh</Label>
+            <select
+              id="uploadedBy"
+              value={draft.uploadedBy}
+              onChange={(event) =>
+                setDraft((prev) => ({
+                  ...prev,
+                  uploadedBy: event.target.value,
+                }))
+              }
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              disabled={!canViewAllUsers}
+            >
+              {uploaderChoices.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dateFrom">Tanggal awal</Label>
+            <Input
+              id="dateFrom"
+              type="date"
+              value={draft.dateFrom}
+              onChange={(event) => setDraft((prev) => ({ ...prev, dateFrom: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dateTo">Tanggal akhir</Label>
+            <Input
+              id="dateTo"
+              type="date"
+              value={draft.dateTo}
+              onChange={(event) => setDraft((prev) => ({ ...prev, dateTo: event.target.value }))}
+            />
+          </div>
+          <div className="space-y-2 md:place-self-end">
+            <Label className="sr-only" htmlFor="apply-filters">
+              Aksi filter
+            </Label>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={handleResetFilters} disabled={isLoading}>
+                Atur ulang
+              </Button>
+              <Button type="submit" id="apply-filters" disabled={isLoading}>
+                Terapkan
+              </Button>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      {error ? (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      ) : null}
+
+      {isEmpty ? (
         <div className="rounded-lg border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-          Tidak ada media yang cocok dengan pencarian Anda.
+          Tidak ada media yang cocok dengan filter saat ini.
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {filteredItems.map((item) => (
+          {items.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -389,6 +728,34 @@ export function MediaManager({ initialItems }: MediaManagerProps) {
           ))}
         </div>
       )}
+
+      {meta.totalPages > 1 ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+          <span>
+            Halaman {meta.page} dari {totalPagesDisplay} • Total {meta.total} media
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(meta.page - 1)}
+              disabled={meta.page <= 1 || isLoading}
+            >
+              Sebelumnya
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(meta.page + 1)}
+              disabled={meta.page >= totalPagesDisplay || isLoading}
+            >
+              Berikutnya
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <Modal open={Boolean(selectedItem)} onClose={closeModal}>
         {selectedItem ? (
@@ -443,14 +810,18 @@ export function MediaManager({ initialItems }: MediaManagerProps) {
               <p>
                 <span className="font-medium text-foreground">Diunggah pada:</span> {formatDate(selectedItem.createdAt)}
               </p>
+              {selectedItem.createdBy ? (
+                <p>
+                  <span className="font-medium text-foreground">Diunggah oleh:</span>{" "}
+                  {selectedItem.createdBy.id === currentUserId
+                    ? `${selectedItem.createdBy.name ?? selectedItem.createdBy.email ?? "Anda"} (Anda)`
+                    : selectedItem.createdBy.name ?? selectedItem.createdBy.email ?? "Pengguna"}
+                </p>
+              ) : null}
             </div>
             {modalError ? <p className="px-4 text-sm text-destructive">{modalError}</p> : null}
             <div className="flex flex-col gap-3 border-t border-border p-4 sm:flex-row sm:items-center sm:justify-between">
-              <Button
-                variant="destructive"
-                onClick={handleDelete}
-                disabled={saving || deleting}
-              >
+              <Button variant="destructive" onClick={handleDelete} disabled={saving || deleting}>
                 {deleting ? "Menghapus..." : "Hapus"}
               </Button>
               <div className="flex gap-2">

@@ -15,6 +15,17 @@ const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   perPage: z.coerce.number().int().min(1).max(50).default(20),
   search: z.string().optional(),
+  uploadedBy: z
+    .union([z.literal("all"), z.literal("me"), z.string().cuid()])
+    .optional(),
+  dateFrom: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  dateTo: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -32,18 +43,53 @@ export async function GET(request: NextRequest) {
   }
 
   const { page, perPage, search } = parsedQuery.data;
-  const where: Prisma.MediaWhereInput = {};
+  const rawUploadedBy = parsedQuery.data.uploadedBy;
+  const dateFrom = parsedQuery.data.dateFrom ? new Date(parsedQuery.data.dateFrom) : undefined;
+  const dateTo = parsedQuery.data.dateTo ? new Date(parsedQuery.data.dateTo) : undefined;
+  if (dateFrom && Number.isNaN(dateFrom.getTime())) {
+    return NextResponse.json({ error: "Tanggal awal tidak valid" }, { status: 400 });
+  }
+  if (dateTo && Number.isNaN(dateTo.getTime())) {
+    return NextResponse.json({ error: "Tanggal akhir tidak valid" }, { status: 400 });
+  }
+  if (dateTo) {
+    dateTo.setUTCHours(23, 59, 59, 999);
+  }
+
+  const role = session.user.role;
+  const isAuthor = role === "AUTHOR";
+  const uploadedBy = isAuthor ? "me" : rawUploadedBy ?? "me";
+  const filters: Prisma.MediaWhereInput[] = [
+    { NOT: { fileName: { startsWith: "album/" } } },
+  ];
 
   if (search) {
-    where.OR = [
-      { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
-      { fileName: { contains: search, mode: Prisma.QueryMode.insensitive } },
-    ];
+    filters.push({
+      OR: [
+        { title: { contains: search, mode: Prisma.QueryMode.insensitive } },
+        { fileName: { contains: search, mode: Prisma.QueryMode.insensitive } },
+      ],
+    });
   }
 
-  if (session.user.role === "AUTHOR") {
-    where.createdById = session.user.id;
+  if (isAuthor) {
+    filters.push({ createdById: session.user.id });
+  } else if (uploadedBy === "me") {
+    filters.push({ createdById: session.user.id });
+  } else if (uploadedBy && uploadedBy !== "all") {
+    filters.push({ createdById: uploadedBy });
   }
+
+  if (dateFrom) {
+    filters.push({ createdAt: { gte: dateFrom } });
+  }
+
+  if (dateTo) {
+    filters.push({ createdAt: { lte: dateTo } });
+  }
+
+  const where =
+    filters.length === 1 ? filters[0] : { AND: filters };
 
   const [items, total] = await Promise.all([
     prisma.media.findMany({
@@ -79,6 +125,15 @@ export async function GET(request: NextRequest) {
       perPage,
       total,
       totalPages: Math.ceil(total / perPage),
+      filters: {
+        uploadedBy: isAuthor
+          ? "me"
+          : uploadedBy === session.user.id
+            ? "me"
+            : uploadedBy ?? null,
+        dateFrom: parsedQuery.data.dateFrom ?? null,
+        dateTo: parsedQuery.data.dateTo ?? null,
+      },
     },
   });
 }

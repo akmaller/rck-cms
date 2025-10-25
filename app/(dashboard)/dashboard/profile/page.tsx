@@ -26,6 +26,7 @@ export default async function ProfilePage() {
       role: true,
       avatarUrl: true,
       twoFactorEnabled: true,
+      socialLinks: true,
     },
   });
 
@@ -41,7 +42,14 @@ export default async function ProfilePage() {
       />
 
       <div className="grid gap-6 lg:grid-cols-[1.4fr_0.6fr]">
-        <ProfileInfoForm initialData={{ name: user.name, email: user.email, bio: user.bio ?? null }} />
+        <ProfileInfoForm
+          initialData={{
+            name: user.name,
+            email: user.email,
+            bio: user.bio ?? null,
+            socialLinks: (user.socialLinks as Record<string, string | null> | null) ?? {},
+          }}
+        />
         <div className="space-y-6">
           <AvatarUploader initialAvatarUrl={user.avatarUrl} userName={user.name} />
           <Card>

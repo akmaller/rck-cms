@@ -1,18 +1,62 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import { ArticleStatus } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getSiteConfig } from "@/lib/site-config/server";
+import { createMetadata } from "@/lib/seo/metadata";
+import { logPageView } from "@/lib/visits/log-page-view";
 
 const PAGE_SIZE = 6;
 
 type TagPageProps = {
-  params: { slug: string };
-  searchParams: { page?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ page?: string }>;
 };
+
+export async function generateMetadata({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ page?: string }>;
+}): Promise<Metadata> {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const tag = await prisma.tag.findUnique({
+    where: { slug },
+    select: { name: true },
+  });
+
+  if (!tag) {
+    return createMetadata({
+      title: "Tag tidak ditemukan",
+      description: "Tag yang Anda cari tidak tersedia.",
+      path: `/tags/${slug}`,
+      robots: { index: false, follow: false },
+    });
+  }
+
+  const currentPage = Math.max(1, Number(query?.page ?? 1));
+  const config = await getSiteConfig();
+  const baseTitle = `Tag: ${tag.name}`;
+  const title = currentPage > 1 ? `${baseTitle} — Halaman ${currentPage}` : baseTitle;
+  const description = `Artikel dengan tag ${tag.name} dari ${config.name}.`;
+  const path = currentPage > 1 ? `/tags/${slug}?page=${currentPage}` : `/tags/${slug}`;
+
+  return createMetadata({
+    config,
+    title,
+    description,
+    path,
+    keywords: [tag.name],
+    tags: [tag.name],
+  });
+}
 
 function buildPaginationLinks({
   current,
@@ -35,8 +79,8 @@ function buildPaginationLinks({
 }
 
 export default async function TagPage({ params, searchParams }: TagPageProps) {
-  const currentPage = Math.max(1, Number(searchParams.page ?? 1));
-  const slug = params.slug;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const currentPage = Math.max(1, Number(query.page ?? 1));
 
   const tag = await prisma.tag.findUnique({
     where: { slug },
@@ -55,7 +99,7 @@ export default async function TagPage({ params, searchParams }: TagPageProps) {
         },
       },
     },
-  };
+  } as const;
 
   const [articles, totalCount] = await Promise.all([
     prisma.article.findMany({
@@ -76,6 +120,21 @@ export default async function TagPage({ params, searchParams }: TagPageProps) {
     total: totalPages,
     basePath: `/tags/${slug}`,
   });
+
+  const queryParams = new URLSearchParams();
+  if (query.page && query.page !== "1") {
+    queryParams.set("page", query.page);
+  }
+  const pathWithQuery = queryParams.toString() ? `/tags/${slug}?${queryParams.toString()}` : `/tags/${slug}`;
+  const headerList = await headers();
+  const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const userAgent = headerList.get("user-agent");
+  const referrer = headerList.get("referer");
+  const protocol = headerList.get("x-forwarded-proto") ?? "https";
+  const host = headerList.get("host");
+  const url = host ? `${protocol}://${host}${pathWithQuery}` : undefined;
+
+  await logPageView({ path: pathWithQuery, url, referrer, ip, userAgent });
 
   return (
     <div className="space-y-8">

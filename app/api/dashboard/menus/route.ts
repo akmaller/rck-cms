@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { ArticleStatus } from "@prisma/client";
 
 import { assertRole } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { menuItemCreateSchema, menuReorderSchema } from "@/lib/validators/menu";
 import { writeAuditLog } from "@/lib/audit/log";
+import { slugify } from "@/lib/utils/slug";
 
 const listQuerySchema = z.object({
   menu: z.string().min(1, "Nama menu wajib diisi").default("main"),
@@ -74,17 +76,133 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (parsed.data.categorySlug && parsed.data.pageId) {
+    return NextResponse.json(
+      { error: "Gunakan halaman atau kategori, bukan keduanya" },
+      { status: 400 }
+    );
+  }
+
+  if (parsed.data.categorySlug && parsed.data.url) {
+    return NextResponse.json(
+      { error: "Gunakan kategori tanpa URL kustom" },
+      { status: 400 }
+    );
+  }
+
+  if (parsed.data.albumId && parsed.data.pageId) {
+    return NextResponse.json(
+      { error: "Gunakan album atau halaman, bukan keduanya" },
+      { status: 400 }
+    );
+  }
+
+  if (parsed.data.albumId && parsed.data.categorySlug) {
+    return NextResponse.json(
+      { error: "Gunakan album atau kategori, bukan keduanya" },
+      { status: 400 }
+    );
+  }
+
+  if (parsed.data.albumId && parsed.data.url) {
+    return NextResponse.json(
+      { error: "Gunakan album tanpa URL kustom" },
+      { status: 400 }
+    );
+  }
+
+  let pageId: string | null = parsed.data.pageId ?? null;
+  let targetSlug: string | null = null;
+  let targetUrl: string | null = null;
+  let isExternal = parsed.data.isExternal ?? false;
+
+  if (pageId) {
+    const page = await prisma.page.findUnique({ where: { id: pageId } });
+    if (!page) {
+      return NextResponse.json({ error: "Halaman tidak ditemukan" }, { status: 404 });
+    }
+    targetSlug = `pages/${page.slug}`;
+    targetUrl = null;
+    pageId = page.id;
+    isExternal = false;
+  } else if (parsed.data.categorySlug) {
+    const category = await prisma.category.findUnique({ where: { slug: parsed.data.categorySlug } });
+    if (!category) {
+      return NextResponse.json({ error: "Kategori tidak ditemukan" }, { status: 404 });
+    }
+    targetSlug = `categories/${category.slug}`;
+    targetUrl = null;
+    pageId = null;
+    isExternal = false;
+  } else if (parsed.data.albumId) {
+    const album = await prisma.album.findFirst({
+      where: { id: parsed.data.albumId, status: ArticleStatus.PUBLISHED },
+    });
+    if (!album) {
+      return NextResponse.json({ error: "Album tidak ditemukan atau belum dipublikasikan" }, { status: 404 });
+    }
+    targetSlug = `albums/${album.id}`;
+    targetUrl = null;
+    pageId = null;
+    isExternal = false;
+  } else {
+    const normalizeUrl = (value: string | undefined | null) => {
+      if (!value) return null;
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    };
+    const manualUrl = normalizeUrl(parsed.data.url);
+    const manualSlugInput = parsed.data.slug ? slugify(parsed.data.slug) : "";
+    const baseTitleSlug = slugify(parsed.data.title);
+
+    if (manualUrl) {
+      targetUrl = manualUrl;
+    }
+
+    if (manualSlugInput) {
+      const base = manualSlugInput;
+      let candidate = base;
+      let counter = 1;
+      while (
+        await prisma.menuItem.findFirst({
+          where: { menu: parsed.data.menu, slug: candidate },
+        })
+      ) {
+        candidate = `${base}-${counter++}`;
+      }
+      targetSlug = candidate;
+    } else if (!targetUrl) {
+      const base = baseTitleSlug || `menu-${Date.now()}`;
+      let candidate = base;
+      let counter = 1;
+      while (
+        await prisma.menuItem.findFirst({
+          where: { menu: parsed.data.menu, slug: candidate },
+        })
+      ) {
+        candidate = `${base}-${counter++}`;
+      }
+      targetSlug = candidate;
+    }
+
+    if (targetUrl) {
+      isExternal = !targetUrl.startsWith("/");
+    } else {
+      isExternal = false;
+    }
+  }
+
   const item = await prisma.menuItem.create({
     data: {
       menu: parsed.data.menu,
       title: parsed.data.title,
-      slug: parsed.data.slug,
-      url: parsed.data.url,
+      slug: targetSlug,
+      url: targetUrl,
       icon: parsed.data.icon,
       order: parsed.data.order ?? 0,
       parentId: parsed.data.parentId ?? null,
-      pageId: parsed.data.pageId ?? null,
-      isExternal: parsed.data.isExternal ?? Boolean(parsed.data.url),
+      pageId,
+      isExternal,
     },
   });
 

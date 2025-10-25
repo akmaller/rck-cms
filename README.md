@@ -1,36 +1,241 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RoemahCita CMS
 
-## Getting Started
+RoemahCita CMS adalah platform manajemen konten berbasis Next.js App Router yang dirancang untuk kebutuhan editorial modern. Aplikasi ini menyediakan dashboard terintegrasi untuk mengatur artikel, halaman, media, navigasi, dan pengaturan situs dengan fitur keamanan tingkat lanjut seperti autentikasi dua faktor serta pemblokiran IP otomatis.
 
-First, run the development server:
+## Fitur Utama
+- **Manajemen konten lengkap**: kelola artikel, halaman statis, kategori, dan tag dengan editor rich text.
+- **Media library**: unggah dan gunakan aset gambar yang tersimpan di penyimpanan lokal atau S3 kompatibel.
+- **Menu builder**: susun menu navigasi secara drag & drop, termasuk tautan internal maupun eksternal.
+- **Dashboard berbasis peran**: akses dibatasi untuk Administrator, Editor, dan Author dengan kontrol granular.
+- **Keamanan berlapis**: 2FA, rate limiting, blokir IP otomatis, audit log, dan kebijakan keamanan yang dapat dikonfigurasi.
+- **Backup & restore**: ekspor dan impor data konten serta konfigurasi situs langsung dari dashboard.
+- **Performa**: caching halaman publik, dukungan ISR, serta desain responsif menggunakan Tailwind CSS.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Teknologi yang Digunakan
+- [Next.js 15 (App Router)](https://nextjs.org/)
+- [TypeScript](https://www.typescriptlang.org/)
+- [Prisma ORM](https://www.prisma.io/) + PostgreSQL
+- [NextAuth v5](https://authjs.dev/) dengan autentikasi kredensial & 2FA
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Vitest](https://vitest.dev/) & [Playwright](https://playwright.dev/) untuk pengujian
+
+## Struktur Direktori
+```
+cms/
+├── app/                    # App Router routes untuk publik & dashboard
+├── components/             # UI components & form utilities
+├── config/                 # Konfigurasi navigasi & konstanta
+├── lib/                    # Helper (auth, security, validators, dsb.)
+├── prisma/                 # Skema Prisma & seed
+├── public/                 # Assets statis
+├── tests/                  # E2E & unit tests
+└── README.md               # Dokumentasi proyek (file ini)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Prasyarat
+- Node.js 20.x (disarankan menggunakan [nvm](https://github.com/nvm-sh/nvm))
+- PostgreSQL 14+ (lokal atau managed service)
+- Git
+- Opsional: penyimpanan S3 kompatibel (AWS S3, MinIO, Cloudflare R2, dsb.) untuk media
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Konfigurasi Environment
+Salin `.env` menjadi `.env.local` (untuk lokal) atau file env lain sesuai sistem Anda. Variabel penting:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Nama Variabel | Deskripsi |
+| ------------- | --------- |
+| `DATABASE_URL` | URL koneksi PostgreSQL (format Prisma). |
+| `NEXTAUTH_SECRET` | String acak >= 32 karakter untuk enkripsi session. |
+| `NEXTAUTH_URL` | URL publik aplikasi (contoh: `https://cms.domain.com`). |
+| `APP_URL` | URL publik aplikasi untuk pembuatan tautan aktivasi email. |
+| `AWS_S3_BUCKET` | (Opsional) Nama bucket untuk media. Kosongkan untuk penyimpanan lokal. |
+| `AWS_S3_REGION` | (Opsional) Region bucket. |
+| `AWS_S3_ACCESS_KEY_ID` & `AWS_S3_SECRET_ACCESS_KEY` | (Opsional) Kredensial akses S3. |
+| `SMTP_HOST` | Host SMTP untuk pengiriman email aktivasi. |
+| `SMTP_PORT` | Port SMTP (umumnya 465 atau 587). |
+| `SMTP_USER` & `SMTP_PASSWORD` | Kredensial autentikasi SMTP. |
+| `SMTP_SECURE` | Gunakan `true` jika menggunakan TLS implicit (465), `false` jika STARTTLS (587). |
+| `SMTP_FROM` | Alamat email pengirim (contoh: `Roemah Cita <no-reply@domain.com>`). |
 
-## Learn More
+> Gunakan `openssl rand -hex 32` atau `npx auth secret` untuk membuat nilai `NEXTAUTH_SECRET`.
 
-To learn more about Next.js, take a look at the following resources:
+## Menjalankan Secara Lokal
+```bash
+# Clone repository
+git clone <repo-url> roemahcita-cms
+cd roemahcita_cms/cms
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# Instal dependencies
+npm install
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# Jalankan migrasi & seed data awal (opsional)
+npx prisma migrate dev
+npm run prisma:seed
 
-## Deploy on Vercel
+# Mulai server pengembangan
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Aplikasi akan tersedia di [http://localhost:3000](http://localhost:3000). Login awal dapat dibuat lewat seed atau langsung dari database.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Skrip Penting
+- `npm run dev` – menjalankan Next.js mode pengembangan.
+- `npm run build` – build produksi.
+- `npm run start` – menjalankan hasil build (pastikan `npm run build` sukses).
+- `npm run lint` – menjalankan ESLint.
+- `npm run test` – menjalankan unit test (Vitest).
+- `npm run e2e` – menjalankan Playwright E2E tests.
+- `npm run prisma:generate` – generate client Prisma.
+- `npm run prisma:migrate` – migrasi dev; gunakan `npx prisma migrate deploy` di server produksi.
+- `npm run prisma:seed` – mengisi data awal.
+
+## Panduan Deploy ke Server Online (Contoh Ubuntu 22.04)
+
+### 1. Siapkan Server
+```bash
+# Update paket
+sudo apt update && sudo apt upgrade -y
+
+# Instal dependensi dasar
+sudo apt install -y build-essential curl git
+
+# Instal Node.js 20 via nvm
+curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+source ~/.nvm/nvm.sh
+nvm install 20
+
+# (Opsional) Instal PostgreSQL lokal
+sudo apt install -y postgresql postgresql-contrib
+sudo -u postgres createuser cms_user -P
+sudo -u postgres createdb roemahcita_cms -O cms_user
+```
+
+Atur firewall dan hostname sesuai kebijakan Anda (contoh menggunakan UFW dan menutup port yang tidak perlu).
+
+### 2. Clone Proyek & Instal Dependensi
+```bash
+cd /var/www
+sudo mkdir roemahcita-cms && sudo chown $USER:$USER roemahcita-cms
+git clone <repo-url> roemahcita-cms
+cd roemahcita-cms/cms
+npm install --production=false
+```
+
+### 3. Konfigurasi Environment
+Buat file `.env.production` atau gunakan pengaturan environment shell:
+```bash
+cp .env .env.production
+```
+Ubah nilainya:
+```env
+DATABASE_URL="postgresql://cms_user:password@localhost:5432/roemahcita_cms?schema=public"
+NEXTAUTH_SECRET="ganti_dengan_random_hex_64"
+NEXTAUTH_URL="https://cms.domain.com"
+# Jika memakai S3:
+# AWS_S3_BUCKET="nama-bucket"
+# AWS_S3_REGION="ap-southeast-1"
+# AWS_S3_ACCESS_KEY_ID="AKIA..."
+# AWS_S3_SECRET_ACCESS_KEY="..."
+```
+
+Gunakan `chmod 600 .env.production` agar file env tidak bisa dibaca pihak lain. Pada server production, ekspor variabel ini sebelum menjalankan aplikasi:
+```bash
+export $(grep -v '^#' .env.production | xargs)
+```
+
+### 4. Migrasi & Seed Database
+```bash
+npx prisma migrate deploy   # menjalankan migrasi di produksi
+npm run prisma:seed         # opsional, jika butuh data awal
+npm run prisma:generate
+```
+
+### 5. Build & Jalankan Produksi
+```bash
+npm run build
+NODE_ENV=production npm run start
+```
+
+Agar service tetap hidup setelah logout, gunakan process manager. Contoh dengan `pm2`:
+```bash
+sudo npm install -g pm2
+pm2 start npm --name "roemahcita-cms" -- start
+pm2 save
+pm2 startup systemd
+```
+
+Contoh konfigurasi `systemd` (jika tidak memakai pm2):
+```
+[Unit]
+Description=RoemahCita CMS
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/roemahcita-cms/cms
+EnvironmentFile=/var/www/roemahcita-cms/cms/.env.production
+ExecStart=/usr/bin/env NODE_ENV=production /home/<user>/.nvm/versions/node/v20.11.0/bin/npm run start
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+Simpan sebagai `/etc/systemd/system/roemahcita.service`, lalu:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now roemahcita.service
+```
+
+### 6. Konfigurasi Reverse Proxy & HTTPS
+Pasang Nginx dan arahkan ke port 3000:
+```bash
+sudo apt install -y nginx
+sudo nano /etc/nginx/sites-available/roemahcita
+```
+Contoh server block:
+```
+server {
+    listen 80;
+    server_name cms.domain.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+Aktifkan dan restart:
+```bash
+sudo ln -s /etc/nginx/sites-available/roemahcita /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Tambah HTTPS menggunakan [Certbot](https://certbot.eff.org/):
+```bash
+sudo apt install python3-certbot-nginx
+sudo certbot --nginx -d cms.domain.com
+```
+
+### 7. Pemeliharaan
+- Jalankan `pm2 restart roemahcita-cms` atau `systemctl restart roemahcita.service` setelah update.
+- Catat backup database secara berkala (`pg_dump` atau managed backup).
+- Gunakan halaman dashboard > Keamanan untuk memantau blokir IP dan mengubah kebijakan rate limit.
+
+## Pengujian & QA
+- **Unit test**: `npm run test`
+- **E2E test** (Playwright): `npm run e2e`
+- **Linting**: `npm run lint`
+
+Jalankan lint dan test sebelum deploy untuk memastikan tidak ada regresi.
+
+## Kontribusi
+Pull request dan diskusi issue sangat diterima. Silakan gunakan format commit yang jelas dan sertakan langkah reproduksi jika melaporkan bug.
+
+---
+© RoemahCita CMS – dibangun dengan penuh perhatian pada keamanan dan pengalaman editorial.

@@ -17,12 +17,21 @@ type SaveResult = {
   thumbnailHeight: number | null;
 };
 
-const uploadsDir = path.join(process.cwd(), "public", "uploads");
-
 function buildThumbnailName(fileName: string) {
   const ext = path.extname(fileName);
   const base = fileName.slice(0, ext.length ? -ext.length : undefined);
   return `${base}-thumb${ext}`;
+}
+
+function resolveBaseDirectory(directory: string) {
+  return path.join(process.cwd(), "public", directory);
+}
+
+function toRelativePath(directory: string, fileName: string) {
+  if (directory === "uploads") {
+    return fileName;
+  }
+  return path.posix.join(directory.replace(/^\/+|\/+$/g, ""), fileName);
 }
 
 export function deriveThumbnailUrl(url: string): string | null {
@@ -40,8 +49,15 @@ export function deriveThumbnailUrl(url: string): string | null {
   return rest ? `${newPath}${rest}` : newPath;
 }
 
-export async function saveMediaFile(file: File): Promise<SaveResult> {
-  await fs.mkdir(uploadsDir, { recursive: true });
+type SaveMediaOptions = {
+  directory?: string;
+};
+
+export async function saveMediaFile(file: File, options?: SaveMediaOptions): Promise<SaveResult> {
+  const directory = (options?.directory ?? "uploads").replace(/^\/+|\/+$/g, "") || "uploads";
+  const baseDir = resolveBaseDirectory(directory);
+
+  await fs.mkdir(baseDir, { recursive: true });
 
   const uniqueBase = `${Date.now()}-${randomUUID()}`;
   const extension = ".webp";
@@ -56,7 +72,7 @@ export async function saveMediaFile(file: File): Promise<SaveResult> {
     .webp({ quality: 90 })
     .toBuffer({ resolveWithObject: true });
 
-  await fs.writeFile(path.join(uploadsDir, mainFileName), mainResult.data);
+  await fs.writeFile(path.join(baseDir, mainFileName), mainResult.data);
 
   const thumbResult = await sharp(inputBuffer)
     .rotate()
@@ -64,17 +80,20 @@ export async function saveMediaFile(file: File): Promise<SaveResult> {
     .webp({ quality: 90 })
     .toBuffer({ resolveWithObject: true });
 
-  await fs.writeFile(path.join(uploadsDir, thumbFileName), thumbResult.data);
+  await fs.writeFile(path.join(baseDir, thumbFileName), thumbResult.data);
+
+  const relativeMain = toRelativePath(directory, mainFileName);
+  const relativeThumb = toRelativePath(directory, thumbFileName);
 
   return {
-    fileName: mainFileName,
-    url: `/uploads/${mainFileName}`,
+    fileName: relativeMain,
+    url: `/${directory}/${mainFileName}`,
     storageType: "local",
     size: mainResult.info.size,
     width: mainResult.info.width ?? null,
     height: mainResult.info.height ?? null,
-    thumbnailFileName: thumbFileName,
-    thumbnailUrl: `/uploads/${thumbFileName}`,
+    thumbnailFileName: relativeThumb,
+    thumbnailUrl: `/${directory}/${thumbFileName}`,
     thumbnailSize: thumbResult.info.size,
     thumbnailWidth: thumbResult.info.width ?? null,
     thumbnailHeight: thumbResult.info.height ?? null,
@@ -82,12 +101,20 @@ export async function saveMediaFile(file: File): Promise<SaveResult> {
 }
 
 export async function deleteMediaFile(storageType: string, fileName: string | null | undefined) {
-  if (storageType !== "local" || !fileName) {
+  if (!storageType.startsWith("local") || !fileName) {
     return;
   }
 
-  const mainPath = path.join(uploadsDir, fileName);
-  const thumbPath = path.join(uploadsDir, buildThumbnailName(fileName));
+  const relativePath = fileName.includes("/")
+    ? fileName.replace(/^\/+/, "")
+    : path.posix.join("uploads", fileName);
+
+  const mainPath = path.join(process.cwd(), "public", relativePath);
+  const thumbPath = path.join(
+    process.cwd(),
+    "public",
+    buildThumbnailName(relativePath)
+  );
 
   await fs.unlink(mainPath).catch(() => {});
   await fs.unlink(thumbPath).catch(() => {});

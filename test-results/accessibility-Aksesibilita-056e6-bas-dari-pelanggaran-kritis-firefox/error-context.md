@@ -1,0 +1,230 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "Roemah Cita News Roemah Cita News Merawat cita lokal, satu cerita dalam satu waktu" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - img "Roemah Cita News" [ref=e6]
+          - generic [ref=e7]:
+            - generic [ref=e8]: Roemah Cita News
+            - generic [ref=e9]: Merawat cita lokal, satu cerita dalam satu waktu
+        - navigation "Navigasi utama" [ref=e10]:
+          - link "Beranda" [ref=e11] [cursor=pointer]:
+            - /url: /
+          - generic [ref=e12]:
+            - link "Artikel" [ref=e13] [cursor=pointer]:
+              - /url: /articles
+            - generic:
+              - list:
+                - listitem:
+                  - link "Budaya":
+                    - /url: /categories/budaya
+                - listitem:
+                  - link "Berita":
+                    - /url: /berita
+          - link "Tentang Kami" [ref=e14] [cursor=pointer]:
+            - /url: /pages/tentang-kami
+        - link "Masuk" [ref=e16] [cursor=pointer]:
+          - /url: /login
+          - img [ref=e17]
+          - text: Masuk
+    - main [ref=e21]:
+      - generic [ref=e23]:
+        - generic [ref=e25]:
+          - generic [ref=e27]:
+            - generic [ref=e28]:
+              - link "Baca Test testTest testTest testTest test" [ref=e29] [cursor=pointer]:
+                - /url: /articles/test-testtest-testtest-testtest-test
+                - img "IMG 6389" [ref=e30]
+                - generic [ref=e32]:
+                  - generic [ref=e33]: Komunitas
+                  - heading "Test testTest testTest testTest test" [level=2] [ref=e34]
+                  - generic [ref=e35]: 25 Oktober 2025
+              - 'link "Baca 18 Negara Hadir di Konvensi DMDI, Muzani: Kita Punya Kepentingan Sama, Kita Jaga Stabilitas Bersama" [ref=e36] [cursor=pointer]':
+                - /url: /articles/18-negara-hadir-di-konvensi-dmdi-muzani-kita-punya-kepentingan-sama-kita-jaga-stabilitas-bersama
+                - img "WhatsApp Image 2025 10 24 at 14.29.35 1" [ref=e37]
+                - generic [ref=e39]:
+                  - generic [ref=e40]: Anggota Dewan
+                  - 'heading "18 Negara Hadir di Konvensi DMDI, Muzani: Kita Punya Kepentingan Sama, Kita Jaga Stabilitas Bersama" [level=2] [ref=e41]'
+                  - generic [ref=e42]: 25 Oktober 2025
+              - 'link "Baca Tragedi Garut, Jaleswari: Perlu Komitmen Presiden dan TNI untuk Reformasi" [ref=e43] [cursor=pointer]':
+                - /url: /articles/tragedi-garut-jaleswari-perlu-komitmen-presiden-dan-tni-untuk-reformasi
+                - img "IMG 6389" [ref=e44]
+                - generic [ref=e46]:
+                  - generic [ref=e47]: Opini • Komunitas
+                  - 'heading "Tragedi Garut, Jaleswari: Perlu Komitmen Presiden dan TNI untuk Reformasi" [level=2] [ref=e48]'
+                  - generic [ref=e49]: 25 Oktober 2025
+              - 'link "Baca Melejit di Senayan, Ini Profil Azis Subekti: Dari Wiraswasta, Aktivis, hingga Anggota DPR RI Fraksi Gerindra" [ref=e50] [cursor=pointer]':
+                - /url: /articles/melejit-di-senayan-ini-profil-azis-subekti-dari-wiraswasta-aktivis-hingga-anggota-dpr-ri-fraksi-gerindra
+                - img "WhatsApp Image 2025 05 28 at 17.15.58 scaled" [ref=e51]
+                - generic [ref=e53]:
+                  - generic [ref=e54]: Anggota Dewan • Politik
+                  - 'heading "Melejit di Senayan, Ini Profil Azis Subekti: Dari Wiraswasta, Aktivis, hingga Anggota DPR RI Fraksi Gerindra" [level=2] [ref=e55]'
+                  - generic [ref=e56]: 25 Oktober 2025
+              - 'link "Baca Surat untuk Presiden: Anak-Anak Sekolah Rakyat Kini Berani Bermimpi & Punya Cita-Cita" [ref=e57] [cursor=pointer]':
+                - /url: /articles/surat-untuk-presiden-anak-anak-sekolah-rakyat-kini-berani-bermimpi-punya-cita-cita
+                - img "Tangkapan Layar 2025 10 24 pukul 15.41.18" [ref=e58]
+                - generic [ref=e60]:
+                  - generic [ref=e61]: Opini • Politik
+                  - 'heading "Surat untuk Presiden: Anak-Anak Sekolah Rakyat Kini Berani Bermimpi & Punya Cita-Cita" [level=2] [ref=e62]'
+                  - generic [ref=e63]: 25 Oktober 2025
+            - generic:
+              - button "Artikel sebelumnya" [disabled] [ref=e64]:
+                - img [ref=e65]
+              - button "Artikel berikutnya" [ref=e67] [cursor=pointer]:
+                - img [ref=e68]
+          - generic [ref=e77]:
+            - link "WhatsApp Image 2025 07 18 at 18.02.39 Negosiasi Sunyi di Tengah Badai Tarif Opini • 25 Oktober 2025" [ref=e78] [cursor=pointer]:
+              - /url: /articles/negosiasi-sunyi-di-tengah-badai-tarif
+              - img "WhatsApp Image 2025 07 18 at 18.02.39" [ref=e80]
+              - generic [ref=e81]:
+                - paragraph [ref=e82]: Negosiasi Sunyi di Tengah Badai Tarif
+                - generic [ref=e83]: Opini • 25 Oktober 2025
+            - link "IMG 20250802 WA0041 One Piece dan Sepotong Nasionalisme Yang Hilang di Bulan Kemerdekaan Akmaller • 25 Oktober 2025" [ref=e84] [cursor=pointer]:
+              - /url: /articles/one-piece-dan-sepotong-nasionalisme-yang-hilang-di-bulan-kemerdekaan
+              - img "IMG 20250802 WA0041" [ref=e86]
+              - generic [ref=e87]:
+                - paragraph [ref=e88]: One Piece dan Sepotong Nasionalisme Yang Hilang di Bulan Kemerdekaan
+                - generic [ref=e89]: Akmaller • 25 Oktober 2025
+            - link "20250803 121927 Takjub dengan Pesawat Airbus A400M, Netizen Minta Presiden Prabowo Tambah Unit Artikel Pilihan • 25 Oktober 2025" [ref=e90] [cursor=pointer]:
+              - /url: /articles/takjub-dengan-pesawat-airbus-a400m-netizen-minta-presiden-prabowo-tambah-unit
+              - img "20250803 121927" [ref=e92]
+              - generic [ref=e93]:
+                - paragraph [ref=e94]: Takjub dengan Pesawat Airbus A400M, Netizen Minta Presiden Prabowo Tambah Unit
+                - generic [ref=e95]: Artikel Pilihan • 25 Oktober 2025
+            - link "Prabowo dan Lula Hangat dan Meriah, Presiden Prabowo Sambut Presiden Lula da Silva di Istana Merdeka Prabowo • 24 Oktober 2025" [ref=e96] [cursor=pointer]:
+              - /url: /articles/hangat-dan-meriah-presiden-prabowo-sambut-presiden-lula-da-silva-di-istana-merdeka
+              - img "Prabowo dan Lula" [ref=e98]
+              - generic [ref=e99]:
+                - paragraph [ref=e100]: Hangat dan Meriah, Presiden Prabowo Sambut Presiden Lula da Silva di Istana Merdeka
+                - generic [ref=e101]: Prabowo • 24 Oktober 2025
+        - generic [ref=e102]:
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - heading "Kabar Terbaru" [level=2] [ref=e105]
+              - paragraph [ref=e106]: Update terhangat dari komunitas dan penulis.
+            - link "Lihat semua artikel" [ref=e107] [cursor=pointer]:
+              - /url: /articles
+          - generic [ref=e110]:
+            - 'link "Danang Wicaksana: Elektabilitas Tertinggi Gerindra Bukti Kepercayaan Publik pada Kepemimpinan Prabowo Anggota Dewan • 24 Oktober 2025" [ref=e111] [cursor=pointer]':
+              - /url: /articles/danang-wicaksana-elektabilitas-tertinggi-gerindra-bukti-kepercayaan-publik-pada-kepemimpinan-prabowo
+              - paragraph [ref=e112]: "Danang Wicaksana: Elektabilitas Tertinggi Gerindra Bukti Kepercayaan Publik pada Kepemimpinan Prabowo"
+              - generic [ref=e113]: Anggota Dewan • 24 Oktober 2025
+            - link "Presiden Prabowo Respon Persoalan yang Menimpa Siswa SMK PN Purworejo Anggota Dewan • 24 Oktober 2025" [ref=e114] [cursor=pointer]:
+              - /url: /articles/presiden-prabowo-respon-persoalan-yang-menimpa-siswa-smk-pn-purworejo
+              - paragraph [ref=e115]: Presiden Prabowo Respon Persoalan yang Menimpa Siswa SMK PN Purworejo
+              - generic [ref=e116]: Anggota Dewan • 24 Oktober 2025
+        - generic [ref=e117]:
+          - generic [ref=e118]:
+            - generic [ref=e119]:
+              - 'heading "Pilihan Kategori: Politik" [level=2] [ref=e120]'
+              - paragraph [ref=e121]: Artikel rekomendasi dari kategori Politik.
+            - link "Jelajahi kategori" [ref=e122] [cursor=pointer]:
+              - /url: /categories/politik
+          - generic [ref=e123]:
+            - 'link "WhatsApp Image 2025 05 28 at 17.15.58 scaled Politik Melejit di Senayan, Ini Profil Azis Subekti: Dari Wiraswasta, Aktivis, hingga Anggota DPR RI Fraksi Gerindra 25 Oktober 2025" [ref=e124] [cursor=pointer]':
+              - /url: /articles/melejit-di-senayan-ini-profil-azis-subekti-dari-wiraswasta-aktivis-hingga-anggota-dpr-ri-fraksi-gerindra
+              - img "WhatsApp Image 2025 05 28 at 17.15.58 scaled" [ref=e126]
+              - generic [ref=e127]:
+                - generic [ref=e128]: Politik
+                - 'heading "Melejit di Senayan, Ini Profil Azis Subekti: Dari Wiraswasta, Aktivis, hingga Anggota DPR RI Fraksi Gerindra" [level=3] [ref=e129]'
+                - generic [ref=e130]: 25 Oktober 2025
+            - 'link "Tangkapan Layar 2025 10 24 pukul 15.41.18 Politik Surat untuk Presiden: Anak-Anak Sekolah Rakyat Kini Berani Bermimpi & Punya Cita-Cita 25 Oktober 2025" [ref=e131] [cursor=pointer]':
+              - /url: /articles/surat-untuk-presiden-anak-anak-sekolah-rakyat-kini-berani-bermimpi-punya-cita-cita
+              - img "Tangkapan Layar 2025 10 24 pukul 15.41.18" [ref=e133]
+              - generic [ref=e134]:
+                - generic [ref=e135]: Politik
+                - 'heading "Surat untuk Presiden: Anak-Anak Sekolah Rakyat Kini Berani Bermimpi & Punya Cita-Cita" [level=3] [ref=e136]'
+                - generic [ref=e137]: 25 Oktober 2025
+            - link "WhatsApp Image 2025 07 18 at 18.02.39 Politik Negosiasi Sunyi di Tengah Badai Tarif 25 Oktober 2025" [ref=e138] [cursor=pointer]:
+              - /url: /articles/negosiasi-sunyi-di-tengah-badai-tarif
+              - img "WhatsApp Image 2025 07 18 at 18.02.39" [ref=e140]
+              - generic [ref=e141]:
+                - generic [ref=e142]: Politik
+                - heading "Negosiasi Sunyi di Tengah Badai Tarif" [level=3] [ref=e143]
+                - generic [ref=e144]: 25 Oktober 2025
+        - generic [ref=e145]:
+          - generic [ref=e147]:
+            - heading "Populer Minggu Ini" [level=2] [ref=e148]
+            - paragraph [ref=e149]: Artikel dengan kunjungan terbanyak dalam 7 hari terakhir.
+          - generic [ref=e150]:
+            - generic [ref=e152]:
+              - link "WhatsApp Image 2025 07 18 at 18.02.39 Negosiasi Sunyi di Tengah Badai Tarif Opini • 25 Oktober 2025" [ref=e153] [cursor=pointer]:
+                - /url: /articles/negosiasi-sunyi-di-tengah-badai-tarif
+                - img "WhatsApp Image 2025 07 18 at 18.02.39" [ref=e155]
+                - generic [ref=e156]:
+                  - paragraph [ref=e157]: Negosiasi Sunyi di Tengah Badai Tarif
+                  - generic [ref=e158]: Opini • 25 Oktober 2025
+              - link "c110d422-e88d-4a67-9f44-06667f8fc55f-2.webp Presiden Prabowo Respon Persoalan yang Menimpa Siswa SMK PN Purworejo Anggota Dewan • 24 Oktober 2025" [ref=e159] [cursor=pointer]:
+                - /url: /articles/presiden-prabowo-respon-persoalan-yang-menimpa-siswa-smk-pn-purworejo
+                - img "c110d422-e88d-4a67-9f44-06667f8fc55f-2.webp" [ref=e161]
+                - generic [ref=e162]:
+                  - paragraph [ref=e163]: Presiden Prabowo Respon Persoalan yang Menimpa Siswa SMK PN Purworejo
+                  - generic [ref=e164]: Anggota Dewan • 24 Oktober 2025
+              - 'link "DNF_6206.JPG Danang Wicaksana: Elektabilitas Tertinggi Gerindra Bukti Kepercayaan Publik pada Kepemimpinan Prabowo Anggota Dewan • 24 Oktober 2025" [ref=e165] [cursor=pointer]':
+                - /url: /articles/danang-wicaksana-elektabilitas-tertinggi-gerindra-bukti-kepercayaan-publik-pada-kepemimpinan-prabowo
+                - img "DNF_6206.JPG" [ref=e167]
+                - generic [ref=e168]:
+                  - paragraph [ref=e169]: "Danang Wicaksana: Elektabilitas Tertinggi Gerindra Bukti Kepercayaan Publik pada Kepemimpinan Prabowo"
+                  - generic [ref=e170]: Anggota Dewan • 24 Oktober 2025
+            - generic [ref=e172]:
+              - link "IMG 6389 Test testTest testTest testTest test Komunitas • 25 Oktober 2025" [ref=e173] [cursor=pointer]:
+                - /url: /articles/test-testtest-testtest-testtest-test
+                - img "IMG 6389" [ref=e175]
+                - generic [ref=e176]:
+                  - paragraph [ref=e177]: Test testTest testTest testTest test
+                  - generic [ref=e178]: Komunitas • 25 Oktober 2025
+              - link "Prabowo dan Lula Hangat dan Meriah, Presiden Prabowo Sambut Presiden Lula da Silva di Istana Merdeka Prabowo • 24 Oktober 2025" [ref=e179] [cursor=pointer]:
+                - /url: /articles/hangat-dan-meriah-presiden-prabowo-sambut-presiden-lula-da-silva-di-istana-merdeka
+                - img "Prabowo dan Lula" [ref=e181]
+                - generic [ref=e182]:
+                  - paragraph [ref=e183]: Hangat dan Meriah, Presiden Prabowo Sambut Presiden Lula da Silva di Istana Merdeka
+                  - generic [ref=e184]: Prabowo • 24 Oktober 2025
+              - link "IMG 20250802 WA0041 One Piece dan Sepotong Nasionalisme Yang Hilang di Bulan Kemerdekaan Akmaller • 25 Oktober 2025" [ref=e185] [cursor=pointer]:
+                - /url: /articles/one-piece-dan-sepotong-nasionalisme-yang-hilang-di-bulan-kemerdekaan
+                - img "IMG 20250802 WA0041" [ref=e187]
+                - generic [ref=e188]:
+                  - paragraph [ref=e189]: One Piece dan Sepotong Nasionalisme Yang Hilang di Bulan Kemerdekaan
+                  - generic [ref=e190]: Akmaller • 25 Oktober 2025
+            - generic [ref=e192]:
+              - 'link "Tangkapan Layar 2025 10 24 pukul 15.41.18 Surat untuk Presiden: Anak-Anak Sekolah Rakyat Kini Berani Bermimpi & Punya Cita-Cita Opini • 25 Oktober 2025" [ref=e193] [cursor=pointer]':
+                - /url: /articles/surat-untuk-presiden-anak-anak-sekolah-rakyat-kini-berani-bermimpi-punya-cita-cita
+                - img "Tangkapan Layar 2025 10 24 pukul 15.41.18" [ref=e195]
+                - generic [ref=e196]:
+                  - paragraph [ref=e197]: "Surat untuk Presiden: Anak-Anak Sekolah Rakyat Kini Berani Bermimpi & Punya Cita-Cita"
+                  - generic [ref=e198]: Opini • 25 Oktober 2025
+              - 'link "WhatsApp Image 2025 10 24 at 14.29.35 1 18 Negara Hadir di Konvensi DMDI, Muzani: Kita Punya Kepentingan Sama, Kita Jaga Stabilitas Bersama Anggota Dewan • 25 Oktober 2025" [ref=e199] [cursor=pointer]':
+                - /url: /articles/18-negara-hadir-di-konvensi-dmdi-muzani-kita-punya-kepentingan-sama-kita-jaga-stabilitas-bersama
+                - img "WhatsApp Image 2025 10 24 at 14.29.35 1" [ref=e201]
+                - generic [ref=e202]:
+                  - paragraph [ref=e203]: "18 Negara Hadir di Konvensi DMDI, Muzani: Kita Punya Kepentingan Sama, Kita Jaga Stabilitas Bersama"
+                  - generic [ref=e204]: Anggota Dewan • 25 Oktober 2025
+              - 'link "WhatsApp Image 2025 05 28 at 17.15.58 scaled Melejit di Senayan, Ini Profil Azis Subekti: Dari Wiraswasta, Aktivis, hingga Anggota DPR RI Fraksi Gerindra Anggota Dewan • 25 Oktober 2025" [ref=e205] [cursor=pointer]':
+                - /url: /articles/melejit-di-senayan-ini-profil-azis-subekti-dari-wiraswasta-aktivis-hingga-anggota-dpr-ri-fraksi-gerindra
+                - img "WhatsApp Image 2025 05 28 at 17.15.58 scaled" [ref=e207]
+                - generic [ref=e208]:
+                  - paragraph [ref=e209]: "Melejit di Senayan, Ini Profil Azis Subekti: Dari Wiraswasta, Aktivis, hingga Anggota DPR RI Fraksi Gerindra"
+                  - generic [ref=e210]: Anggota Dewan • 25 Oktober 2025
+    - contentinfo [ref=e211]:
+      - generic [ref=e212]:
+        - generic [ref=e213]:
+          - generic [ref=e214]: Roemah Cita News
+          - paragraph [ref=e215]: Merawat cita lokal, satu cerita dalam satu waktu Metadata
+        - navigation "Navigasi footer" [ref=e216]:
+          - link "Hubungi Kami" [ref=e218] [cursor=pointer]:
+            - /url: /contact
+        - generic [ref=e219]:
+          - link "facebook" [ref=e220] [cursor=pointer]:
+            - /url: https://facebook.com/roemahcita
+          - link "instagram" [ref=e221] [cursor=pointer]:
+            - /url: https://instagram.com/roemahcita
+          - link "youtube" [ref=e222] [cursor=pointer]:
+            - /url: https://youtube.com/@roemahcita
+        - paragraph [ref=e223]: © 2025 Roemah Cita News. Hak cipta dilindungi.
+  - button "Open Next.js Dev Tools" [ref=e229] [cursor=pointer]:
+    - img [ref=e230]
+  - alert [ref=e234]
+```

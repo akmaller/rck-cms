@@ -30,10 +30,23 @@ type PageOption = {
   title: string;
 };
 
+type CategoryOption = {
+  id: string;
+  name: string;
+  slug: string;
+};
+
+type AlbumOption = {
+  id: string;
+  title: string;
+};
+
 type MenuBuilderProps = {
   menu: string;
   items: MenuNode[];
   pages: PageOption[];
+  categories: CategoryOption[];
+  albums: AlbumOption[];
 };
 
 type FlattenedItem = ReturnType<typeof flattenMenuTree>[number];
@@ -169,10 +182,13 @@ type EditState = {
   icon: string | null;
   parentId: string | null;
   pageId: string | null;
+  categorySlug: string | null;
+  albumId: string | null;
 };
 
-export function MenuBuilder({ menu, items, pages }: MenuBuilderProps) {
+export function MenuBuilder({ menu, items, pages, categories, albums }: MenuBuilderProps) {
   const router = useRouter();
+  const [isMounted, setIsMounted] = useState(false);
   const [tree, setTree] = useState<MenuNode[]>(items);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [currentProjection, setCurrentProjection] = useState<Projection | null>(null);
@@ -180,6 +196,10 @@ export function MenuBuilder({ menu, items, pages }: MenuBuilderProps) {
   const [editing, setEditing] = useState<EditState | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     setTree(items);
@@ -283,6 +303,14 @@ export function MenuBuilder({ menu, items, pages }: MenuBuilderProps) {
   const handleEdit = (id: string) => {
     const original = findNode(tree, id);
     if (!original) return;
+    const categorySlug =
+      original.slug && original.slug.startsWith("categories/")
+        ? original.slug.replace(/^categories\//, "")
+        : null;
+    const albumId =
+      original.slug && original.slug.startsWith("albums/")
+        ? original.slug.replace(/^albums\//, "")
+        : null;
     setEditing({
       id: original.id,
       title: original.title,
@@ -291,6 +319,8 @@ export function MenuBuilder({ menu, items, pages }: MenuBuilderProps) {
       icon: original.icon,
       parentId: original.parentId,
       pageId: original.pageId,
+      categorySlug,
+      albumId,
     });
   };
 
@@ -333,26 +363,36 @@ export function MenuBuilder({ menu, items, pages }: MenuBuilderProps) {
     const url = String(formData.get("url") ?? "").trim();
     const icon = String(formData.get("icon") ?? "").trim();
     const pageId = String(formData.get("pageId") ?? "").trim();
+    const categorySlug = String(formData.get("categorySlug") ?? "").trim();
+    const albumId = String(formData.get("albumId") ?? "").trim();
 
-    if (slug) {
-      payload.slug = slug;
-    } else {
+    payload.icon = icon ? icon : "";
+
+    if (albumId) {
+      payload.albumId = albumId;
       payload.slug = "";
-    }
-
-    if (url) {
-      payload.url = url;
-    } else {
       payload.url = "";
-    }
-
-    if (icon) {
-      payload.icon = icon;
+      payload.pageId = null;
+      payload.categorySlug = "";
+    } else if (pageId) {
+      payload.pageId = pageId;
+      payload.albumId = null;
+      payload.categorySlug = "";
+      payload.slug = "";
+      payload.url = "";
+    } else if (categorySlug) {
+      payload.categorySlug = categorySlug;
+      payload.pageId = null;
+      payload.albumId = null;
+      payload.slug = "";
+      payload.url = "";
     } else {
-      payload.icon = "";
+      payload.albumId = null;
+      payload.pageId = null;
+      payload.categorySlug = "";
+      payload.slug = slug ? slug : "";
+      payload.url = url ? url : "";
     }
-
-    payload.pageId = pageId || null;
 
     try {
       const response = await fetch(`/api/dashboard/menus/${editing.id}`, {
@@ -421,6 +461,41 @@ export function MenuBuilder({ menu, items, pages }: MenuBuilderProps) {
                 ))}
               </select>
             </div>
+            <div>
+              <Label htmlFor="categorySlug-edit">Kategori</Label>
+              <select
+                id="categorySlug-edit"
+                name="categorySlug"
+                defaultValue={editing.categorySlug ?? ""}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">(Tidak ada)</option>
+                {categories.map((category) => (
+                  <option key={category.id} value={category.slug}>
+                    {category.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="albumId-edit">Album</Label>
+              <select
+                id="albumId-edit"
+                name="albumId"
+                defaultValue={editing.albumId ?? ""}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <option value="">(Tidak ada)</option>
+                {albums.map((album) => (
+                  <option key={album.id} value={album.id}>
+                    {album.title}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Gunakan salah satu sumber tautan (halaman, kategori, atau album) atau kosongkan untuk custom link.
+              </p>
+            </div>
             <div className="flex items-center justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setEditing(null)} disabled={savingEdit}>
                 Batal
@@ -434,6 +509,10 @@ export function MenuBuilder({ menu, items, pages }: MenuBuilderProps) {
       </div>
     );
   };
+
+  if (!isMounted) {
+    return null;
+  }
 
   return (
     <div className="space-y-4">

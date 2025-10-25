@@ -9,6 +9,38 @@ function serializeDate(value: Date | null) {
   return value ? value.toISOString() : null;
 }
 
+function buildSqlBackup(payload: Record<string, unknown>) {
+  const lines: string[] = [];
+  const exportedAt = payload.exportedAt;
+  lines.push("-- Roemah Cita CMS Backup (SQL)");
+  if (typeof exportedAt === "string") {
+    lines.push(`-- Exported At: ${exportedAt}`);
+  }
+  lines.push("-- Format ini dapat diimpor kembali melalui dashboard atau dijalankan pada database PostgreSQL.");
+  lines.push("BEGIN;");
+
+  const siteConfig = payload.siteConfig as Record<string, unknown> | undefined;
+  if (siteConfig && typeof siteConfig === "object") {
+    for (const [key, value] of Object.entries(siteConfig)) {
+      const valueJson = JSON.stringify(value ?? null);
+      const escapedJson = valueJson.replace(/'/g, "''");
+      lines.push(
+        `INSERT INTO "SiteConfig" ("key","value","updatedAt") VALUES ('${key}', '${escapedJson}'::jsonb, NOW()) ON CONFLICT ("key") DO UPDATE SET "value" = EXCLUDED."value", "updatedAt" = NOW();`
+      );
+    }
+  }
+
+  lines.push("COMMIT;");
+  lines.push("");
+  lines.push("-- Data tambahan (JSON) disertakan sebagai referensi:");
+  const jsonString = JSON.stringify(payload, null, 2);
+  for (const line of jsonString.split("\n")) {
+    lines.push(`-- ${line}`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
 const SECTION_MAP = {
   config: "config",
   articles: "articles",
@@ -29,6 +61,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const typesParam = url.searchParams.get("types");
+  const formatParam = url.searchParams.get("format");
+  const format = formatParam === "sql" ? "sql" : "json";
   const requested = typesParam
     ? typesParam
         .split(",")
@@ -133,9 +167,19 @@ export async function GET(request: Request) {
     }));
   }
 
-  return NextResponse.json(payload, {
+  if (format === "json") {
+    return NextResponse.json(payload, {
+      headers: {
+        "Content-Disposition": `attachment; filename="cms-backup-${Date.now()}.json"`,
+      },
+    });
+  }
+
+  const sql = buildSqlBackup(payload);
+  return new NextResponse(sql, {
     headers: {
-      "Content-Disposition": `attachment; filename="cms-backup-${Date.now()}.json"`,
+      "Content-Type": "application/sql; charset=utf-8",
+      "Content-Disposition": `attachment; filename="cms-backup-${Date.now()}.sql"`,
     },
   });
 }

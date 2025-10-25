@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { updateProfile } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { AUTHOR_SOCIAL_FIELDS, type AuthorSocialKey } from "@/lib/authors/social-links";
 import { notifyError, notifySuccess } from "@/lib/notifications/client";
 
 type ProfileInfoFormProps = {
@@ -15,18 +16,22 @@ type ProfileInfoFormProps = {
     name: string;
     email: string;
     bio: string | null;
+    socialLinks: Partial<Record<AuthorSocialKey, string | null>> | Record<string, string | null>;
   };
 };
 
 export function ProfileInfoForm({ initialData }: ProfileInfoFormProps) {
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
+  const socialInitialValues = useMemo(() => initialData.socialLinks ?? {}, [initialData.socialLinks]);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Informasi Profil</CardTitle>
-        <CardDescription>Perbarui nama tampilan, email, dan bio singkat Anda.</CardDescription>
+        <CardDescription>
+          Perbarui nama tampilan, email, bio singkat, serta tautan media sosial Anda.
+        </CardDescription>
       </CardHeader>
       <form
         onSubmit={(event) => {
@@ -76,6 +81,29 @@ export function ProfileInfoForm({ initialData }: ProfileInfoFormProps) {
               placeholder="Ceritakan secara singkat tentang diri Anda (maksimal 500 karakter)"
               rows={5}
             />
+          </div>
+          <div className="space-y-3">
+            <div>
+              <Label className="text-sm font-semibold text-foreground">Media Sosial</Label>
+              <p className="text-xs text-muted-foreground">
+                Cantumkan tautan lengkap profil Anda. Kosongkan jika tidak ingin ditampilkan.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {AUTHOR_SOCIAL_FIELDS.map((field) => (
+                <div key={field.key} className="space-y-2">
+                  <Label htmlFor={`socialLinks.${field.key}`}>{field.label}</Label>
+                  <Input
+                    id={`socialLinks.${field.key}`}
+                    name={`socialLinks.${field.key}`}
+                    type="url"
+                    defaultValue={socialInitialValues?.[field.key] ?? ""}
+                    placeholder={field.placeholder}
+                    inputMode="url"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </CardContent>
         <CardFooter className="flex items-center justify-between gap-3">

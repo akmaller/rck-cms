@@ -53,13 +53,21 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         <section className="flex-1">
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle>Masuk ke Dashboard</CardTitle>
+              <CardTitle asChild>
+                <h2>Masuk ke Dashboard</h2>
+              </CardTitle>
               <CardDescription>Masukkan email dan password yang telah terdaftar.</CardDescription>
             </CardHeader>
             <CardContent>
               <Suspense fallback={<div className="text-sm text-muted-foreground">Memuat formulir...</div>}>
                 <LoginForm callbackUrl={callbackUrl} />
               </Suspense>
+              <p className="mt-4 text-center text-sm text-muted-foreground">
+                Belum punya akun?{" "}
+                <Link href="/register" className="font-semibold text-primary hover:underline">
+                  Daftar sebagai penulis
+                </Link>
+              </p>
             </CardContent>
           </Card>
         </section>

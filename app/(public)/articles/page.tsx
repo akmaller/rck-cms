@@ -1,17 +1,46 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { headers } from "next/headers";
 import { ArticleStatus } from "@prisma/client";
 
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getSiteConfig } from "@/lib/site-config/server";
+import { createMetadata } from "@/lib/seo/metadata";
+import { logPageView } from "@/lib/visits/log-page-view";
 
 const PAGE_SIZE = 9;
 
 type ArticlesPageProps = {
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string }>;
 };
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}): Promise<Metadata> {
+  const resolved = await searchParams;
+  const currentPage = Math.max(1, Number(resolved?.page ?? 1));
+  const config = await getSiteConfig();
+  const baseTitle = "Artikel Terbaru";
+  const title = currentPage > 1 ? `${baseTitle} — Halaman ${currentPage}` : baseTitle;
+  const description =
+    currentPage > 1
+      ? `Daftar artikel terbaru ${config.name} pada halaman ${currentPage}.`
+      : `Rangkuman artikel terbaru dan pilihan redaksi dari ${config.name}.`;
+  const path = currentPage > 1 ? `/articles?page=${currentPage}` : "/articles";
+
+  return createMetadata({
+    config,
+    title,
+    description,
+    path,
+  });
+}
 
 function buildPaginationLinks({
   current,
@@ -34,7 +63,8 @@ function buildPaginationLinks({
 }
 
 export default async function ArticlesPage({ searchParams }: ArticlesPageProps) {
-  const currentPage = Math.max(1, Number(searchParams.page ?? 1));
+  const resolved = await searchParams;
+  const currentPage = Math.max(1, Number(resolved.page ?? 1));
 
   const where = { status: ArticleStatus.PUBLISHED } as const;
 
@@ -56,13 +86,26 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const pagination = buildPaginationLinks({ current: currentPage, total: totalPages, basePath: "/articles" });
 
+  const queryParams = new URLSearchParams();
+  if (resolved.page && resolved.page !== "1") {
+    queryParams.set("page", resolved.page);
+  }
+  const pathWithQuery = queryParams.toString() ? `/articles?${queryParams.toString()}` : "/articles";
+  const headerList = await headers();
+  const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const userAgent = headerList.get("user-agent");
+  const referrer = headerList.get("referer");
+  const protocol = headerList.get("x-forwarded-proto") ?? "https";
+  const host = headerList.get("host");
+  const url = host ? `${protocol}://${host}${pathWithQuery}` : undefined;
+
+  await logPageView({ path: pathWithQuery, url, referrer, ip, userAgent });
+
   return (
     <section className="space-y-8">
       <div>
         <h1 className="text-3xl font-semibold tracking-tight">Artikel Terbaru</h1>
-        <p className="text-muted-foreground">
-          Temukan cerita terbaru dari Roemah Cita.
-        </p>
+        <p className="text-muted-foreground">Temukan cerita terbaru dari Roemah Cita.</p>
       </div>
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {articles.map((article) => (
@@ -79,7 +122,9 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
               </div>
             ) : null}
             <CardHeader>
-              <CardTitle className="line-clamp-2 text-lg">{article.title}</CardTitle>
+              <CardTitle asChild className="line-clamp-2 text-lg">
+                <h2>{article.title}</h2>
+              </CardTitle>
               <CardDescription>
                 Dipublikasikan {article.publishedAt?.toLocaleDateString("id-ID") ?? "-"}
               </CardDescription>

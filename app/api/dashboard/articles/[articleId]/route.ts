@@ -7,7 +7,8 @@ import { isRateLimited } from "@/lib/rate-limit";
 import { slugify } from "@/lib/utils/slug";
 import { articleUpdateSchema } from "@/lib/validators/article";
 import { writeAuditLog } from "@/lib/audit/log";
-import { validateRelations } from "../route";
+import { validateArticleRelations } from "@/lib/articles/validate-relations";
+
 
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 20;
@@ -99,7 +100,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Artikel tidak ditemukan" }, { status: 404 });
   }
 
-  await validateRelations({
+  await validateArticleRelations({
     title: data.title ?? article.title,
     slug: data.slug ?? article.slug,
     excerpt: data.excerpt ?? article.excerpt ?? undefined,

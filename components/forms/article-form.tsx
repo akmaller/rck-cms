@@ -39,6 +39,7 @@ type ArticleFormProps = {
   allTags: string[];
   allCategories: string[];
   currentRole: "ADMIN" | "EDITOR" | "AUTHOR";
+  canPublishContent?: boolean;
 };
 
 export function ArticleForm({
@@ -51,6 +52,7 @@ export function ArticleForm({
   allTags,
   allCategories,
   currentRole,
+  canPublishContent = true,
 }: ArticleFormProps) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -95,6 +97,10 @@ export function ArticleForm({
       ),
     [allCategories]
   );
+  const normalizedAllCategoriesLower = useMemo(
+    () => normalizedAllCategories.map((category) => category.toLowerCase()),
+    [normalizedAllCategories]
+  );
   const [selectedCategories, setSelectedCategories] = useState<string[]>(initialValues?.categories ?? []);
   const [categoryInput, setCategoryInput] = useState("");
   const categorySuggestionMouseDownRef = useRef(false);
@@ -135,6 +141,8 @@ export function ArticleForm({
       .slice(0, 6);
   }, [normalizedAllTags, selectedTags, tagInput]);
 
+  const canCreateCategories = currentRole !== "AUTHOR";
+
   const addCategory = (rawValue: string) => {
     const normalized = rawValue.trim().replace(/\s+/g, " ");
     if (!normalized) {
@@ -142,11 +150,16 @@ export function ArticleForm({
       return;
     }
     const lower = normalized.toLowerCase();
+    const exists = normalizedAllCategoriesLower.includes(lower);
+    if (!canCreateCategories && !exists) {
+      setCategoryInput("");
+      return;
+    }
     if (selectedCategories.some((category) => category.toLowerCase() === lower)) {
       setCategoryInput("");
       return;
     }
-    setSelectedCategories((prev) => [...prev, normalized]);
+    setSelectedCategories((prev) => [...prev, exists ? normalizedAllCategories[normalizedAllCategoriesLower.indexOf(lower)] : normalized]);
     setCategoryInput("");
   };
 
@@ -204,16 +217,33 @@ export function ArticleForm({
     return slugify(trimmedTitle);
   }, [initialValues?.id, initialSlug, initialTitle, title]);
 
+  const isAuthor = currentRole === "AUTHOR";
+  const authorCanPublish = !isAuthor || canPublishContent;
+  const isAuthorRestricted = isAuthor && !authorCanPublish;
+  const canPublish = currentRole === "ADMIN" || currentRole === "EDITOR" || authorCanPublish;
+
   type SubmitIntent = "draft" | "publish";
-  const defaultIntent: SubmitIntent =
-    initialValues?.status === ArticleStatus.PUBLISHED ? "publish" : "draft";
+  const defaultIntent: SubmitIntent = isAuthorRestricted
+    ? "draft"
+    : initialValues?.status === ArticleStatus.PUBLISHED
+      ? "publish"
+      : "draft";
   const [submitIntent, setSubmitIntent] = useState<SubmitIntent>(defaultIntent);
   const submitIntentRef = useRef<SubmitIntent>(defaultIntent);
+  const resolvedSubmitIntent = isAuthorRestricted ? "draft" : submitIntent;
 
-  const setIntent = (intent: SubmitIntent) => {
-    submitIntentRef.current = intent;
-    setSubmitIntent(intent);
-  };
+  useEffect(() => {
+    submitIntentRef.current = resolvedSubmitIntent;
+  }, [resolvedSubmitIntent]);
+
+  const setIntent = useCallback(
+    (intent: SubmitIntent) => {
+      const nextIntent = isAuthorRestricted ? "draft" : intent;
+      setSubmitIntent(nextIntent);
+      submitIntentRef.current = nextIntent;
+    },
+    [isAuthorRestricted]
+  );
 
   const serializeArticleState = useCallback(
     (params: {
@@ -255,7 +285,11 @@ export function ArticleForm({
     [content, featuredMedia?.id, selectedCategories, selectedTags, serializeArticleState, title]
   );
 
-  const isDirty = initialSnapshotRef.current !== currentSnapshot;
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    setIsDirty(initialSnapshotRef.current !== currentSnapshot);
+  }, [currentSnapshot]);
 
   const handleSaveAndExit = useCallback(
     async (targetUrl: string | null) => {
@@ -280,7 +314,6 @@ export function ArticleForm({
     onSaveAndExit: handleSaveAndExit,
   });
 
-  const canPublish = currentRole === "ADMIN" || currentRole === "EDITOR" || currentRole === "AUTHOR";
   const handleDelete = () => {
     const articleId = initialValues?.id;
     if (!articleId) {
@@ -402,6 +435,11 @@ export function ArticleForm({
           {initialValues?.id ? (
             <input type="hidden" name="articleId" value={initialValues.id} />
           ) : null}
+          {isAuthorRestricted ? (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Akun penulis Anda menunggu persetujuan admin. Anda masih bisa menyimpan draft, tetapi belum dapat memublikasikan artikel.
+            </div>
+          ) : null}
           <div className="space-y-2">
             <Label htmlFor="title">Judul</Label>
             <Input
@@ -442,9 +480,10 @@ export function ArticleForm({
               onSelect={setFeaturedMedia}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="categories-input">Kategori</Label>
-            <div className="rounded-md border border-border/60 bg-background p-2">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="categories-input">Kategori</Label>
+              <div className="rounded-md border border-border/60 bg-background p-2">
               <div className="flex flex-wrap gap-2">
                 {selectedCategories.map((category, index) => (
                   <span
@@ -505,13 +544,15 @@ export function ArticleForm({
                 </div>
               ) : null}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Pilih satu atau lebih kategori. Kategori pertama akan menjadi kategori utama. Kategori baru akan dibuat otomatis ketika disimpan.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="tags-input">Tag</Label>
-            <div className="rounded-md border border-border/60 bg-background p-2">
+              <p className="text-xs text-muted-foreground">
+                {canCreateCategories
+                  ? "Pilih satu atau lebih kategori. Kategori pertama menjadi kategori utama. Ketik nama baru untuk membuat kategori baru."
+                  : "Pilih kategori yang tersedia. Jika tidak menemukan kategori yang cocok, hubungi Editor atau Admin."}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="tags-input">Tag</Label>
+              <div className="rounded-md border border-border/60 bg-background p-2">
               <div className="flex flex-wrap gap-2">
                 {selectedTags.map((tag) => (
                   <span
@@ -569,6 +610,7 @@ export function ArticleForm({
               Pisahkan tag dengan Enter atau koma. Tag baru akan dibuat otomatis ketika disimpan.
             </p>
           </div>
+          </div>
         </CardContent>
         <CardFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -590,7 +632,7 @@ export function ArticleForm({
               disabled={isPending || isDeleting}
               onClick={() => setIntent("draft")}
             >
-              {isPending && submitIntent === "draft"
+              {isPending && resolvedSubmitIntent === "draft"
                 ? "Menyimpan..."
                 : submitLabel ?? draftLabel}
             </Button>
@@ -601,7 +643,7 @@ export function ArticleForm({
                 disabled={isPending || isDeleting}
                 onClick={() => setIntent("publish")}
               >
-                {isPending && submitIntent === "publish"
+                {isPending && resolvedSubmitIntent === "publish"
                   ? "Memublikasikan..."
                   : publishLabel}
               </Button>

@@ -16,7 +16,7 @@ export async function SiteFooter() {
           <span className="font-semibold text-foreground">{config.name}</span>
           <p className="max-w-md">{config.description}</p>
         </div>
-        <nav className="grid gap-6 sm:grid-cols-2 md:grid-cols-3">
+        <nav className="grid gap-6 sm:grid-cols-2 md:grid-cols-3" aria-label="Navigasi footer">
           {footerMenu.length > 0
             ? footerMenu.map((item) => {
                 const href = resolveHref(item.slug, item.url);
@@ -46,13 +46,13 @@ export async function SiteFooter() {
                             return (
                               <li key={child.id}>
                                 {childHref === "#" ? (
-                                  <span className="transition-colors hover:text-foreground">
+                                  <span className="text-muted-foreground transition-colors hover:text-foreground">
                                     {child.title}
                                   </span>
                                 ) : (
                                   <Link
                                     href={childHref}
-                                    className="transition-colors hover:text-foreground"
+                                    className="text-muted-foreground transition-colors hover:text-foreground"
                                   >
                                     {child.title}
                                   </Link>

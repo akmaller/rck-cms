@@ -1,6 +1,7 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -11,9 +12,10 @@ import { cn } from "@/lib/utils";
 type ArticleListActionsProps = {
   articleId: string;
   showDeleteOnly?: boolean;
+  publicUrl?: string;
 };
 
-export function ArticleListActions({ articleId, showDeleteOnly = false }: ArticleListActionsProps) {
+export function ArticleListActions({ articleId, showDeleteOnly = false, publicUrl }: ArticleListActionsProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -35,6 +37,38 @@ export function ArticleListActions({ articleId, showDeleteOnly = false }: Articl
     });
   };
 
+  const iconClass = showDeleteOnly
+    ? "h-4 w-4 text-destructive"
+    : "h-4 w-4 text-destructive-foreground";
+
+  const viewButton = publicUrl
+    ? showDeleteOnly
+      ? (
+          <Link
+            href={publicUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              buttonVariants({ variant: "outline", size: "icon" }),
+              "h-8 w-8 rounded-md border border-border/60 bg-background hover:bg-accent"
+            )}
+            aria-label="Lihat halaman publik"
+          >
+            <ExternalLink className="h-4 w-4" aria-hidden />
+          </Link>
+        )
+      : (
+          <Link
+            href={publicUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "text-xs")}
+          >
+            Lihat Publik
+          </Link>
+        )
+    : null;
+
   const deleteButton = (
     <button
       type="button"
@@ -51,7 +85,7 @@ export function ArticleListActions({ articleId, showDeleteOnly = false }: Articl
       {isPending ? (
         <span className="text-[10px]">...</span>
       ) : (
-        <Trash2 className="h-4 w-4" aria-hidden />
+        <Trash2 className={iconClass} aria-hidden />
       )}
     </button>
   );
@@ -59,7 +93,10 @@ export function ArticleListActions({ articleId, showDeleteOnly = false }: Articl
   if (showDeleteOnly) {
     return (
       <div className="flex flex-col items-center gap-1">
-        {deleteButton}
+        <div className="flex items-center gap-2">
+          {viewButton}
+          {deleteButton}
+        </div>
         {error ? <p className="text-[10px] text-destructive">{error}</p> : null}
       </div>
     );
@@ -67,6 +104,7 @@ export function ArticleListActions({ articleId, showDeleteOnly = false }: Articl
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground sm:text-[11px]">
+      {viewButton}
       {deleteButton}
       {error ? <p className="basis-full text-[10px] text-destructive">{error}</p> : null}
     </div>

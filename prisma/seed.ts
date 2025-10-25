@@ -14,7 +14,9 @@ async function main() {
       name: "Administrator",
       passwordHash: adminPassword,
       role: UserRole.ADMIN,
-      bio: "Pengelola utama Roemah Cita CMS."
+      bio: "Pengelola utama Roemah Cita CMS.",
+      emailVerified: new Date(),
+      canPublish: true,
     },
   });
 

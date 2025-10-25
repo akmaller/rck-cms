@@ -160,6 +160,17 @@ export async function createArticle(formData: FormData) {
   try {
     const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
 
+    if (session.user.role === "AUTHOR") {
+      const author = await prisma.user.findUnique({
+        where: { id: session.user.id },
+      });
+      if (!author?.canPublish) {
+        return {
+          error: "Akun penulis Anda menunggu persetujuan admin sebelum dapat menulis artikel.",
+        };
+      }
+    }
+
     const parsed = articleFormSchema.safeParse({
       title: formData.get("title"),
       slug: formData.get("slug") || undefined,
@@ -444,7 +455,21 @@ export async function createUser(formData: FormData) {
   }
 }
 
-export async function createMenuItem(formData: FormData) {
+function sanitizeCategorySlug(raw: FormDataEntryValue | null): string | undefined {
+  if (typeof raw !== "string") {
+    return undefined;
+  }
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeUrl(value: string | undefined | null) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+export async function createMenuItemAction(formData: FormData) {
   try {
     await assertRole("ADMIN");
 
@@ -458,6 +483,8 @@ export async function createMenuItem(formData: FormData) {
       parentId: formData.get("parentId") ? String(formData.get("parentId")) : null,
       pageId: formData.get("pageId") ? String(formData.get("pageId")) : null,
       isExternal: formData.get("isExternal") === "on",
+      categorySlug: sanitizeCategorySlug(formData.get("categorySlug")),
+      albumId: formData.get("albumId") ? String(formData.get("albumId")) : null,
     });
 
     if (!parsed.success) {
@@ -468,6 +495,26 @@ export async function createMenuItem(formData: FormData) {
       return { error: "Gunakan URL atau tautan halaman, bukan keduanya" };
     }
 
+    if (parsed.data.categorySlug && parsed.data.pageId) {
+      return { error: "Gunakan halaman atau kategori, bukan keduanya" };
+    }
+
+    if (parsed.data.categorySlug && parsed.data.url) {
+      return { error: "Gunakan kategori tanpa URL kustom" };
+    }
+
+    if (parsed.data.albumId && parsed.data.pageId) {
+      return { error: "Gunakan album atau halaman, bukan keduanya" };
+    }
+
+    if (parsed.data.albumId && parsed.data.categorySlug) {
+      return { error: "Gunakan album atau kategori, bukan keduanya" };
+    }
+
+    if (parsed.data.albumId && parsed.data.url) {
+      return { error: "Gunakan album tanpa URL kustom" };
+    }
+
     if (parsed.data.parentId) {
       const parent = await prisma.menuItem.findUnique({ where: { id: parsed.data.parentId } });
       if (!parent || parent.menu !== parsed.data.menu) {
@@ -475,32 +522,93 @@ export async function createMenuItem(formData: FormData) {
       }
     }
 
-    const baseSlug = slugify(parsed.data.slug ?? parsed.data.title);
-    const safeBase = baseSlug.length > 0 ? baseSlug : `menu-${Date.now()}`;
-    let candidate = safeBase;
-    let counter = 1;
-    while (true) {
-      const exists = await prisma.menuItem.findFirst({
-        where: {
-          slug: candidate,
-          menu: parsed.data.menu,
-        },
+    let pageId: string | null = parsed.data.pageId ?? null;
+    let targetSlug: string | null = null;
+    let targetUrl: string | null = null;
+    let isExternal = parsed.data.isExternal || false;
+
+    if (pageId) {
+      const page = await prisma.page.findUnique({ where: { id: pageId } });
+      if (!page) {
+        return { error: "Halaman tidak ditemukan" };
+      }
+      targetSlug = `pages/${page.slug}`;
+      targetUrl = null;
+      pageId = page.id;
+      isExternal = false;
+    } else if (parsed.data.categorySlug) {
+      const category = await prisma.category.findUnique({ where: { slug: parsed.data.categorySlug } });
+      if (!category) {
+        return { error: "Kategori tidak ditemukan" };
+      }
+      targetSlug = `categories/${category.slug}`;
+      targetUrl = null;
+      pageId = null;
+      isExternal = false;
+    } else if (parsed.data.albumId) {
+      const album = await prisma.album.findFirst({
+        where: { id: parsed.data.albumId, status: ArticleStatus.PUBLISHED },
       });
-      if (!exists) break;
-      candidate = `${safeBase}-${counter++}`;
+      if (!album) {
+        return { error: "Album tidak ditemukan atau belum dipublikasikan" };
+      }
+      targetSlug = `albums/${album.id}`;
+      targetUrl = null;
+      pageId = null;
+      isExternal = false;
+    } else {
+      const manualUrl = normalizeUrl(parsed.data.url);
+      const manualSlugInput = parsed.data.slug ? slugify(parsed.data.slug) : "";
+      const baseTitleSlug = slugify(parsed.data.title);
+
+      if (manualUrl) {
+        targetUrl = manualUrl;
+      }
+
+      if (manualSlugInput) {
+        const base = manualSlugInput;
+        let candidate = base;
+        let counter = 1;
+        while (
+          await prisma.menuItem.findFirst({
+            where: { menu: parsed.data.menu, slug: candidate },
+          })
+        ) {
+          candidate = `${base}-${counter++}`;
+        }
+        targetSlug = candidate;
+      } else if (!targetUrl) {
+        const base = baseTitleSlug || `menu-${Date.now()}`;
+        let candidate = base;
+        let counter = 1;
+        while (
+          await prisma.menuItem.findFirst({
+            where: { menu: parsed.data.menu, slug: candidate },
+          })
+        ) {
+          candidate = `${base}-${counter++}`;
+        }
+        targetSlug = candidate;
+      }
+
+      if (targetUrl) {
+        isExternal = !targetUrl.startsWith("/");
+      } else {
+        isExternal = false;
+      }
     }
 
     const menuItem = await prisma.menuItem.create({
       data: {
         menu: parsed.data.menu,
         title: parsed.data.title,
-        slug: candidate,
-        url: parsed.data.url,
+        slug: targetSlug,
+        url: targetUrl,
         icon: parsed.data.icon,
         order: parsed.data.order ?? 0,
         parentId: parsed.data.parentId ?? null,
-        pageId: parsed.data.pageId ?? null,
-        isExternal: parsed.data.isExternal || Boolean(parsed.data.url),
+        pageId,
+        isExternal,
       },
     });
 
@@ -584,6 +692,20 @@ export async function updateSiteConfig(formData: FormData) {
     }
     if (Object.keys(metadataValues).length > 0) {
       data.metadata = metadataValues;
+    }
+
+    const registrationValues: NonNullable<SiteConfigInput["registration"]> = {};
+    const registrationEnabledValues = formData.getAll("registration.enabled").map(String);
+    if (registrationEnabledValues.length > 0) {
+      registrationValues.enabled = registrationEnabledValues.includes("true") || registrationEnabledValues.includes("on");
+    }
+    const registrationAutoApproveValues = formData.getAll("registration.autoApprove").map(String);
+    if (registrationAutoApproveValues.length > 0) {
+      registrationValues.autoApprove =
+        registrationAutoApproveValues.includes("true") || registrationAutoApproveValues.includes("on");
+    }
+    if (Object.keys(registrationValues).length > 0) {
+      data.registration = registrationValues;
     }
 
     const cacheValues = formData.getAll("cacheEnabled").map(String);
@@ -816,6 +938,17 @@ export async function updatePage(formData: FormData) {
 export async function updateArticle(formData: FormData) {
   try {
     const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
+
+    if (session.user.role === "AUTHOR") {
+      const author = await prisma.user.findUnique({
+        where: { id: session.user.id },
+      });
+      if (!author?.canPublish) {
+        return {
+          error: "Akun penulis Anda menunggu persetujuan admin sebelum dapat mengubah artikel.",
+        };
+      }
+    }
 
     const parsed = articleUpdateFormSchema.safeParse({
       articleId: formData.get("articleId"),

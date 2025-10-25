@@ -32,6 +32,13 @@ export async function updateUserAction(userId: string, formData: FormData) {
       password: sanitize(formData.get("password")),
     };
 
+    const emailVerifiedRaw = formData.get("emailVerified");
+    const canPublishRaw = formData.get("canPublish");
+    const emailVerifiedSetting =
+      emailVerifiedRaw === "true" ? true : emailVerifiedRaw === "false" ? false : undefined;
+    const canPublishSetting =
+      canPublishRaw === "true" ? true : canPublishRaw === "false" ? false : undefined;
+
     const parsed = userUpdateSchema.safeParse(payload);
     if (!parsed.success) {
       return {
@@ -40,7 +47,9 @@ export async function updateUserAction(userId: string, formData: FormData) {
       };
     }
 
-    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+    });
     if (!targetUser) {
       return { success: false, message: "Pengguna tidak ditemukan." };
     }
@@ -57,6 +66,7 @@ export async function updateUserAction(userId: string, formData: FormData) {
       email?: string;
       role?: UserRole;
       passwordHash?: string;
+      emailVerified?: Date | null;
     } = {};
 
     if (parsed.data.name) data.name = parsed.data.name;
@@ -65,17 +75,37 @@ export async function updateUserAction(userId: string, formData: FormData) {
     if (parsed.data.password) {
       data.passwordHash = await hashPassword(parsed.data.password);
     }
+    if (typeof emailVerifiedSetting === "boolean") {
+      data.emailVerified = emailVerifiedSetting
+        ? targetUser.emailVerified ?? new Date()
+        : null;
+    }
 
     const updated = await prisma.user.update({
       where: { id: userId },
       data,
     });
 
+    if (typeof canPublishSetting === "boolean" && canPublishSetting !== targetUser.canPublish) {
+      await prisma.$executeRawUnsafe(
+        `UPDATE "User" SET "canPublish" = ${canPublishSetting ? "TRUE" : "FALSE"} WHERE "id" = $1`,
+        userId
+      );
+    }
+
+    const refreshedUser = await prisma.user.findUnique({ where: { id: userId } });
+
     await writeAuditLog({
       action: "USER_UPDATE",
       entity: "User",
       entityId: updated.id,
-      metadata: { email: updated.email, role: updated.role, updatedBy: session.user.id },
+      metadata: {
+        email: refreshedUser?.email ?? updated.email,
+        role: refreshedUser?.role ?? updated.role,
+        updatedBy: session.user.id,
+        emailVerified: refreshedUser?.emailVerified ?? updated.emailVerified,
+        canPublish: refreshedUser?.canPublish ?? targetUser.canPublish,
+      },
     });
 
     revalidatePath("/dashboard/users");
@@ -125,5 +155,60 @@ export async function deleteUserAction(userId: string) {
   } catch (error) {
     console.error(error);
     return { success: false, message: "Gagal menghapus pengguna." };
+  }
+}
+
+export async function resetTwoFactorAction(userId: string) {
+  try {
+    const session = await requireAuth();
+    if ((session.user.role ?? "") !== "ADMIN") {
+      return { success: false, message: "Hanya Administrator yang dapat mengelola autentikator pengguna." };
+    }
+
+    const targetUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        twoFactorEnabled: true,
+      },
+    });
+
+    if (!targetUser) {
+      return { success: false, message: "Pengguna tidak ditemukan." };
+    }
+
+    if (!targetUser.twoFactorEnabled) {
+      await prisma.twoFactorToken.deleteMany({ where: { userId } });
+      await prisma.twoFactorConfirmation.deleteMany({ where: { userId } });
+      return { success: true, message: "Autentikator pengguna sudah dinonaktifkan." };
+    }
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { twoFactorEnabled: false, twoFactorSecret: null },
+      }),
+      prisma.twoFactorToken.deleteMany({ where: { userId } }),
+      prisma.twoFactorConfirmation.deleteMany({ where: { userId } }),
+    ]);
+
+    await writeAuditLog({
+      action: "USER_RESET_TWO_FACTOR",
+      entity: "User",
+      entityId: userId,
+      metadata: {
+        email: targetUser.email,
+        resetBy: session.user.id,
+      },
+    });
+
+    revalidatePath("/dashboard/users");
+    revalidatePath(`/dashboard/users/${userId}`);
+
+    return { success: true, message: "Autentikator pengguna telah dinonaktifkan." };
+  } catch (error) {
+    console.error(error);
+    return { success: false, message: "Gagal mereset autentikator pengguna." };
   }
 }

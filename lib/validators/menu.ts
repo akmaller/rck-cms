@@ -32,6 +32,8 @@ export const menuItemCreateSchema = z
     parentId: z.string().cuid().nullable().optional(),
     pageId: z.string().cuid().nullable().optional(),
     isExternal: z.boolean().optional(),
+    categorySlug: z.string().trim().min(1).optional(),
+    albumId: z.string().cuid().nullable().optional(),
   })
   .strict();
 
@@ -45,6 +47,8 @@ export const menuItemUpdateSchema = z
     parentId: z.string().cuid().nullable().optional(),
     pageId: z.string().cuid().nullable().optional(),
     isExternal: z.boolean().optional(),
+    categorySlug: z.string().trim().optional().or(z.literal("")),
+    albumId: z.string().cuid().nullable().optional(),
   })
   .strict();
 

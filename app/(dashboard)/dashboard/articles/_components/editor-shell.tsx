@@ -12,6 +12,7 @@ export type ArticleEditorShellProps = {
   allTags: string[];
   allCategories: string[];
   currentRole: Parameters<typeof ArticleForm>[0]["currentRole"];
+  canPublishContent?: boolean;
 };
 
 export function ArticleEditorShell({
@@ -23,6 +24,7 @@ export function ArticleEditorShell({
   allTags,
   allCategories,
   currentRole,
+  canPublishContent = true,
 }: ArticleEditorShellProps) {
   return (
     <div className="space-y-6">
@@ -36,6 +38,7 @@ export function ArticleEditorShell({
         allTags={allTags}
         allCategories={allCategories}
         currentRole={currentRole}
+        canPublishContent={canPublishContent}
       />
     </div>
   );

@@ -9,6 +9,9 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
   const metadata = values?.metadata ?? {};
   const social = values?.social ?? {};
 
+  const registrationDefaults = defaultSiteConfig.registration ?? { enabled: true, autoApprove: false };
+  const registrationSetting = values?.registration ?? {};
+
   return {
     ...defaultSiteConfig,
     name: values?.siteName?.trim() || defaultSiteConfig.name,
@@ -35,6 +38,12 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
     },
     ogImage: defaultSiteConfig.ogImage,
     url: defaultSiteConfig.url,
+    registration: {
+      enabled:
+        registrationSetting.enabled ?? registrationDefaults.enabled ?? true,
+      autoApprove:
+        registrationSetting.autoApprove ?? registrationDefaults.autoApprove ?? false,
+    },
   };
 };
 

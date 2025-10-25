@@ -4,8 +4,9 @@ import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-import { cn } from "@/lib/utils";
+import { createMetadata } from "@/lib/seo/metadata";
 import { getSiteConfig } from "@/lib/site-config/server";
+import { cn } from "@/lib/utils";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -19,40 +20,23 @@ const geistMono = Geist_Mono({
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
-  const title = config.metadata.title ?? config.name;
-  const description = config.metadata.description ?? config.description;
-  const ogImage = config.ogImage ?? config.logoUrl ?? "/og.jpg";
+  const baseMetadata = await createMetadata({
+    config,
+    title: config.metadata.title ?? config.name,
+    description: config.metadata.description ?? config.description,
+    path: "/",
+  });
+
+  const defaultTitle = typeof baseMetadata.title === "string" ? baseMetadata.title : config.name;
 
   return {
+    ...baseMetadata,
     metadataBase: new URL(config.url),
     title: {
-      default: title,
+      default: defaultTitle,
       template: `%s | ${config.name}`,
     },
-    description,
-    icons: config.logoUrl ? { icon: config.logoUrl } : undefined,
-    openGraph: {
-      title,
-      description,
-      url: config.url,
-      siteName: config.name,
-      locale: "id_ID",
-      type: "website",
-      images: [
-        {
-          url: ogImage,
-          width: 1200,
-          height: 630,
-          alt: config.name,
-        },
-      ],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title,
-      description,
-      images: [ogImage],
-    },
+    icons: config.iconUrl ? { icon: config.iconUrl } : undefined,
   };
 }
 

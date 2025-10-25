@@ -1,10 +1,14 @@
 import { auth } from "@/auth";
 import { ConfigForm, ConfigValues } from "@/components/forms/config-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { prisma } from "@/lib/prisma";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
 import type { RoleKey } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma";
+import { CacheControls } from "../_components/cache-controls";
+import { BackupControls } from "../_components/backup-controls";
+
+export const runtime = "nodejs";
 
 export default async function GeneralSettingsPage() {
   const session = await auth();
@@ -20,10 +24,16 @@ export default async function GeneralSettingsPage() {
 
   const initialConfig: ConfigValues = {
     siteName: value.siteName ?? "",
+    siteUrl: value.siteUrl ?? "",
     logoUrl: value.logoUrl ?? "",
     iconUrl: value.iconUrl ?? "",
     tagline: value.tagline ?? "",
+    timezone: value.timezone ?? "UTC",
     contactEmail: value.contactEmail ?? "",
+    cacheEnabled: value.cache?.enabled ?? true,
+    cache: {
+      enabled: value.cache?.enabled ?? true,
+    },
     social: {
       facebook: value.social?.facebook ?? "",
       instagram: value.social?.instagram ?? "",
@@ -35,15 +45,21 @@ export default async function GeneralSettingsPage() {
       description: value.metadata?.description ?? "",
       keywords: value.metadata?.keywords ?? [],
     },
+    registration: {
+      enabled: value.registration?.enabled ?? true,
+      autoApprove: value.registration?.autoApprove ?? false,
+    },
   };
 
   return (
     <div className="space-y-8">
       <DashboardHeading
         heading="Informasi Umum"
-        description="Sesuaikan identitas dan metadata situs sebelum dipublikasikan."
+        description="Kelola identitas, metadata, dan utilitas sistem publik."
       />
       <ConfigForm initialConfig={initialConfig} />
+      <CacheControls />
+      <BackupControls />
       <Card>
         <CardHeader>
           <CardTitle>Panduan</CardTitle>

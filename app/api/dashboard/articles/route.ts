@@ -8,7 +8,8 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit/log";
 import { isRateLimited } from "@/lib/rate-limit";
 import { slugify } from "@/lib/utils/slug";
-import { ArticleCreateInput, articleCreateSchema } from "@/lib/validators/article";
+import { articleCreateSchema } from "@/lib/validators/article";
+import { validateArticleRelations } from "@/lib/articles/validate-relations";
 
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 20;
@@ -37,31 +38,6 @@ async function ensureUniqueSlug(baseSlug: string) {
   return candidate;
 }
 
-export async function validateRelations(input: ArticleCreateInput) {
-  const [categories, tags, media] = await Promise.all([
-    input.categoryIds.length
-      ? prisma.category.findMany({ where: { id: { in: input.categoryIds } }, select: { id: true } })
-      : [],
-    input.tagIds.length
-      ? prisma.tag.findMany({ where: { id: { in: input.tagIds } }, select: { id: true } })
-      : [],
-    input.featuredMediaId
-      ? prisma.media.findUnique({ where: { id: input.featuredMediaId }, select: { id: true } })
-      : null,
-  ]);
-
-  if (categories.length !== input.categoryIds.length) {
-    throw new Error("Beberapa kategori tidak ditemukan");
-  }
-
-  if (tags.length !== input.tagIds.length) {
-    throw new Error("Beberapa tag tidak ditemukan");
-  }
-
-  if (input.featuredMediaId && !media) {
-    throw new Error("Media unggulan tidak ditemukan");
-  }
-}
 
 export async function GET(request: NextRequest) {
   const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
@@ -167,7 +143,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await validateRelations(parsedBody.data);
+    await validateArticleRelations(parsedBody.data);
   } catch (error) {
     if (error instanceof Error) {
       return NextResponse.json({ error: error.message }, { status: 400 });

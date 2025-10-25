@@ -35,6 +35,8 @@ export async function verifyTwoFactorAction(
   }
 
   const { token, code, redirectTo } = parsed.data;
+  const normalizedRedirect =
+    typeof redirectTo === "string" && redirectTo.trim().length > 0 ? redirectTo : undefined;
 
   const pending = await prisma.twoFactorToken.findUnique({ where: { token } });
   if (!pending || pending.purpose !== "LOGIN") {
@@ -66,5 +68,5 @@ export async function verifyTwoFactorAction(
     return { error: "Terjadi kesalahan saat memverifikasi 2FA" };
   }
 
-  redirect(redirectTo ?? "/dashboard");
+  redirect(normalizedRedirect ?? "/dashboard");
 }

@@ -18,6 +18,10 @@ export type SiteConfig = {
     description?: string;
     keywords?: string[];
   };
+  registration?: {
+    enabled?: boolean;
+    autoApprove?: boolean;
+  };
 };
 
 export const siteConfig: SiteConfig = {
@@ -38,7 +42,11 @@ export const siteConfig: SiteConfig = {
   metadata: {
     title: "Roemah Cita CMS",
     description:
-      "Content management system untuk mengelola artikel, media, dan konfigurasi situs Roemah Cita.",
+      "Content management system untuk mengelola artikel dan media Roemah Cita.",
     keywords: ["roemah cita", "cms", "konten"],
+  },
+  registration: {
+    enabled: true,
+    autoApprove: false,
   },
 };

@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Prisma } from "@prisma/client";
 
+import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -27,40 +28,51 @@ type DashboardArticlesPageProps = {
 };
 
 export default async function DashboardArticlesPage({ searchParams }: DashboardArticlesPageProps) {
+  const session = await auth();
+  const role = session?.user?.role ?? "AUTHOR";
+  const userId = session?.user?.id ?? null;
+  const isAuthor = role === "AUTHOR";
+
   const resolvedParams = await searchParams;
   const rawPage = Number(resolvedParams.page ?? "1");
   const currentPage = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
   const query = (resolvedParams.q ?? "").trim();
 
-  const where: Prisma.ArticleWhereInput | undefined = query
-    ? {
-        OR: [
-          { title: { contains: query, mode: Prisma.QueryMode.insensitive } },
-          {
-            categories: {
-              some: {
-                category: { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
-              },
+  const filters: Prisma.ArticleWhereInput[] = [];
+  if (isAuthor) {
+    filters.push({ authorId: userId ?? "__unknown__" });
+  }
+  if (query) {
+    filters.push({
+      OR: [
+        { title: { contains: query, mode: Prisma.QueryMode.insensitive } },
+        {
+          categories: {
+            some: {
+              category: { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
             },
           },
-          {
-            tags: {
-              some: {
-                tag: { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
-              },
+        },
+        {
+          tags: {
+            some: {
+              tag: { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
             },
           },
-          {
-            author: {
-              OR: [
-                { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
-                { email: { contains: query, mode: Prisma.QueryMode.insensitive } },
-              ],
-            },
+        },
+        {
+          author: {
+            OR: [
+              { name: { contains: query, mode: Prisma.QueryMode.insensitive } },
+              { email: { contains: query, mode: Prisma.QueryMode.insensitive } },
+            ],
           },
-        ],
-      }
-    : undefined;
+        },
+      ],
+    });
+  }
+
+  const where = filters.length > 0 ? { AND: filters } : undefined;
 
   const totalArticles = await prisma.article.count({ where });
   const totalPages = Math.max(1, Math.ceil(totalArticles / PAGE_SIZE));
@@ -77,6 +89,24 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
       tags: { include: { tag: true } },
     },
   });
+
+  const articlePaths = articles.map((article) => `/articles/${article.slug}`);
+  const viewsByPath = new Map<string, number>();
+  if (articlePaths.length > 0) {
+    try {
+      const uniqueArticleVisits = await prisma.visitLog.findMany({
+        where: { path: { in: articlePaths } },
+        select: { path: true, ip: true },
+        distinct: ["path", "ip"],
+      });
+      for (const entry of uniqueArticleVisits) {
+        const current = viewsByPath.get(entry.path) ?? 0;
+        viewsByPath.set(entry.path, current + 1);
+      }
+    } catch {
+      // keep views at zero if logging table not available
+    }
+  }
 
   const startItem = totalArticles === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1;
   const endItem = totalArticles === 0 ? 0 : startItem + articles.length - 1;
@@ -148,6 +178,7 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
               const categoryBadges = article.categories
                 .map((entry) => entry.category?.name)
                 .filter(Boolean) as string[];
+              const viewCount = viewsByPath.get(`/articles/${article.slug}`) ?? 0;
               return (
                 <div
                   key={article.id}
@@ -167,6 +198,10 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
                             ? new Date(article.publishedAt).toLocaleDateString("id-ID")
                             : "-"}
                         </span>
+                        <span className="flex items-center gap-1">
+                          <span className="text-muted-foreground/80">•</span>
+                          {viewCount.toLocaleString("id-ID")} tampilan unik
+                        </span>
                         {categoryBadges.length ? (
                           <span className="flex items-center gap-1">
                             <span className="text-muted-foreground/80">•</span>
@@ -176,16 +211,30 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
                       </div>
                     </div>
                   </Link>
-                  <ArticleListActions articleId={article.id} showDeleteOnly />
+                  <ArticleListActions
+                    articleId={article.id}
+                    showDeleteOnly
+                    publicUrl={`/articles/${article.slug}`}
+                  />
                 </div>
               );
             })}
             {articles.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                {query
-                  ? "Tidak ada artikel yang cocok dengan pencarian Anda."
-                  : "Belum ada artikel. Mulai dengan membuat artikel baru."}
-              </p>
+              query ? (
+                <p className="text-sm text-muted-foreground">Tidak ada artikel yang cocok dengan pencarian Anda.</p>
+              ) : isAuthor ? (
+                <div className="flex flex-col items-start gap-3 rounded-md border border-dashed border-border/60 bg-muted/10 p-4">
+                  <p className="text-sm text-muted-foreground">Anda belum memiliki artikel.</p>
+                  <Link
+                    href="/dashboard/articles/new"
+                    className={cn(buttonVariants({ size: "sm" }))}
+                  >
+                    Tulis artikel sekarang
+                  </Link>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Belum ada artikel. Mulai dengan membuat artikel baru.</p>
+              )
             ) : null}
           </CardContent>
         </Card>
