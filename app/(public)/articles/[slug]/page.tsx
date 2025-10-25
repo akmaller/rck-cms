@@ -21,7 +21,7 @@ const sidebarArticleInclude = {
     orderBy: { assignedAt: "asc" as const },
   },
   featuredMedia: {
-    select: { url: true, title: true, width: true, height: true },
+    select: { url: true, title: true, description: true, width: true, height: true },
   },
 } satisfies Prisma.ArticleInclude;
 
@@ -34,7 +34,7 @@ async function getArticle(slug: string) {
       author: { select: { id: true, name: true } },
       categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
       tags: { include: { tag: true } },
-      featuredMedia: { select: { url: true, title: true, width: true, height: true } },
+      featuredMedia: { select: { url: true, title: true, description: true, width: true, height: true } },
     },
   });
 }
@@ -73,7 +73,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     image: article.featuredMedia
       ? {
           url: article.featuredMedia.url,
-          alt: article.featuredMedia.title ?? article.title,
+          alt: article.featuredMedia.description ?? article.featuredMedia.title ?? article.title,
           width: article.featuredMedia.width ?? undefined,
           height: article.featuredMedia.height ?? undefined,
         }
@@ -231,15 +231,20 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
 
           <div className="space-y-6">
             {article.featuredMedia?.url ? (
-              <div className="overflow-hidden rounded-xl border border-border/60">
+              <div className="relative overflow-hidden rounded-xl border border-border/60">
                 <Image
                   src={article.featuredMedia.url}
-                  alt={article.featuredMedia.title ?? article.title}
+                  alt={article.featuredMedia.description ?? article.featuredMedia.title ?? article.title}
                   width={article.featuredMedia.width ?? 1280}
                   height={article.featuredMedia.height ?? 720}
                   className="h-auto w-full object-cover"
                   priority
                 />
+                {article.featuredMedia?.description ? (
+                  <div className="absolute inset-x-0 bottom-0 bg-black/60 px-4 py-3 text-xs font-medium leading-snug text-white sm:px-6 sm:text-sm">
+                    {article.featuredMedia.description}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <ArticleViewer content={article.content} />

@@ -1,6 +1,7 @@
 "use client";
 
-import { Menu } from "lucide-react";
+import Link from "next/link";
+import { Home, Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -43,7 +44,15 @@ export function DashboardTopbar({ onToggleSidebar, isSidebarOpen, siteName }: Da
           ) : null}
         </div>
       </div>
-      <DashboardSearch />
+      <div className="ml-auto flex items-center gap-2 [&>form]:ml-0">
+        <DashboardSearch />
+        <Button asChild variant="outline" size="icon">
+          <Link href="/" aria-label="Ke Beranda">
+            <Home className="h-4 w-4" />
+            <span className="sr-only">Ke Beranda</span>
+          </Link>
+        </Button>
+      </div>
     </header>
   );
 }

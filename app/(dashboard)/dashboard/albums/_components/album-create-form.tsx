@@ -287,6 +287,7 @@ export function AlbumCreateForm() {
                       alt={item.file.name}
                       fill
                       className="object-cover"
+                      sizes="(min-width: 1024px) 40vw, (min-width: 768px) 45vw, 100vw"
                     />
                     <button
                       type="button"

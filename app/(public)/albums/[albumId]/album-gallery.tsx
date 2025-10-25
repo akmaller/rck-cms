@@ -75,7 +75,7 @@ export function AlbumGallery({ albumTitle, images }: AlbumGalleryProps) {
                 alt={image.caption?.trim() || image.title || `Foto ${index + 1}`}
                 fill
                 className="object-cover transition duration-300 group-hover:scale-105"
-                sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, 50vw"
+                sizes="(min-width: 1280px) 25vw, (min-width: 768px) 33vw, (min-width: 640px) 50vw, 100vw"
                 priority={index < 6}
               />
             </div>

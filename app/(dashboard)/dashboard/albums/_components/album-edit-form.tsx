@@ -326,6 +326,7 @@ export function AlbumEditForm({ album }: AlbumEditFormProps) {
                         alt={item.title ?? `Gambar ${index + 1}`}
                         fill
                         className="object-cover"
+                        sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
                       />
                       <span className="absolute left-2 top-2 rounded bg-black/60 px-2 py-0.5 text-[10px] font-medium text-white">
                         {formatBytes(item.size)}
@@ -501,6 +502,7 @@ export function AlbumEditForm({ album }: AlbumEditFormProps) {
                       alt={item.file.name}
                       fill
                       className="object-cover"
+                      sizes="(min-width: 1024px) 40vw, (min-width: 768px) 45vw, 100vw"
                     />
                     <button
                       type="button"
