@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export type HeroSliderArticle = {
   id: string;
@@ -32,7 +32,7 @@ export function HeroSlider({ articles }: HeroSliderProps) {
   const autoPlayTimeoutRef = useRef<number | null>(null);
   const programmaticScrollRef = useRef(false);
   const programmaticResetTimeoutRef = useRef<number | null>(null);
-  const [progressCycle, setProgressCycle] = useState(0);
+  const progressIterationRef = useRef(0);
 
   const clampIndex = useCallback(
     (index: number) => {
@@ -110,14 +110,6 @@ export function HeroSlider({ articles }: HeroSliderProps) {
   }, [articles.length, safeActiveIndex, clearAutoPlay]);
 
   useEffect(() => {
-    if (articles.length <= 1) {
-      return;
-    }
-
-    setProgressCycle((prev) => prev + 1);
-  }, [articles.length, safeActiveIndex]);
-
-  useEffect(() => {
     const handleResize = () => {
       const container = containerRef.current;
       if (!container) return;
@@ -170,11 +162,14 @@ export function HeroSlider({ articles }: HeroSliderProps) {
     };
   }, [clearAutoPlay]);
 
+  const progressKey = useMemo(() => {
+    progressIterationRef.current += 1;
+    return `${progressIterationRef.current}-${safeActiveIndex}-${articles.length}`;
+  }, [articles.length, safeActiveIndex]);
+
   if (articles.length === 0) {
     return null;
   }
-
-  const progressKey = `${progressCycle}-${safeActiveIndex}-${articles.length}`;
 
   return (
     <div className="relative hero-slider-wrapper">
