@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type HeroSliderArticle = {
   id: string;
@@ -32,7 +32,7 @@ export function HeroSlider({ articles }: HeroSliderProps) {
   const autoPlayTimeoutRef = useRef<number | null>(null);
   const programmaticScrollRef = useRef(false);
   const programmaticResetTimeoutRef = useRef<number | null>(null);
-  const progressIterationRef = useRef(0);
+  const [progressCycle, setProgressCycle] = useState(0);
 
   const clampIndex = useCallback(
     (index: number) => {
@@ -162,10 +162,21 @@ export function HeroSlider({ articles }: HeroSliderProps) {
     };
   }, [clearAutoPlay]);
 
-  const progressKey = useMemo(() => {
-    progressIterationRef.current += 1;
-    return `${progressIterationRef.current}-${safeActiveIndex}-${articles.length}`;
+  useEffect(() => {
+    if (articles.length <= 1) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      setProgressCycle((prev) => prev + 1);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
   }, [articles.length, safeActiveIndex]);
+
+  const progressKey = `${progressCycle}-${safeActiveIndex}-${articles.length}`;
 
   if (articles.length === 0) {
     return null;
