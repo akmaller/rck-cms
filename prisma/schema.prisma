@@ -34,6 +34,7 @@ model User {
   auditLogs              AuditLog[]
   media                  Media[]
   albums                 Album[]
+  comments               Comment[]
   pages                  Page[]                 @relation("PageAuthor")
   sessions               Session[]
   twoFactorConfirmations TwoFactorConfirmation?
@@ -99,6 +100,7 @@ model Article {
   featuredMedia   Media?            @relation(fields: [featuredMediaId], references: [id])
   categories      ArticleCategory[]
   tags            ArticleTag[]
+  comments        Comment[]
 
   @@index([status, publishedAt])
   @@index([authorId])
@@ -122,6 +124,23 @@ model ArticleTag {
   tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
 
   @@id([articleId, tagId])
+}
+
+model Comment {
+  id         String         @id @default(cuid())
+  articleId  String
+  userId     String
+  content    String
+  status     CommentStatus  @default(PUBLISHED)
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+  article    Article        @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id])
+
+  @@index([articleId, status, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Album {
@@ -345,5 +364,11 @@ enum ArticleStatus {
   REVIEW
   SCHEDULED
   PUBLISHED
+  ARCHIVED
+}
+
+enum CommentStatus {
+  PUBLISHED
+  PENDING
   ARCHIVED
 }

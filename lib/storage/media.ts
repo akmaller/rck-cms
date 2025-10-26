@@ -63,41 +63,49 @@ export async function saveMediaFile(file: File, options?: SaveMediaOptions): Pro
   const extension = ".webp";
   const mainFileName = `${uniqueBase}${extension}`;
   const thumbFileName = buildThumbnailName(mainFileName);
+  const mainPath = path.join(baseDir, mainFileName);
+  const thumbPath = path.join(baseDir, thumbFileName);
 
-  const inputBuffer = Buffer.from(await file.arrayBuffer());
+  try {
+    const inputBuffer = Buffer.from(await file.arrayBuffer());
 
-  const mainResult = await sharp(inputBuffer)
-    .rotate()
-    .resize({ width: 1920, height: 1080, fit: "inside", withoutEnlargement: true })
-    .webp({ quality: 90 })
-    .toBuffer({ resolveWithObject: true });
+    const mainResult = await sharp(inputBuffer)
+      .rotate()
+      .resize({ width: 1920, height: 1080, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 90 })
+      .toBuffer({ resolveWithObject: true });
 
-  await fs.writeFile(path.join(baseDir, mainFileName), mainResult.data);
+    await fs.writeFile(mainPath, mainResult.data);
 
-  const thumbResult = await sharp(inputBuffer)
-    .rotate()
-    .resize({ width: 720, height: 360, fit: "inside", withoutEnlargement: true })
-    .webp({ quality: 90 })
-    .toBuffer({ resolveWithObject: true });
+    const thumbResult = await sharp(inputBuffer)
+      .rotate()
+      .resize({ width: 720, height: 360, fit: "inside", withoutEnlargement: true })
+      .webp({ quality: 90 })
+      .toBuffer({ resolveWithObject: true });
 
-  await fs.writeFile(path.join(baseDir, thumbFileName), thumbResult.data);
+    await fs.writeFile(thumbPath, thumbResult.data);
 
-  const relativeMain = toRelativePath(directory, mainFileName);
-  const relativeThumb = toRelativePath(directory, thumbFileName);
+    const relativeMain = toRelativePath(directory, mainFileName);
+    const relativeThumb = toRelativePath(directory, thumbFileName);
 
-  return {
-    fileName: relativeMain,
-    url: `/${directory}/${mainFileName}`,
-    storageType: "local",
-    size: mainResult.info.size,
-    width: mainResult.info.width ?? null,
-    height: mainResult.info.height ?? null,
-    thumbnailFileName: relativeThumb,
-    thumbnailUrl: `/${directory}/${thumbFileName}`,
-    thumbnailSize: thumbResult.info.size,
-    thumbnailWidth: thumbResult.info.width ?? null,
-    thumbnailHeight: thumbResult.info.height ?? null,
-  };
+    return {
+      fileName: relativeMain,
+      url: `/${directory}/${mainFileName}`,
+      storageType: "local",
+      size: mainResult.info.size,
+      width: mainResult.info.width ?? null,
+      height: mainResult.info.height ?? null,
+      thumbnailFileName: relativeThumb,
+      thumbnailUrl: `/${directory}/${thumbFileName}`,
+      thumbnailSize: thumbResult.info.size,
+      thumbnailWidth: thumbResult.info.width ?? null,
+      thumbnailHeight: thumbResult.info.height ?? null,
+    };
+  } catch {
+    await fs.unlink(mainPath).catch(() => {});
+    await fs.unlink(thumbPath).catch(() => {});
+    throw new Error("Gagal memproses berkas gambar.");
+  }
 }
 
 export async function deleteMediaFile(storageType: string, fileName: string | null | undefined) {

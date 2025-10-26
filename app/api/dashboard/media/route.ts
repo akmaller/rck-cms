@@ -10,6 +10,14 @@ import { deriveThumbnailUrl, saveMediaFile } from "@/lib/storage/media";
 
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 20;
+const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
 
 const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -142,7 +150,7 @@ export async function POST(request: NextRequest) {
   const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
   const rateKey = `media_mutation:${session.user.id}`;
 
-  if (isRateLimited(rateKey, MUTATION_LIMIT, MUTATION_WINDOW_MS)) {
+  if (await isRateLimited(rateKey, MUTATION_LIMIT, MUTATION_WINDOW_MS)) {
     return NextResponse.json(
       { error: "Terlalu banyak permintaan. Coba lagi nanti." },
       { status: 429 }
@@ -159,13 +167,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "File wajib diunggah" }, { status: 400 });
   }
 
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return NextResponse.json({ error: "Ukuran file maksimal 5MB" }, { status: 400 });
+  }
+
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    return NextResponse.json({ error: "Hanya format gambar yang didukung" }, { status: 400 });
+  }
+
   const titleValue = formData.get("title");
   const title =
     typeof titleValue === "string" && titleValue.trim().length > 0
       ? titleValue.trim()
       : file.name ?? "Media";
 
-  const saved = await saveMediaFile(file);
+  let saved;
+  try {
+    saved = await saveMediaFile(file);
+  } catch (error) {
+    console.error("Gagal memproses file yang diunggah", error);
+    return NextResponse.json({ error: "File gambar tidak valid" }, { status: 400 });
+  }
 
   const media = await prisma.media.create({
     data: {

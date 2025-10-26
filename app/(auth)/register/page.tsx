@@ -10,7 +10,7 @@ import { RegisterForm } from "./register-form";
 
 export const metadata: Metadata = {
   title: "Daftar Penulis",
-  description: "Registrasi akun penulis Roemah Cita.",
+  description: "Registrasi akun penulis.",
 };
 
 export default async function RegisterPage() {
@@ -20,6 +20,9 @@ export default async function RegisterPage() {
   }
 
   const config = await getSiteConfig();
+  const privacyPolicyUrl = config.registration.privacyPolicyPageSlug
+    ? `/pages/${config.registration.privacyPolicyPageSlug}`
+    : null;
 
   return (
     <div className="min-h-screen bg-muted/40 py-12">
@@ -28,7 +31,7 @@ export default async function RegisterPage() {
           <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground">
             &larr; Kembali ke {config.name}
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight">Menjadi Penulis di Roemah Cita</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Menjadi Penulis {config.name}</h1>
           <p className="max-w-md text-muted-foreground">
             Daftar untuk membagikan cerita dan karya Anda. Setelah registrasi, kami akan mengirim tautan aktivasi ke email untuk mengaktifkan akun.
           </p>
@@ -47,7 +50,7 @@ export default async function RegisterPage() {
               <CardDescription>Isi formulir di bawah ini untuk membuat akun penulis.</CardDescription>
             </CardHeader>
             <CardContent>
-              <RegisterForm />
+              <RegisterForm privacyPolicyUrl={privacyPolicyUrl} />
               <p className="mt-4 text-center text-sm text-muted-foreground">
                 Sudah punya akun? <Link href="/login" className="font-semibold text-primary hover:underline">Masuk di sini</Link>
               </p>

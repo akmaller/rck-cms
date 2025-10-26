@@ -49,7 +49,7 @@ export default async function StaticPagesIndex() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Halaman Informasi</h1>
         <p className="text-muted-foreground">
-          Ringkasan halaman statis yang menampilkan informasi penting dari Roemah Cita.
+          Ringkasan halaman statis yang menampilkan informasi penting dari kami.
         </p>
       </header>
 

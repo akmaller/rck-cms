@@ -11,6 +11,13 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
 
   const registrationDefaults = defaultSiteConfig.registration ?? { enabled: true, autoApprove: false };
   const registrationSetting = values?.registration ?? {};
+  const commentsDefaults = defaultSiteConfig.comments ?? { enabled: true };
+  const commentsSetting = values?.comments ?? {};
+  const normalizePolicySlug = (value: unknown) =>
+    typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+  const privacyPolicyPageSlug =
+    normalizePolicySlug(registrationSetting.privacyPolicyPageSlug) ??
+    normalizePolicySlug(registrationDefaults.privacyPolicyPageSlug);
 
   return {
     ...defaultSiteConfig,
@@ -43,6 +50,10 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
         registrationSetting.enabled ?? registrationDefaults.enabled ?? true,
       autoApprove:
         registrationSetting.autoApprove ?? registrationDefaults.autoApprove ?? false,
+      privacyPolicyPageSlug,
+    },
+    comments: {
+      enabled: commentsSetting.enabled ?? commentsDefaults.enabled ?? true,
     },
   };
 };

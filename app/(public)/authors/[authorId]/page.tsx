@@ -59,7 +59,7 @@ export async function generateMetadata({ params }: { params: Promise<{ authorId:
 
   return createMetadata({
     title: `Profil ${author.name}`,
-    description: author.bio ?? `Profil dan tulisan ${author.name} di Roemah Cita.`,
+    description: author.bio ?? `Profil dan tulisan ${author.name} di platform kami.`,
     path: `/authors/${authorId}`,
     type: "article",
     image: author.avatarUrl

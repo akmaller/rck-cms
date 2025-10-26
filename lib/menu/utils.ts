@@ -96,3 +96,49 @@ export function flattenMenuTree(nodes: MenuNode[], depth = 0, parentId: string |
 
   return flattened;
 }
+
+const SAFE_PATH_REGEX = /^[A-Za-z0-9\-\/]+$/;
+const ALLOWED_URL_SCHEMES = new Set(["http", "https", "mailto", "tel", "sms"]);
+
+function sanitizeSlugPath(slug: string | null): string | null {
+  if (!slug) return null;
+  const trimmed = slug.trim().replace(/^\/+/, "");
+  if (!trimmed || !SAFE_PATH_REGEX.test(trimmed)) {
+    return null;
+  }
+  return `/${trimmed}`;
+}
+
+function sanitizeExternalUrl(url: string | null): string | null {
+  if (!url) return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("/")) {
+    return trimmed.replace(/\/{2,}/g, "/");
+  }
+  const scheme = trimmed.split(":")[0]?.toLowerCase();
+  if (scheme && ALLOWED_URL_SCHEMES.has(scheme)) {
+    if (scheme === "http" || scheme === "https") {
+      try {
+        return new URL(trimmed).toString();
+      } catch {
+        return null;
+      }
+    }
+    return trimmed;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    const scheme = parsed.protocol.replace(/:$/, "").toLowerCase();
+    if (ALLOWED_URL_SCHEMES.has(scheme)) {
+      return parsed.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+export function resolveMenuHref(slug: string | null, url: string | null): string {
+  return sanitizeExternalUrl(url) ?? sanitizeSlugPath(slug) ?? "#";
+}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import type { Prisma } from "@prisma/client";
+import { CommentStatus, Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import {
@@ -97,12 +97,13 @@ export default async function DashboardHomePage() {
   let totalArticles = 0;
   let articleThisMonth = 0;
   let articlePaths: string[] = [];
+  let articleIds: string[] = [];
 
   if (role === "AUTHOR" && session?.user?.id) {
     const [countAll, countThisMonth, slugRows, authorRecord] = await Promise.all([
       prisma.article.count({ where: { authorId: session.user.id } }),
       prisma.article.count({ where: { authorId: session.user.id, createdAt: { gte: startOfMonth } } }),
-      prisma.article.findMany({ where: { authorId: session.user.id }, select: { slug: true } }),
+      prisma.article.findMany({ where: { authorId: session.user.id }, select: { id: true, slug: true } }),
       prisma.user.findUnique({
         where: { id: session.user.id },
       }),
@@ -110,11 +111,13 @@ export default async function DashboardHomePage() {
     totalArticles = countAll;
     articleThisMonth = countThisMonth;
     articlePaths = slugRows.map((row) => `/articles/${row.slug}`);
+    articleIds = slugRows.map((row) => row.id);
     authorAccount = authorRecord;
   } else if (role === "AUTHOR") {
     totalArticles = 0;
     articleThisMonth = 0;
     articlePaths = [];
+    articleIds = [];
     if (session?.user?.id) {
       authorAccount = await prisma.user.findUnique({
         where: { id: session.user.id },
@@ -148,12 +151,51 @@ export default async function DashboardHomePage() {
     }
   }
   try {
-    commentsThisMonth = await prisma.auditLog.count({
-      where: {
-        action: "COMMENT_CREATE",
-        createdAt: { gte: startOfMonth },
-      },
-    });
+    const commentDelegate = (prisma as unknown as { comment?: { count: typeof prisma.comment.count } }).comment;
+    const statusLiteral = Prisma.raw(`'${CommentStatus.PUBLISHED}'::"CommentStatus"`);
+
+    if (role === "AUTHOR") {
+      if (articleIds.length === 0) {
+        commentsThisMonth = 0;
+      } else if (commentDelegate?.count) {
+        commentsThisMonth = await commentDelegate.count({
+          where: {
+            articleId: { in: articleIds },
+            status: CommentStatus.PUBLISHED,
+            createdAt: { gte: startOfMonth },
+          },
+        });
+      } else {
+        const idList = Prisma.join(articleIds.map((id) => Prisma.sql`${id}`));
+        const rawCount = await prisma.$queryRaw<Array<{ total: bigint }>>(
+          Prisma.sql`
+            SELECT COUNT(*)::bigint AS total
+            FROM "Comment"
+            WHERE "articleId" IN (${idList})
+              AND "status" = ${statusLiteral}
+              AND "createdAt" >= ${startOfMonth}
+          `
+        );
+        commentsThisMonth = Number(rawCount[0]?.total ?? 0);
+      }
+    } else if (commentDelegate?.count) {
+      commentsThisMonth = await commentDelegate.count({
+        where: {
+          status: CommentStatus.PUBLISHED,
+          createdAt: { gte: startOfMonth },
+        },
+      });
+    } else {
+      const rawCount = await prisma.$queryRaw<Array<{ total: bigint }>>(
+        Prisma.sql`
+          SELECT COUNT(*)::bigint AS total
+          FROM "Comment"
+          WHERE "status" = ${statusLiteral}
+            AND "createdAt" >= ${startOfMonth}
+        `
+      );
+      commentsThisMonth = Number(rawCount[0]?.total ?? 0);
+    }
   } catch {
     commentsThisMonth = 0;
   }

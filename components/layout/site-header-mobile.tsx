@@ -7,17 +7,13 @@ import { Facebook, Instagram, Twitter, Youtube, X } from "lucide-react";
 
 import { PublicAuthActions } from "@/app/(public)/(components)/auth-actions";
 import type { ResolvedSiteConfig } from "@/lib/site-config/types";
-import type { MenuNode } from "@/lib/menu/utils";
+import { resolveMenuHref, type MenuNode } from "@/lib/menu/utils";
 import { cn } from "@/lib/utils";
 
 type MobileNavigationProps = {
   siteConfig: ResolvedSiteConfig;
   mainMenu: MenuNode[];
 };
-
-function resolveHref(slug: string | null, url: string | null) {
-  return url ? url : slug ? `/${slug}` : "#";
-}
 
 export function MobileNavigation({ siteConfig, mainMenu }: MobileNavigationProps) {
   const pathname = usePathname();
@@ -133,7 +129,7 @@ export function MobileNavigation({ siteConfig, mainMenu }: MobileNavigationProps
         <nav className="flex-1 overflow-y-auto px-4 py-4 text-sm">
           <ul className="space-y-2">
             {menuItems.map((item) => {
-              const href = resolveHref(item.slug, item.url);
+              const href = resolveMenuHref(item.slug, item.url);
               const isActive =
                 href !== "#" &&
                 (href === "/"
@@ -161,7 +157,7 @@ export function MobileNavigation({ siteConfig, mainMenu }: MobileNavigationProps
                   {item.children.length > 0 ? (
                     <ul className="mt-2 space-y-1 rounded-lg bg-muted/40 px-3 py-2 text-sm font-medium text-muted-foreground">
                       {item.children.map((child) => {
-                        const childHref = resolveHref(child.slug, child.url);
+                        const childHref = resolveMenuHref(child.slug, child.url);
                         const isChildActive =
                           childHref !== "#" &&
                           (childHref === "/"

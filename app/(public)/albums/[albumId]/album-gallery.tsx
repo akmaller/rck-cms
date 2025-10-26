@@ -90,6 +90,9 @@ export function AlbumGallery({ albumTitle, images }: AlbumGalleryProps) {
       </div>
 
       {activeImage ? (
+        (() => {
+          const currentIndex = activeIndex ?? 0;
+          return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur">
           <div
             className="absolute inset-0"
@@ -125,14 +128,19 @@ export function AlbumGallery({ albumTitle, images }: AlbumGalleryProps) {
             </div>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>
-                Foto {activeIndex + 1} dari {images.length}
+                Foto {currentIndex + 1} dari {images.length}
               </span>
               <div className="flex gap-2">
                 <button
                   type="button"
                   className="rounded-full border border-border/60 px-3 py-1 transition hover:border-primary/60 hover:text-primary"
-                  onClick={() => setActiveIndex((prev) => (prev && prev > 0 ? prev - 1 : prev))}
-                  disabled={activeIndex === 0}
+                  onClick={() =>
+                    setActiveIndex((prev) => {
+                      if (prev === null) return prev;
+                      return prev > 0 ? prev - 1 : prev;
+                    })
+                  }
+                  disabled={currentIndex === 0}
                 >
                   Sebelumnya
                 </button>
@@ -144,7 +152,7 @@ export function AlbumGallery({ albumTitle, images }: AlbumGalleryProps) {
                       prev !== null && prev + 1 < images.length ? prev + 1 : prev
                     )
                   }
-                  disabled={activeIndex === images.length - 1}
+                  disabled={currentIndex === images.length - 1}
                 >
                   Berikutnya
                 </button>
@@ -152,6 +160,8 @@ export function AlbumGallery({ albumTitle, images }: AlbumGalleryProps) {
             </div>
           </div>
         </div>
+          );
+        })()
       ) : null}
     </>
   );

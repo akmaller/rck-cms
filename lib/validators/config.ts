@@ -50,10 +50,21 @@ export const siteConfigSchema = z.object({
       enabled: z.boolean().optional(),
     })
     .optional(),
+  comments: z
+    .object({
+      enabled: z.boolean().optional(),
+    })
+    .optional(),
   registration: z
     .object({
       enabled: z.boolean().optional(),
       autoApprove: z.boolean().optional(),
+      privacyPolicyPageSlug: z
+        .string()
+        .trim()
+        .min(1, "Halaman kebijakan & privasi tidak valid")
+        .optional()
+        .nullable(),
     })
     .optional(),
 });

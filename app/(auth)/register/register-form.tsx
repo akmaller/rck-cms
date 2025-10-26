@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -7,6 +8,10 @@ import { registerAction, type RegisterActionState } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+
+type RegisterFormProps = {
+  privacyPolicyUrl?: string | null;
+};
 
 function SubmitButton() {
   const { pending } = useFormStatus();
@@ -17,7 +22,7 @@ function SubmitButton() {
   );
 }
 
-export function RegisterForm() {
+export function RegisterForm({ privacyPolicyUrl }: RegisterFormProps) {
   const [state, formAction] = useActionState<RegisterActionState, FormData>(registerAction, {});
 
   return (
@@ -44,6 +49,15 @@ export function RegisterForm() {
           <p className="text-xs text-destructive">{state.fieldErrors.confirmPassword}</p>
         ) : null}
       </div>
+      {privacyPolicyUrl ? (
+        <p className="text-xs text-muted-foreground">
+          Dengan mendaftar, Anda menyetujui{" "}
+          <Link href={privacyPolicyUrl} className="font-medium text-primary hover:underline">
+            Kebijakan &amp; Privasi
+          </Link>{" "}
+          kami.
+        </p>
+      ) : null}
       {state?.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
       {state?.success ? <p className="text-sm text-emerald-600">{state.success}</p> : null}
       <SubmitButton />

@@ -5,12 +5,9 @@ import { Suspense } from "react";
 
 import { getSiteConfig } from "@/lib/site-config/server";
 import { getMenuTree } from "@/lib/menu/server";
+import { resolveMenuHref } from "@/lib/menu/utils";
 import { PublicAuthActions } from "@/app/(public)/(components)/auth-actions";
 import { MobileNavigation } from "./site-header-mobile";
-
-function resolveHref(slug: string | null, url: string | null) {
-  return url ? url : slug ? `/${slug}` : "#";
-}
 
 export async function SiteHeader() {
   const [config, mainMenu] = await Promise.all([getSiteConfig(), getMenuTree("main")]);
@@ -33,7 +30,7 @@ export async function SiteHeader() {
           aria-label="Navigasi utama"
         >
           {mainMenu.map((item) => {
-            const href = resolveHref(item.slug, item.url);
+            const href = resolveMenuHref(item.slug, item.url);
             const disabled = href === "#";
             if (item.children.length > 0) {
               return (
@@ -53,7 +50,7 @@ export async function SiteHeader() {
                   <div className="pointer-events-none absolute left-0 top-full z-40 w-56 -translate-y-2 rounded-xl border border-border/70 bg-card/95 p-2 opacity-0 shadow-lg ring-1 ring-primary/10 transition duration-200 ease-out group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 before:absolute before:-top-3 before:left-0 before:h-3 before:w-full before:content-['']">
                     <ul className="space-y-1 py-1 text-sm">
                       {item.children.map((child) => {
-                        const childHref = resolveHref(child.slug, child.url);
+                        const childHref = resolveMenuHref(child.slug, child.url);
                         return (
                           <li key={child.id}>
                             <Link

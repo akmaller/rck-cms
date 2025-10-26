@@ -9,7 +9,7 @@ import { deriveThumbnailUrl } from "@/lib/storage/media";
 
 export const metadata: Metadata = {
   title: "Album Dokumentasi",
-  description: "Kumpulan album foto kegiatan dan program terbaru dari Roemah Cita.",
+  description: "Kumpulan album foto kegiatan dan program terbaru dari komunitas kami.",
 };
 
 export default async function AlbumsPage() {

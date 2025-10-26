@@ -4,4 +4,12 @@ export type ResolvedSiteConfig = SiteConfig & {
   metadata: NonNullable<SiteConfig["metadata"]> & {
     keywords: string[];
   };
+  comments: {
+    enabled: boolean;
+  };
+  registration: {
+    enabled: boolean;
+    autoApprove: boolean;
+    privacyPolicyPageSlug: string | null;
+  };
 };

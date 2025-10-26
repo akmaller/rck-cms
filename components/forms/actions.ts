@@ -48,6 +48,43 @@ function normalizeCategoryNames(value: FormDataEntryValue | null | undefined): s
   );
 }
 
+function mergeSiteConfigValues(
+  current: SiteConfigInput | null | undefined,
+  updates: SiteConfigInput
+): SiteConfigInput {
+  const result: SiteConfigInput = { ...(current ?? {}) };
+
+  if (updates.siteName !== undefined) result.siteName = updates.siteName;
+  if (updates.siteUrl !== undefined) result.siteUrl = updates.siteUrl;
+  if (updates.logoUrl !== undefined) result.logoUrl = updates.logoUrl;
+  if (updates.iconUrl !== undefined) result.iconUrl = updates.iconUrl;
+  if (updates.tagline !== undefined) result.tagline = updates.tagline;
+  if (updates.timezone !== undefined) result.timezone = updates.timezone;
+  if (updates.contactEmail !== undefined) result.contactEmail = updates.contactEmail;
+
+  if (updates.social) {
+    result.social = { ...(current?.social ?? {}), ...updates.social };
+  }
+
+  if (updates.metadata) {
+    result.metadata = { ...(current?.metadata ?? {}), ...updates.metadata };
+  }
+
+  if (updates.registration) {
+    result.registration = { ...(current?.registration ?? {}), ...updates.registration };
+  }
+
+  if (updates.comments) {
+    result.comments = { ...(current?.comments ?? {}), ...updates.comments };
+  }
+
+  if (updates.cache) {
+    result.cache = { ...(current?.cache ?? {}), ...updates.cache };
+  }
+
+  return result;
+}
+
 async function ensureTag(client: PrismaClientLike, name: string): Promise<{ id: string }> {
   const normalized = name.trim().replace(/\s+/g, " ");
   if (!normalized) {
@@ -463,10 +500,30 @@ function sanitizeCategorySlug(raw: FormDataEntryValue | null): string | undefine
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+const ALLOWED_MENU_URL_SCHEMES = new Set(["http", "https", "mailto", "tel", "sms"]);
+
 function normalizeUrl(value: string | undefined | null) {
   if (!value) return null;
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  if (!trimmed) return null;
+  if (trimmed.startsWith("/")) {
+    return trimmed.replace(/\/{2,}/g, "/");
+  }
+  const scheme = trimmed.split(":")[0]?.toLowerCase();
+  if (!scheme) {
+    return null;
+  }
+  if (!ALLOWED_MENU_URL_SCHEMES.has(scheme)) {
+    return null;
+  }
+  if (scheme === "http" || scheme === "https") {
+    try {
+      return new URL(trimmed).toString();
+    } catch {
+      return null;
+    }
+  }
+  return trimmed;
 }
 
 export async function createMenuItemAction(formData: FormData) {
@@ -704,8 +761,23 @@ export async function updateSiteConfig(formData: FormData) {
       registrationValues.autoApprove =
         registrationAutoApproveValues.includes("true") || registrationAutoApproveValues.includes("on");
     }
+    const privacyPolicySlugRaw = formData.get("registration.privacyPolicyPageSlug");
+    if (privacyPolicySlugRaw !== null) {
+      const text = privacyPolicySlugRaw.toString().trim();
+      registrationValues.privacyPolicyPageSlug = text.length > 0 ? text : null;
+    }
     if (Object.keys(registrationValues).length > 0) {
       data.registration = registrationValues;
+    }
+
+    const commentsValues: NonNullable<SiteConfigInput["comments"]> = {};
+    const commentsEnabledValues = formData.getAll("comments.enabled").map(String);
+    if (commentsEnabledValues.length > 0) {
+      commentsValues.enabled =
+        commentsEnabledValues.includes("true") || commentsEnabledValues.includes("on");
+    }
+    if (Object.keys(commentsValues).length > 0) {
+      data.comments = commentsValues;
     }
 
     const cacheValues = formData.getAll("cacheEnabled").map(String);
@@ -719,17 +791,22 @@ export async function updateSiteConfig(formData: FormData) {
       return { error: parsed.error.issues[0]?.message ?? "Data konfigurasi tidak valid" };
     }
 
+    const existingRecord = await prisma.siteConfig.findUnique({ where: { key: "general" } });
+    const existingValue = (existingRecord?.value ?? null) as SiteConfigInput | null;
+    const mergedValue = mergeSiteConfigValues(existingValue, parsed.data);
+    const validatedValue = siteConfigSchema.parse(mergedValue);
+
     const config = await prisma.siteConfig.upsert({
       where: { key: "general" },
-      update: { value: parsed.data },
-      create: { key: "general", value: parsed.data },
+      update: { value: validatedValue },
+      create: { key: "general", value: validatedValue },
     });
 
     await writeAuditLog({
       action: "CONFIG_UPDATE",
       entity: "SiteConfig",
       entityId: config.id,
-      metadata: parsed.data,
+      metadata: validatedValue,
     });
 
     revalidateTag("site-config");

@@ -54,7 +54,7 @@ export async function PATCH(
   const session = await assertRole(["EDITOR", "ADMIN"]);
   const rateKey = `category_mutation:${session.user.id}`;
 
-  if (isRateLimited(rateKey, MUTATION_LIMIT, MUTATION_WINDOW_MS)) {
+  if (await isRateLimited(rateKey, MUTATION_LIMIT, MUTATION_WINDOW_MS)) {
     return NextResponse.json(
       { error: "Terlalu banyak permintaan. Coba lagi nanti." },
       { status: 429 }
@@ -145,7 +145,7 @@ export async function DELETE(
   const session = await assertRole(["EDITOR", "ADMIN"]);
   const rateKey = `category_mutation:${session.user.id}`;
 
-  if (isRateLimited(rateKey, MUTATION_LIMIT, MUTATION_WINDOW_MS)) {
+  if (await isRateLimited(rateKey, MUTATION_LIMIT, MUTATION_WINDOW_MS)) {
     return NextResponse.json(
       { error: "Terlalu banyak permintaan. Coba lagi nanti." },
       { status: 429 }

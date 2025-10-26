@@ -9,6 +9,13 @@ import { deleteMediaFile, deriveThumbnailUrl, saveMediaFile } from "@/lib/storag
 import { writeAuditLog } from "@/lib/audit/log";
 
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
 
 const uploadSchema = z.object({
   title: z.string().min(2, "Judul minimal 2 karakter").optional(),
@@ -26,6 +33,10 @@ export async function uploadMedia(formData: FormData) {
     return { error: "Ukuran file maksimal 5MB" };
   }
 
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    return { error: "Hanya format gambar yang didukung" };
+  }
+
   const titleEntry = formData.get("title");
   const parsed = uploadSchema.safeParse({
     title: typeof titleEntry === "string" && titleEntry.trim().length > 0 ? titleEntry : undefined,
@@ -34,7 +45,13 @@ export async function uploadMedia(formData: FormData) {
     return { error: parsed.error.issues[0]?.message ?? "Judul tidak valid" };
   }
 
-  const saved = await saveMediaFile(file);
+  let saved;
+  try {
+    saved = await saveMediaFile(file);
+  } catch (error) {
+    console.error("Gagal memproses file yang diunggah", error);
+    return { error: "File gambar tidak valid" };
+  }
   const media = await prisma.media.create({
     data: {
       title: parsed.data.title ?? file.name ?? "Media",

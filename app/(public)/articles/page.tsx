@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { ArticleStatus } from "@prisma/client";
@@ -11,6 +10,9 @@ import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { createMetadata } from "@/lib/seo/metadata";
 import { logPageView } from "@/lib/visits/log-page-view";
+import { ArticleListCard } from "@/app/(public)/(components)/article-list-card";
+import { ArticleSidebar } from "@/app/(public)/(components)/article-sidebar";
+import { getArticleSidebarData } from "@/lib/articles/sidebar";
 
 const PAGE_SIZE = 9;
 
@@ -68,7 +70,7 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
 
   const where = { status: ArticleStatus.PUBLISHED } as const;
 
-  const [articles, totalCount] = await Promise.all([
+  const [articles, totalCount, sidebarData] = await Promise.all([
     prisma.article.findMany({
       where,
       include: {
@@ -81,6 +83,7 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
       take: PAGE_SIZE,
     }),
     prisma.article.count({ where }),
+    getArticleSidebarData(),
   ]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
@@ -102,93 +105,87 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
   await logPageView({ path: pathWithQuery, url, referrer, ip, userAgent });
 
   return (
-    <section className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Artikel Terbaru</h1>
-        <p className="text-muted-foreground">Temukan cerita terbaru dari Roemah Cita.</p>
-      </div>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {articles.map((article) => (
-          <Card key={article.id} className="flex h-full flex-col overflow-hidden">
-            {article.featuredMedia?.url ? (
-              <div className="relative h-40 w-full overflow-hidden border-b border-border/60">
-                <Image
-                  src={article.featuredMedia.url}
-                  alt={article.featuredMedia.title ?? article.title}
-                  fill
-                  className="object-cover"
-                  sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
-                />
-              </div>
-            ) : null}
-            <CardHeader>
-              <CardTitle asChild className="line-clamp-2 text-lg">
-                <h2>{article.title}</h2>
-              </CardTitle>
-              <CardDescription>
-                Dipublikasikan {article.publishedAt?.toLocaleDateString("id-ID") ?? "-"}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col gap-4">
-              <p className="line-clamp-3 text-sm text-muted-foreground">{article.excerpt ?? "Belum ada ringkasan."}</p>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>{article.author?.name ?? "Anonim"}</span>
-                <span>
-                  {article.categories.map((item) => item.category.name).join(", ") || "Tanpa kategori"}
-                </span>
-              </div>
-              <Button asChild size="sm" className="mt-auto">
-                <Link href={`/articles/${article.slug}`}>Baca Artikel</Link>
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {articles.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Belum ada artikel</CardTitle>
-            <CardDescription>Konten akan segera hadir.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Link className={buttonVariants({ variant: "outline" })} href="/">
-              Kembali ke beranda
-            </Link>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {totalPages > 1 ? (
-        <nav className="flex items-center gap-2" aria-label="Pagination">
-          <Button asChild variant="outline" size="sm" disabled={currentPage === 1}>
-            <Link href={`/articles?page=${currentPage - 1}`}>Sebelumnya</Link>
-          </Button>
-          <div className="flex items-center gap-1">
-            {pagination.map((item, index) =>
-              item === "ellipsis" ? (
-                <span key={`ellipsis-${index}`} className="px-2 text-sm text-muted-foreground">
-                  …
-                </span>
-              ) : (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={buttonVariants({
-                    variant: item.active ? "default" : "ghost",
-                    size: "sm",
-                  })}
-                >
-                  {item.label}
-                </Link>
-              )
-            )}
+    <div className="mx-auto w-full max-w-6xl">
+      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <section className="space-y-8">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-semibold tracking-tight">Artikel Terbaru</h1>
+            <p className="text-muted-foreground">Temukan cerita terbaru dari penulis kami.</p>
           </div>
-          <Button asChild variant="outline" size="sm" disabled={currentPage === totalPages}>
-            <Link href={`/articles?page=${currentPage + 1}`}>Berikutnya</Link>
-          </Button>
-        </nav>
-      ) : null}
-    </section>
+          <div className="space-y-4">
+            {articles.map((article) => (
+              <ArticleListCard
+                key={article.id}
+                href={`/articles/${article.slug}`}
+                title={article.title}
+                excerpt={article.excerpt}
+                publishedAt={article.publishedAt}
+                authorName={article.author?.name}
+                category={
+                  article.categories[0]?.category
+                    ? {
+                        name: article.categories[0].category.name,
+                        slug: article.categories[0].category.slug,
+                      }
+                    : null
+                }
+                image={article.featuredMedia?.url ? { url: article.featuredMedia.url, alt: article.featuredMedia.title ?? article.title } : null}
+              />
+            ))}
+          </div>
+
+          {articles.length === 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Belum ada artikel</CardTitle>
+                <CardDescription>Konten akan segera hadir.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Link className={buttonVariants({ variant: "outline" })} href="/">
+                  Kembali ke beranda
+                </Link>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {totalPages > 1 ? (
+            <nav className="flex flex-wrap items-center gap-2" aria-label="Pagination">
+              <Button asChild variant="outline" size="sm" disabled={currentPage === 1}>
+                <Link href={`/articles?page=${currentPage - 1}`}>Sebelumnya</Link>
+              </Button>
+              <div className="flex items-center gap-1">
+                {pagination.map((item, index) =>
+                  item === "ellipsis" ? (
+                    <span key={`ellipsis-${index}`} className="px-2 text-sm text-muted-foreground">
+                      …
+                    </span>
+                  ) : (
+                    <Link
+                      key={item.label}
+                      href={item.href}
+                      className={buttonVariants({
+                        variant: item.active ? "default" : "ghost",
+                        size: "sm",
+                      })}
+                    >
+                      {item.label}
+                    </Link>
+                  )
+                )}
+              </div>
+              <Button asChild variant="outline" size="sm" disabled={currentPage === totalPages}>
+                <Link href={`/articles?page=${currentPage + 1}`}>Berikutnya</Link>
+              </Button>
+            </nav>
+          ) : null}
+        </section>
+
+        <ArticleSidebar
+          latestArticles={sidebarData.latestSidebarArticles}
+          popularArticles={sidebarData.popularSidebarArticles}
+          popularTags={sidebarData.popularTags}
+        />
+      </div>
+    </div>
   );
 }

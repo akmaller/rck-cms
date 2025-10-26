@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const ALLOWED_URL_SCHEMES = new Set(["http", "https", "mailto", "tel", "sms"]);
+
 const menuUrlSchema = z
   .string()
   .trim()
@@ -13,12 +15,12 @@ const menuUrlSchema = z
       }
       try {
         const parsed = new URL(value);
-        return Boolean(parsed);
+        return ALLOWED_URL_SCHEMES.has(parsed.protocol.replace(/:$/, "").toLowerCase());
       } catch {
         return false;
       }
     },
-    { message: "URL tidak valid. Gunakan tautan absolut atau yang diawali '/'." }
+    { message: "URL tidak valid. Gunakan tautan relatif atau skema http/https/mailto/tel/sms." }
   );
 
 export const menuItemCreateSchema = z

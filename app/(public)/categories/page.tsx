@@ -41,7 +41,7 @@ export default async function CategoriesIndexPage() {
       <header className="space-y-2">
         <h1 className="text-3xl font-semibold tracking-tight">Kategori</h1>
         <p className="text-muted-foreground">
-          Temukan tema tulisan yang kami kurasi untuk pembaca Roemah Cita.
+          Temukan tema tulisan yang kami kurasi untuk pembaca kami.
         </p>
       </header>
 

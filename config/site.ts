@@ -18,9 +18,13 @@ export type SiteConfig = {
     description?: string;
     keywords?: string[];
   };
+  comments?: {
+    enabled?: boolean;
+  };
   registration?: {
     enabled?: boolean;
     autoApprove?: boolean;
+    privacyPolicyPageSlug?: string | null;
   };
 };
 
@@ -44,6 +48,9 @@ export const siteConfig: SiteConfig = {
     description:
       "Content management system untuk mengelola artikel dan media Roemah Cita.",
     keywords: ["roemah cita", "cms", "konten"],
+  },
+  comments: {
+    enabled: true,
   },
   registration: {
     enabled: true,

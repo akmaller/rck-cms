@@ -1,10 +1,25 @@
 import bcrypt from "bcryptjs";
+import { randomBytes } from "crypto";
 import { ArticleStatus, PrismaClient, UserRole } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+async function resolveSeedPassword() {
+  const fromEnv = process.env.SEED_ADMIN_PASSWORD?.trim();
+  if (fromEnv && fromEnv.length >= 12) {
+    return { plain: fromEnv, generated: false };
+  }
+
+  const generated = randomBytes(16).toString("base64url");
+  console.warn(
+    `[seed] Generated temporary admin password. Store it securely and rotate immediately: ${generated}`
+  );
+  return { plain: generated, generated: true };
+}
+
 async function main() {
-  const adminPassword = await bcrypt.hash("admin123", 12);
+  const { plain: adminPasswordPlain } = await resolveSeedPassword();
+  const adminPasswordHash = await bcrypt.hash(adminPasswordPlain, 12);
 
   const adminUser = await prisma.user.upsert({
     where: { email: "admin@roemahcita.local" },
@@ -12,7 +27,7 @@ async function main() {
     create: {
       email: "admin@roemahcita.local",
       name: "Administrator",
-      passwordHash: adminPassword,
+      passwordHash: adminPasswordHash,
       role: UserRole.ADMIN,
       bio: "Pengelola utama Roemah Cita CMS.",
       emailVerified: new Date(),
@@ -56,6 +71,9 @@ async function main() {
           description: "Content management system untuk mengelola artikel dan media Roemah Cita.",
           keywords: ["roemah cita", "cms", "konten"],
         },
+        comments: {
+          enabled: true,
+        },
       },
     },
     create: {
@@ -74,6 +92,9 @@ async function main() {
           title: "Roemah Cita CMS",
           description: "Content management system untuk mengelola artikel dan media Roemah Cita.",
           keywords: ["roemah cita", "cms", "konten"],
+        },
+        comments: {
+          enabled: true,
         },
       },
     },

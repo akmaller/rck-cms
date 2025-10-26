@@ -8,6 +8,7 @@ RoemahCita CMS adalah platform manajemen konten berbasis Next.js App Router yang
 - **Menu builder**: susun menu navigasi secara drag & drop, termasuk tautan internal maupun eksternal.
 - **Dashboard berbasis peran**: akses dibatasi untuk Administrator, Editor, dan Author dengan kontrol granular.
 - **Keamanan berlapis**: 2FA, rate limiting, blokir IP otomatis, audit log, dan kebijakan keamanan yang dapat dikonfigurasi.
+- **Komentar publik terawasi**: formulir komentar aman dengan sanitasi XSS, pembatasan brute force, dan integrasi login.
 - **Backup & restore**: ekspor dan impor data konten serta konfigurasi situs langsung dari dashboard.
 - **Performa**: caching halaman publik, dukungan ISR, serta desain responsif menggunakan Tailwind CSS.
 
@@ -55,6 +56,7 @@ Salin `.env` menjadi `.env.local` (untuk lokal) atau file env lain sesuai sistem
 | `SMTP_USER` & `SMTP_PASSWORD` | Kredensial autentikasi SMTP. |
 | `SMTP_SECURE` | Gunakan `true` jika menggunakan TLS implicit (465), `false` jika STARTTLS (587). |
 | `SMTP_FROM` | Alamat email pengirim (contoh: `Roemah Cita <no-reply@domain.com>`). |
+| `SEED_ADMIN_PASSWORD` | (Opsional) Password admin saat seeding. Jika tidak diisi, script akan membuat password acak dan menampilkannya di log. |
 
 > Gunakan `openssl rand -hex 32` atau `npx auth secret` untuk membuat nilai `NEXTAUTH_SECRET`.
 
