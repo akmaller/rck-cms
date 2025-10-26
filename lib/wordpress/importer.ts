@@ -421,6 +421,26 @@ async function downloadFeaturedImage(url: string): Promise<File | null> {
   return new File([arrayBuffer], fileName, { type: contentType });
 }
 
+export async function hasImportedWordpressPost(postId: number): Promise<boolean> {
+  if (!Number.isFinite(postId) || postId <= 0) {
+    return false;
+  }
+
+  const existing = await prisma.auditLog.findFirst({
+    where: {
+      action: "ARTICLE_IMPORT_WORDPRESS",
+      entity: "Article",
+      metadata: {
+        path: ["originalPostId"],
+        equals: postId,
+      },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(existing);
+}
+
 export async function importWordpressPost(params: {
   post: WordpressPostPayload;
   intent: "publish" | "draft";

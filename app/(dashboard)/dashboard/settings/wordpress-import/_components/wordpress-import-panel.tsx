@@ -16,6 +16,19 @@ import { Badge } from "@/components/ui/badge";
 
 type LoadState = "idle" | "loading";
 
+type AuthorOption = {
+  id: string;
+  name: string | null;
+  email: string | null;
+  role: string;
+};
+
+const ROLE_LABEL: Record<string, string> = {
+  ADMIN: "Admin",
+  EDITOR: "Editor",
+  AUTHOR: "Penulis",
+};
+
 function formatDate(value: string) {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
@@ -27,7 +40,13 @@ function formatDate(value: string) {
   });
 }
 
-export function WordpressImportPanel() {
+export function WordpressImportPanel({
+  authors,
+  defaultAuthorId,
+}: {
+  authors: AuthorOption[];
+  defaultAuthorId: string;
+}) {
   const [siteUrl, setSiteUrl] = useState("");
   const [categories, setCategories] = useState<WordpressCategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
@@ -45,6 +64,32 @@ export function WordpressImportPanel() {
   const [categoryLoadState, setCategoryLoadState] = useState<LoadState>("idle");
   const [postLoadState, setPostLoadState] = useState<LoadState>("idle");
   const [importState, setImportState] = useState<LoadState>("idle");
+  const [selectedAuthorId, setSelectedAuthorId] = useState(() => {
+    if (authors.length === 0) {
+      return "";
+    }
+    const hasDefault = authors.some((author) => author.id === defaultAuthorId);
+    return hasDefault ? defaultAuthorId : authors[0].id;
+  });
+  const authorDisplayMap = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        label: string;
+        name: string;
+      }
+    >();
+    authors.forEach((author) => {
+      const roleLabel = ROLE_LABEL[author.role] ?? author.role;
+      const base = author.name?.trim() || author.email?.trim() || "Tanpa nama";
+      map.set(author.id, {
+        label: roleLabel ? `${base} (${roleLabel})` : base,
+        name: base,
+      });
+    });
+    return map;
+  }, [authors]);
+  const selectedAuthorDisplay = selectedAuthorId ? authorDisplayMap.get(selectedAuthorId) : undefined;
 
   const currentPost = posts[currentPostIndex];
 
@@ -137,27 +182,43 @@ export function WordpressImportPanel() {
       return;
     }
 
-    setPosts(result.data.posts);
+    const { posts: fetchedPosts, page: nextPage, totalPages: totalPageCount, totalItems: totalItemsCount, skippedDuplicates } =
+      result.data;
+
+    setPosts(fetchedPosts);
     setCurrentPostIndex(0);
-    setCurrentPage(result.data.page);
-    setTotalPages(result.data.totalPages);
-    setTotalItems(result.data.totalItems);
+    setCurrentPage(nextPage);
+    setTotalPages(totalPageCount);
+    setTotalItems(totalItemsCount);
 
     if (resetCounters) {
-      setProcessedCount(0);
       setImportedCount(0);
-      setSkippedCount(0);
+      setProcessedCount(skippedDuplicates);
+      setSkippedCount(skippedDuplicates);
+    } else if (skippedDuplicates > 0) {
+      setProcessedCount((prev) => prev + skippedDuplicates);
+      setSkippedCount((prev) => prev + skippedDuplicates);
     }
 
-    if (result.data.posts.length === 0) {
-      setStatusMessage("Tidak ada postingan untuk kategori tersebut.");
+    let status: string;
+    if (fetchedPosts.length === 0) {
+      status =
+        skippedDuplicates > 0
+          ? "Semua postingan pada halaman ini telah diimpor sebelumnya dan dilewati otomatis."
+          : "Tidak ada postingan untuk kategori tersebut.";
     } else {
-      setStatusMessage(
-        `Memuat ${result.data.posts.length} dari ${result.data.totalItems} postingan (halaman ${result.data.page} dari ${Math.max(
-          1,
-          result.data.totalPages
-        )}).`
-      );
+      status = `Memuat ${fetchedPosts.length} dari ${totalItemsCount} postingan (halaman ${nextPage} dari ${Math.max(
+        1,
+        totalPageCount
+      )}).`;
+      if (skippedDuplicates > 0) {
+        status += ` ${skippedDuplicates} postingan duplikat dilewati otomatis.`;
+      }
+    }
+    setStatusMessage(status);
+
+    if (fetchedPosts.length === 0 && totalPageCount > 0 && nextPage < totalPageCount) {
+      await fetchPosts(nextPage + 1, false);
     }
   };
 
@@ -185,11 +246,17 @@ export function WordpressImportPanel() {
     if (!currentPost) return;
     setSkippedCount((prev) => prev + 1);
     setProcessedCount((prev) => prev + 1);
+    setStatusMessage(`Postingan "${currentPost.title}" dilewati secara manual.`);
     await loadNextPost();
   };
 
   const handleImport = async () => {
     if (!currentPost) {
+      return;
+    }
+
+    if (!selectedAuthorId) {
+      setErrorMessage("Pilih penulis artikel sebelum melakukan impor.");
       return;
     }
 
@@ -200,6 +267,7 @@ export function WordpressImportPanel() {
       siteUrl,
       post: currentPost,
       intent,
+      authorId: selectedAuthorId,
     });
 
     setImportState("idle");
@@ -209,9 +277,20 @@ export function WordpressImportPanel() {
       return;
     }
 
+    if (result.data.skipped) {
+      setSkippedCount((prev) => prev + 1);
+      setProcessedCount((prev) => prev + 1);
+      setStatusMessage(`Postingan "${currentPost.title}" telah diimpor sebelumnya dan dilewati otomatis.`);
+      await loadNextPost();
+      return;
+    }
+
     setImportedCount((prev) => prev + 1);
     setProcessedCount((prev) => prev + 1);
-    setStatusMessage(`Artikel "${currentPost.title}" berhasil diimpor sebagai ${intent === "publish" ? "publikasi" : "draft"}.`);
+    const assignedInfo = selectedAuthorDisplay?.label ?? "penulis terpilih";
+    setStatusMessage(
+      `Artikel "${currentPost.title}" berhasil diimpor sebagai ${intent === "publish" ? "publikasi" : "draft"} dan ditugaskan ke ${assignedInfo}.`
+    );
     await loadNextPost();
   };
 
@@ -247,6 +326,36 @@ export function WordpressImportPanel() {
           <p className="text-xs text-muted-foreground">
             Masukkan URL WordPress (dengan atau tanpa skema). Sistem akan mengambil daftar kategori yang tersedia.
           </p>
+        </div>
+        <div className="space-y-2 md:col-span-2">
+          <Label htmlFor="wordpress-author">Penulis Artikel</Label>
+          {authors.length > 0 ? (
+            <>
+              <select
+                id="wordpress-author"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                value={selectedAuthorId}
+                onChange={(event) => setSelectedAuthorId(event.target.value)}
+                disabled={disableControls}
+              >
+                {authors.map((author) => {
+                  const display = authorDisplayMap.get(author.id)?.label ?? author.id;
+                  return (
+                    <option key={author.id} value={author.id}>
+                      {display}
+                    </option>
+                  );
+                })}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Artikel yang diimpor akan langsung ditugaskan ke penulis yang dipilih.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-destructive">
+              Tidak ada penulis yang tersedia. Tambahkan pengguna dengan peran penulis terlebih dahulu.
+            </p>
+          )}
         </div>
       </form>
 

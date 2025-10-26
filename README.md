@@ -40,13 +40,15 @@ cms/
 - Opsional: penyimpanan S3 kompatibel (AWS S3, MinIO, Cloudflare R2, dsb.) untuk media
 
 ## Konfigurasi Environment
-Salin `.env` menjadi `.env.local` (untuk lokal) atau file env lain sesuai sistem Anda. Variabel penting:
+Salin `.env.example` menjadi `.env.local` (untuk pengembangan) atau `.env.production` (untuk server) lalu isi nilainya. File `.env.example` bersifat referensi dan boleh dikomit, sedangkan file berisi rahasia jangan pernah dibagikan publik.
 
 | Nama Variabel | Deskripsi |
 | ------------- | --------- |
 | `DATABASE_URL` | URL koneksi PostgreSQL (format Prisma). |
+| `DATABASE_CONNECTION_LIMIT` | Batas koneksi maksimal per instance Prisma (default 5, sesuaikan dengan kapasitas database/pgBouncer). |
 | `NEXTAUTH_SECRET` | String acak >= 32 karakter untuk enkripsi session. |
 | `NEXTAUTH_URL` | URL publik aplikasi (contoh: `https://cms.domain.com`). |
+| `NEXT_PUBLIC_APP_URL` | URL publik yang digunakan di sisi klien (misal untuk berbagi tautan). |
 | `APP_URL` | URL publik aplikasi untuk pembuatan tautan aktivasi email. |
 | `AWS_S3_BUCKET` | (Opsional) Nama bucket untuk media. Kosongkan untuk penyimpanan lokal. |
 | `AWS_S3_REGION` | (Opsional) Region bucket. |
@@ -65,6 +67,8 @@ Salin `.env` menjadi `.env.local` (untuk lokal) atau file env lain sesuai sistem
 # Clone repository
 git clone <repo-url> roemahcita-cms
 cd roemahcita_cms/cms
+cp .env.example .env.local
+# Edit .env.local sesuai konfigurasi Anda
 
 # Instal dependencies
 npm install
@@ -89,6 +93,14 @@ Aplikasi akan tersedia di [http://localhost:3000](http://localhost:3000). Login 
 - `npm run prisma:generate` – generate client Prisma.
 - `npm run prisma:migrate` – migrasi dev; gunakan `npx prisma migrate deploy` di server produksi.
 - `npm run prisma:seed` – mengisi data awal.
+
+## Checklist Kesiapan Produksi
+- Pastikan `.env.production` terisi lengkap (database, `NEXTAUTH_SECRET`, URL publik, SMTP, opsi S3 bila diperlukan).
+- Sesuaikan `DATABASE_CONNECTION_LIMIT` dengan kapasitas pool database atau layanan pgBouncer yang digunakan.
+- Jalankan `npm run lint`, `npm run test`, dan `npm run build` hingga semuanya lulus tanpa error.
+- Jalankan `npx prisma migrate deploy` pada database produksi sebelum boot pertama.
+- Konfigurasi layanan email (SMTP) dan storage sesuai kebutuhan lalu uji kirim email aktivasi.
+- Siapkan reverse proxy (mis. Nginx) serta sertifikat TLS (Let’s Encrypt/sertifikat resmi) sebelum membuka akses publik.
 
 ## Panduan Deploy ke Server Online (Contoh Ubuntu 22.04)
 
@@ -119,19 +131,22 @@ cd /var/www
 sudo mkdir roemahcita-cms && sudo chown $USER:$USER roemahcita-cms
 git clone <repo-url> roemahcita-cms
 cd roemahcita-cms/cms
-npm install --production=false
+npm ci
 ```
 
 ### 3. Konfigurasi Environment
-Buat file `.env.production` atau gunakan pengaturan environment shell:
+Salin file contoh environment dan isi dengan kredensial produksi:
 ```bash
-cp .env .env.production
+cp .env.example .env.production
 ```
-Ubah nilainya:
+Perbarui nilainya:
 ```env
 DATABASE_URL="postgresql://cms_user:password@localhost:5432/roemahcita_cms?schema=public"
-NEXTAUTH_SECRET="ganti_dengan_random_hex_64"
+DATABASE_CONNECTION_LIMIT=10           # Sesuaikan dengan kapasitas pool DB/pgBouncer
 NEXTAUTH_URL="https://cms.domain.com"
+NEXT_PUBLIC_APP_URL="https://cms.domain.com"
+APP_URL="https://cms.domain.com"
+NEXTAUTH_SECRET="ganti_dengan_random_hex_64"
 # Jika memakai S3:
 # AWS_S3_BUCKET="nama-bucket"
 # AWS_S3_REGION="ap-southeast-1"
@@ -139,9 +154,11 @@ NEXTAUTH_URL="https://cms.domain.com"
 # AWS_S3_SECRET_ACCESS_KEY="..."
 ```
 
-Gunakan `chmod 600 .env.production` agar file env tidak bisa dibaca pihak lain. Pada server production, ekspor variabel ini sebelum menjalankan aplikasi:
+Gunakan `chmod 600 .env.production` agar file tidak mudah dibaca pihak lain. Saat menjalankan aplikasi, muat variabel env tersebut (contoh dengan shell bawaan):
 ```bash
-export $(grep -v '^#' .env.production | xargs)
+set -a
+source .env.production
+set +a
 ```
 
 ### 4. Migrasi & Seed Database
@@ -151,8 +168,10 @@ npm run prisma:seed         # opsional, jika butuh data awal
 npm run prisma:generate
 ```
 
-### 5. Build & Jalankan Produksi
+### 5. Validasi Build & Jalankan Produksi
 ```bash
+npm run lint
+npm run test
 npm run build
 NODE_ENV=production npm run start
 ```

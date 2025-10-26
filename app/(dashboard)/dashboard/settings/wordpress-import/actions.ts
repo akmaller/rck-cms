@@ -4,10 +4,12 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 import { assertRole } from "@/lib/auth/permissions";
+import { prisma } from "@/lib/prisma";
 import {
   getWordpressCategories,
   getWordpressPostsForCategory,
   importWordpressPost,
+  hasImportedWordpressPost,
   type WordpressCategory,
   type WordpressPostPayload,
 } from "@/lib/wordpress/importer";
@@ -78,6 +80,7 @@ export async function fetchWordpressPostsAction(params: {
         page: number;
         totalPages: number;
         totalItems: number;
+        skippedDuplicates: number;
       };
     }
   | { success: false; message: string }
@@ -96,9 +99,29 @@ export async function fetchWordpressPostsAction(params: {
     const page = params.page && params.page > 0 ? params.page : 1;
     const result = await getWordpressPostsForCategory(parsedUrl.data, params.categoryId, page);
 
+    const duplicateChecks = await Promise.all(
+      result.posts.map((post) => hasImportedWordpressPost(post.id))
+    );
+
+    const filtered: WordpressPostPayload[] = [];
+    let skippedDuplicates = 0;
+    result.posts.forEach((post, index) => {
+      if (duplicateChecks[index]) {
+        skippedDuplicates += 1;
+        return;
+      }
+      filtered.push(post);
+    });
+
     return {
       success: true,
-      data: result,
+      data: {
+        posts: filtered,
+        page: result.page,
+        totalPages: result.totalPages,
+        totalItems: result.totalItems,
+        skippedDuplicates,
+      },
     };
   } catch (error) {
     console.error("fetchWordpressPostsAction", error);
@@ -110,15 +133,16 @@ export async function importWordpressPostAction(input: {
   siteUrl: string;
   post: WordpressPostPayload;
   intent: "publish" | "draft";
+  authorId: string;
 }): Promise<
   | {
       success: true;
-      data: { articleId: string; slug: string; status: string };
+      data: { articleId: string | null; slug: string | null; status: string | null; skipped: boolean };
     }
   | { success: false; message: string }
 > {
   try {
-    const session = await assertRole("ADMIN");
+    await assertRole("ADMIN");
 
     const parsedUrl = siteUrlSchema.safeParse(input.siteUrl);
     if (!parsedUrl.success) {
@@ -133,11 +157,33 @@ export async function importWordpressPostAction(input: {
       };
     }
 
+    const authorIdSchema = z.string().cuid("Penulis tidak valid");
+    const parsedAuthorId = authorIdSchema.safeParse(input.authorId);
+    if (!parsedAuthorId.success) {
+      return { success: false, message: parsedAuthorId.error.issues[0]?.message ?? "Penulis tidak valid" };
+    }
+
+    const author = await prisma.user.findUnique({
+      where: { id: parsedAuthorId.data },
+      select: { id: true },
+    });
+    if (!author) {
+      return { success: false, message: "Penulis tidak ditemukan" };
+    }
+
     const intent = input.intent === "publish" ? "publish" : "draft";
+
+    if (await hasImportedWordpressPost(parsedPost.data.id)) {
+      return {
+        success: true,
+        data: { articleId: null, slug: null, status: null, skipped: true },
+      };
+    }
+
     const created = await importWordpressPost({
       post: parsedPost.data,
       intent,
-      authorId: session.user.id,
+      authorId: author.id,
     });
 
     revalidateTag("content");
@@ -145,7 +191,7 @@ export async function importWordpressPostAction(input: {
 
     return {
       success: true,
-      data: { articleId: created.articleId, slug: created.slug, status: created.status },
+      data: { articleId: created.articleId, slug: created.slug, status: created.status, skipped: false },
     };
   } catch (error) {
     console.error("importWordpressPostAction", error);

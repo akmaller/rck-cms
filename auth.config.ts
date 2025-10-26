@@ -1,5 +1,6 @@
-import Credentials from "next-auth/providers/credentials";
 import type { NextAuthConfig } from "next-auth";
+import type { Adapter } from "next-auth/adapters";
+import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { z } from "zod";
 
@@ -27,8 +28,12 @@ const credentialsSchema = z
     return Boolean(data.email && data.password);
   }, { message: "Kredensial tidak valid" });
 
+// Cast required because Prisma adapter ships with its own @auth/core types which
+// don't pick up our AdapterUser augmentation (role). Runtime still returns role.
+const prismaAdapter = PrismaAdapter(prisma) as Adapter;
+
 export const authConfig: NextAuthConfig = {
-  adapter: PrismaAdapter(prisma),
+  adapter: prismaAdapter,
   session: {
     strategy: "jwt",
   },

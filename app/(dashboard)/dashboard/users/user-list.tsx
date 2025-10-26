@@ -19,9 +19,10 @@ type UserListEntry = {
 type UserListProps = {
   users: UserListEntry[];
   currentUserId: string;
+  emptyMessage?: string;
 };
 
-export function UserList({ users, currentUserId }: UserListProps) {
+export function UserList({ users, currentUserId, emptyMessage }: UserListProps) {
   const router = useRouter();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [isDeleting, startDeleting] = useTransition();
@@ -110,7 +111,9 @@ export function UserList({ users, currentUserId }: UserListProps) {
         );
       })}
       {users.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Belum ada pengguna.</p>
+        <p className="text-sm text-muted-foreground">
+          {emptyMessage ?? "Belum ada pengguna."}
+        </p>
       ) : null}
     </div>
   );
