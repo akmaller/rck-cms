@@ -110,8 +110,22 @@ export function DashboardSidebar({
     <>
       <aside className="hidden h-screen w-64 flex-col border-r border-border bg-card/40 p-4 md:sticky md:top-0 md:flex">
         <div className="mb-6 flex items-center gap-3">
-          {siteConfig.logoUrl ? (
-            <Image src={siteConfig.logoUrl} alt={siteConfig.name} width={32} height={32} className="h-8 w-8 rounded" />
+          {siteConfig.iconUrl ? (
+            <Image
+              src={siteConfig.iconUrl}
+              alt={`${siteConfig.name} icon`}
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded"
+            />
+          ) : siteConfig.logoUrl ? (
+            <Image
+              src={siteConfig.logoUrl}
+              alt={siteConfig.name}
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded"
+            />
           ) : null}
           <div className="flex flex-col">
             <span className="text-sm font-semibold text-foreground">{siteConfig.name}</span>
@@ -162,8 +176,22 @@ export function DashboardSidebar({
       >
         <div className="mb-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {siteConfig.logoUrl ? (
-              <Image src={siteConfig.logoUrl} alt={siteConfig.name} width={24} height={24} className="h-6 w-6 rounded" />
+            {siteConfig.iconUrl ? (
+              <Image
+                src={siteConfig.iconUrl}
+                alt={`${siteConfig.name} icon`}
+                width={24}
+                height={24}
+                className="h-6 w-6 rounded"
+              />
+            ) : siteConfig.logoUrl ? (
+              <Image
+                src={siteConfig.logoUrl}
+                alt={siteConfig.name}
+                width={24}
+                height={24}
+                className="h-6 w-6 rounded"
+              />
             ) : null}
             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Navigasi

@@ -211,6 +211,7 @@ function renderNode(node: TiptapNode, key: string): ReactNode {
             width={width}
             height={height}
             className="h-auto w-full object-cover"
+            style={{ width: "100%", height: "auto" }}
           />
         </div>
       );

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
 import { buttonVariants } from "@/lib/button-variants";
+import { cn, ensureTrailingSlash } from "@/lib/utils";
 
 type ShareChannel = "twitter" | "facebook" | "whatsapp" | "telegram";
 
@@ -15,8 +16,9 @@ type ShareActionsProps = {
 };
 
 function buildShareUrl(channel: ShareChannel, title: string, url: string) {
+  const normalizedUrl = ensureTrailingSlash(url);
   const encodedTitle = encodeURIComponent(title);
-  const encodedUrl = encodeURIComponent(url);
+  const encodedUrl = encodeURIComponent(normalizedUrl);
 
   switch (channel) {
     case "twitter":
@@ -28,13 +30,17 @@ function buildShareUrl(channel: ShareChannel, title: string, url: string) {
     case "telegram":
       return `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`;
     default:
-      return url;
+      return normalizedUrl;
   }
 }
 
 export function ShareActions({ title, articleUrl, className }: ShareActionsProps) {
   const [copied, setCopied] = useState(false);
-  const shareMessage = useMemo(() => `${title} — ${articleUrl}`, [title, articleUrl]);
+  const normalizedArticleUrl = ensureTrailingSlash(articleUrl);
+  const shareMessage = useMemo(
+    () => `${title} — ${normalizedArticleUrl}`,
+    [title, normalizedArticleUrl]
+  );
 
   const handleCopy = useCallback(async () => {
     try {
@@ -70,32 +76,38 @@ export function ShareActions({ title, articleUrl, className }: ShareActionsProps
   ];
 
   return (
-    <div className={className}>
-      <div className="grid gap-2 sm:grid-cols-2">
-        {shareButtons.map(({ channel, label, Icon }) => (
-          <Link
-            key={channel}
-            href={buildShareUrl(channel, title, articleUrl)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={buttonVariants({
-              variant: "outline",
-              size: "sm",
-              className: "flex items-center justify-center gap-2 text-sm font-medium",
-            })}
-          >
-            <Icon className="h-4 w-4" aria-hidden />
-            <span>{label}</span>
-          </Link>
-        ))}
-      </div>
+    <div
+      className={cn(
+        "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2 md:flex-nowrap",
+        className
+      )}
+    >
+      <span className="col-span-2 text-sm font-semibold text-muted-foreground sm:w-auto sm:text-foreground sm:flex-none">
+        Bagikan:
+      </span>
+      {shareButtons.map(({ channel, label, Icon }) => (
+        <Link
+          key={channel}
+          href={buildShareUrl(channel, title, normalizedArticleUrl)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={buttonVariants({
+            variant: "outline",
+            size: "sm",
+            className: "flex w-full items-center justify-center gap-2 text-sm font-medium sm:w-auto sm:flex-none",
+          })}
+        >
+          <Icon className="h-4 w-4" aria-hidden />
+          <span>{label}</span>
+        </Link>
+      ))}
       <button
         type="button"
         onClick={handleCopy}
         className={buttonVariants({
           variant: "secondary",
           size: "sm",
-          className: "mt-2 flex w-full items-center justify-center gap-2 text-sm font-medium sm:mt-3",
+          className: "flex w-full items-center justify-center gap-2 text-sm font-medium sm:w-auto sm:flex-none",
         })}
       >
         <Copy className="h-4 w-4" aria-hidden />

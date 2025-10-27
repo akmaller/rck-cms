@@ -304,6 +304,7 @@ export function ImageInsertDialog({ open, onOpenChange, onInsert, initialItems =
                         width={320}
                         height={200}
                         className="h-auto w-full object-cover"
+                        style={{ width: "100%", height: "auto" }}
                       />
                     </div>
                   </div>

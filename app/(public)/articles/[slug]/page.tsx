@@ -8,7 +8,7 @@ import Image from "next/image";
 import { auth } from "@/auth";
 import { ArticleViewer } from "@/components/article/article-viewer";
 import { buttonVariants } from "@/lib/button-variants";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { getArticleComments } from "@/lib/comments/service";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo/metadata";
@@ -196,6 +196,7 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
                   width={article.featuredMedia.width ?? 1280}
                   height={article.featuredMedia.height ?? 720}
                   className="h-auto w-full object-cover"
+                  style={{ width: "100%", height: "auto" }}
                   priority
                 />
                 {article.featuredMedia?.description ? (
@@ -224,17 +225,10 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
             ) : null}
 
             <Card>
-              <CardHeader>
-                <CardTitle>Bagikan Artikel</CardTitle>
-                <CardDescription>
-                  Sebarkan cerita ini ke jejaring Anda.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
+              <CardContent className="py-4">
                 <ShareActions
                   title={article.title}
                   articleUrl={`${process.env.NEXT_PUBLIC_APP_URL}/articles/${article.slug}`}
-                  className="space-y-3"
                 />
               </CardContent>
             </Card>

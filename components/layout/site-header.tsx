@@ -14,9 +14,19 @@ export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur">
       <div className="container flex h-16 items-center justify-between gap-3">
-        <Link href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-3">
           {config.logoUrl ? (
-            <Image src={config.logoUrl} alt={config.name} width={32} height={32} className="h-8 w-8 rounded" />
+            <span className="flex h-full max-w-[12rem] items-center py-[2px]">
+              <Image
+                src={config.logoUrl}
+                alt={config.name}
+                width={180}
+                height={36}
+                className="max-h-full object-contain"
+                style={{ width: "auto", height: "auto" }}
+                priority
+              />
+            </span>
           ) : null}
           {!config.logoUrl ? (
             <div className="flex flex-col leading-tight">

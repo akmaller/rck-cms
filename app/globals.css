@@ -78,6 +78,7 @@ body {
   background-image: var(--background-gradient);
   background-attachment: fixed;
   background-size: cover;
+  overflow-x: hidden;
 }
 
 .animate-in {

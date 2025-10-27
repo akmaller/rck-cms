@@ -55,22 +55,27 @@ export async function SiteFooter() {
           <div className="flex flex-col gap-6 md:pr-8">
             <Link href="/" className="flex items-center gap-4 text-foreground">
               {config.logoUrl ? (
-                <Image
-                  src={config.logoUrl}
-                  alt={config.name}
-                  width={48}
-                  height={48}
-                  className="h-12 w-12 rounded-lg border border-border/60 bg-card object-contain p-2"
-                />
-              ) : null}
-              <div className="flex flex-col">
-                <span className="text-lg font-semibold">{config.name}</span>
-                {config.tagline ? (
-                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                    {config.tagline}
-                  </span>
-                ) : null}
-              </div>
+                <span className="flex h-12 max-w-[14rem] items-center">
+                  <Image
+                    src={config.logoUrl}
+                    alt={config.name}
+                    width={220}
+                    height={48}
+                    className="max-h-full object-contain"
+                    style={{ width: "auto", height: "auto" }}
+                    priority
+                  />
+                </span>
+              ) : (
+                <div className="flex flex-col">
+                  <span className="text-lg font-semibold">{config.name}</span>
+                  {config.tagline ? (
+                    <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                      {config.tagline}
+                    </span>
+                  ) : null}
+                </div>
+              )}
             </Link>
             {socialEntries.length > 0 ? (
               <div className="space-y-3">
