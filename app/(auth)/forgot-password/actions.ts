@@ -12,6 +12,7 @@ import { sendPasswordResetEmail } from "@/lib/email/send-password-reset-email";
 import { extractClientIp } from "@/lib/security/ip-block";
 import { logSecurityIncident } from "@/lib/security/activity-log";
 import { writeAuditLog } from "@/lib/audit/log";
+import { verifyTurnstileToken } from "@/lib/security/turnstile";
 
 const requestSchema = z.object({
   email: z.string().email("Email tidak valid"),
@@ -39,8 +40,25 @@ export async function requestPasswordResetAction(
     };
   }
 
-  const headersList = headers();
+  const headersList = await headers();
   const ip = extractClientIp({ headers: headersList, ip: null });
+  const turnstileToken = formData.get("turnstileToken");
+
+  const verification = await verifyTurnstileToken(typeof turnstileToken === "string" ? turnstileToken : null, ip);
+  if (!verification.success) {
+    await logSecurityIncident({
+      category: "password-reset",
+      source: "turnstile",
+      ip,
+      description: "Verifikasi anti-robot gagal untuk permintaan reset password.",
+      metadata: {
+        errors: verification.errors ?? [],
+      },
+    });
+    return {
+      error: "Verifikasi anti-robot gagal. Silakan coba lagi.",
+    };
+  }
 
   const email = parsed.data.email.trim().toLowerCase();
   const user = await prisma.user.findUnique({ where: { email } });

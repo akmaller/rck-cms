@@ -50,6 +50,8 @@ Salin `.env.example` menjadi `.env.local` (untuk pengembangan) atau `.env.produc
 | `NEXTAUTH_URL` | URL publik aplikasi (contoh: `https://cms.domain.com`). |
 | `NEXT_PUBLIC_APP_URL` | URL publik yang digunakan di sisi klien (misal untuk berbagi tautan). |
 | `APP_URL` | URL publik aplikasi untuk pembuatan tautan aktivasi email. |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | (Opsional) Site key Cloudflare Turnstile untuk formulir publik (reset password). |
+| `TURNSTILE_SECRET_KEY` | (Opsional) Secret key Turnstile untuk memverifikasi token di server. Wajib saat site key diaktifkan. |
 | `AWS_S3_BUCKET` | (Opsional) Nama bucket untuk media. Kosongkan untuk penyimpanan lokal. |
 | `AWS_S3_REGION` | (Opsional) Region bucket. |
 | `AWS_S3_ACCESS_KEY_ID` & `AWS_S3_SECRET_ACCESS_KEY` | (Opsional) Kredensial akses S3. |

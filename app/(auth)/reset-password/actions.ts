@@ -52,7 +52,7 @@ export async function resetPasswordAction(
   }
 
   const { token, password } = parsed.data;
-  const headersList = headers();
+  const headersList = await headers();
   const ip = extractClientIp({ headers: headersList, ip: null });
 
   const record = await findActivePasswordResetToken(token);

@@ -20,6 +20,7 @@ export default async function ForgotPasswordPage() {
   }
 
   const config = await getSiteConfig();
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null;
 
   return (
     <div className="min-h-screen bg-muted/40 py-12">
@@ -48,7 +49,7 @@ export default async function ForgotPasswordPage() {
               <CardDescription>Ketuk tombol di bawah untuk menerima tautan reset via email.</CardDescription>
             </CardHeader>
             <CardContent>
-              <ForgotPasswordForm />
+              <ForgotPasswordForm turnstileSiteKey={turnstileSiteKey} />
               <p className="mt-4 text-center text-sm text-muted-foreground">
                 Ingat password Anda?{" "}
                 <Link href="/login" className="font-semibold text-primary hover:underline">
