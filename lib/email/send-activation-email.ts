@@ -1,7 +1,7 @@
 import { sendMail } from "@/lib/email/mailer";
 import { getSiteConfig } from "@/lib/site-config/server";
 
-const APP_URL = process.env.APP_URL ?? "http://localhost:3000";
+const APP_URL = process.env.APP_URL ?? "http://localhost:3033";
 
 export async function sendActivationEmail({
   email,
