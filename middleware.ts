@@ -11,7 +11,8 @@ const DASHBOARD_ROLES = new Set(["ADMIN", "EDITOR", "AUTHOR"]);
 const buildCspHeader = () => {
   const isProduction = process.env.NODE_ENV === "production";
   const scriptSrc = ["'self'", "'unsafe-inline'"];
-  if (!isProduction) {
+  const allowUnsafeEval = !isProduction || process.env.CSP_ALLOW_UNSAFE_EVAL === "true";
+  if (allowUnsafeEval) {
     scriptSrc.push("'unsafe-eval'");
   }
   const turnstileScriptSrc = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? "https://challenges.cloudflare.com" : null;
