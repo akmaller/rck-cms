@@ -28,6 +28,7 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 
   const defaultTitle = typeof baseMetadata.title === "string" ? baseMetadata.title : config.name;
+  const iconUrl = config.iconUrl?.trim();
 
   return {
     ...baseMetadata,
@@ -36,6 +37,7 @@ export async function generateMetadata(): Promise<Metadata> {
       default: defaultTitle,
       template: `%s | ${config.name}`,
     },
+    icons: iconUrl ? { icon: iconUrl } : undefined,
   };
 }
 
