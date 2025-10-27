@@ -10,6 +10,7 @@ import {
   type ComponentType,
 } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Facebook, Instagram, Search, Twitter, Youtube, X } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -161,11 +162,13 @@ export function MobileNavigation({ siteConfig, mainMenu }: MobileNavigationProps
             <div>
               {siteConfig.logoUrl ? (
                 <span className="flex h-10 max-w-[12rem] items-center">
-                  <img
+                  <Image
                     src={siteConfig.logoUrl}
                     alt={siteConfig.name}
+                    width={200}
+                    height={80}
                     className="h-full w-auto object-contain"
-                    loading="lazy"
+                    priority={false}
                   />
                 </span>
               ) : (
