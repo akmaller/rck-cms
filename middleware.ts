@@ -11,7 +11,9 @@ const DASHBOARD_ROLES = new Set(["ADMIN", "EDITOR", "AUTHOR"]);
 const buildCspHeader = () => {
   const isProduction = process.env.NODE_ENV === "production";
   const scriptSrc = ["'self'", "'unsafe-inline'"];
-  const allowUnsafeEval = !isProduction || process.env.CSP_ALLOW_UNSAFE_EVAL === "true";
+  const allowUnsafeEval =
+    !isProduction ||
+    ["1", "true", "yes", "on"].includes((process.env.CSP_ALLOW_UNSAFE_EVAL ?? "").toLowerCase());
   if (allowUnsafeEval) {
     scriptSrc.push("'unsafe-eval'");
   }

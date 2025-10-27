@@ -52,7 +52,7 @@ Salin `.env.example` menjadi `.env.local` (untuk pengembangan) atau `.env.produc
 | `APP_URL` | URL publik aplikasi untuk pembuatan tautan aktivasi email. |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | (Opsional) Site key Cloudflare Turnstile untuk formulir publik (reset password). |
 | `TURNSTILE_SECRET_KEY` | (Opsional) Secret key Turnstile untuk memverifikasi token di server. Wajib saat site key diaktifkan. |
-| `CSP_ALLOW_UNSAFE_EVAL` | (Opsional) Set `true` hanya jika benar-benar perlu mengizinkan `unsafe-eval` pada CSP. Default mengikuti mode development saja. |
+| `CSP_ALLOW_UNSAFE_EVAL` | (Opsional) Set `true`/`1`/`yes` hanya jika benar-benar perlu mengizinkan `unsafe-eval` pada CSP. Default mengikuti mode development saja. |
 | `AWS_S3_BUCKET` | (Opsional) Nama bucket untuk media. Kosongkan untuk penyimpanan lokal. |
 | `AWS_S3_REGION` | (Opsional) Region bucket. |
 | `AWS_S3_ACCESS_KEY_ID` & `AWS_S3_SECRET_ACCESS_KEY` | (Opsional) Kredensial akses S3. |
