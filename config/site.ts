@@ -34,7 +34,7 @@ export const siteConfig: SiteConfig = {
     "Content management system untuk mengelola artikel, media, dan konfigurasi situs Roemah Cita.",
   tagline: "Platform pengelolaan konten Roemah Cita.",
   logoUrl: "/logo.svg",
-  iconUrl: "/icon.png",
+  iconUrl: "/default-favicon.ico",
   contactEmail: "admin@roemahcita.local",
   url: "https://roemahcita.local",
   ogImage: "/og.jpg",

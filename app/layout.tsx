@@ -36,7 +36,6 @@ export async function generateMetadata(): Promise<Metadata> {
       default: defaultTitle,
       template: `%s | ${config.name}`,
     },
-    icons: config.iconUrl ? { icon: config.iconUrl } : undefined,
   };
 }
 
