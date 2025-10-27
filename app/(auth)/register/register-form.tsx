@@ -1,29 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState } from "react";
+import { useActionState, useCallback, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { registerAction, type RegisterActionState } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { TurnstileField } from "@/components/security/turnstile-field";
 
 type RegisterFormProps = {
   privacyPolicyUrl?: string | null;
+  turnstileSiteKey?: string | null;
 };
 
-function SubmitButton() {
+function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="w-full" disabled={pending}>
+    <Button type="submit" className="w-full" disabled={pending || disabled}>
       {pending ? "Memproses..." : "Daftar"}
     </Button>
   );
 }
 
-export function RegisterForm({ privacyPolicyUrl }: RegisterFormProps) {
+export function RegisterForm({ privacyPolicyUrl, turnstileSiteKey }: RegisterFormProps) {
   const [state, formAction] = useActionState<RegisterActionState, FormData>(registerAction, {});
+  const [turnstileValid, setTurnstileValid] = useState(!turnstileSiteKey);
+  const [resetKey, setResetKey] = useState(0);
+
+  const handleTokenChange = useCallback(
+    (token: string) => {
+      if (!turnstileSiteKey) {
+        setTurnstileValid(true);
+        return;
+      }
+      setTurnstileValid(Boolean(token));
+    },
+    [turnstileSiteKey]
+  );
+
+  useEffect(() => {
+    if (state?.error || state?.success) {
+      const timer = window.setTimeout(() => {
+        setTurnstileValid(!turnstileSiteKey);
+        setResetKey((key) => key + 1);
+      }, 0);
+      return () => window.clearTimeout(timer);
+    }
+    return undefined;
+  }, [state?.error, state?.success, turnstileSiteKey]);
+
+  const disableSubmit = turnstileSiteKey ? !turnstileValid : false;
 
   return (
     <form action={formAction} className="space-y-4">
@@ -58,9 +86,15 @@ export function RegisterForm({ privacyPolicyUrl }: RegisterFormProps) {
           kami.
         </p>
       ) : null}
+      <TurnstileField
+        siteKey={turnstileSiteKey}
+        onTokenChange={handleTokenChange}
+        tokenFieldName="turnstileToken"
+        resetKey={resetKey}
+      />
       {state?.error ? <p className="text-sm text-destructive">{state.error}</p> : null}
       {state?.success ? <p className="text-sm text-emerald-600">{state.success}</p> : null}
-      <SubmitButton />
+      <SubmitButton disabled={disableSubmit} />
     </form>
   );
 }

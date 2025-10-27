@@ -19,6 +19,7 @@ const buildCspHeader = () => {
   }
   const turnstileScriptSrc = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? "https://challenges.cloudflare.com" : null;
   const scriptSrcValues = turnstileScriptSrc ? [...scriptSrc, `${turnstileScriptSrc}`] : scriptSrc;
+  const scriptSrcElemValues = scriptSrcValues;
   const frameSrcValues = ["'self'"];
   if (turnstileScriptSrc) {
     frameSrcValues.push(turnstileScriptSrc);
@@ -27,6 +28,7 @@ const buildCspHeader = () => {
   return [
     "default-src 'self'",
     `script-src ${scriptSrcValues.join(" ")}`,
+    `script-src-elem ${scriptSrcElemValues.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",

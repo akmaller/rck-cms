@@ -20,6 +20,7 @@ export default async function RegisterPage() {
   }
 
   const config = await getSiteConfig();
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null;
   const privacyPolicyUrl = config.registration.privacyPolicyPageSlug
     ? `/pages/${config.registration.privacyPolicyPageSlug}`
     : null;
@@ -50,7 +51,7 @@ export default async function RegisterPage() {
               <CardDescription>Isi formulir di bawah ini untuk membuat akun penulis.</CardDescription>
             </CardHeader>
             <CardContent>
-              <RegisterForm privacyPolicyUrl={privacyPolicyUrl} />
+              <RegisterForm privacyPolicyUrl={privacyPolicyUrl} turnstileSiteKey={turnstileSiteKey} />
               <p className="mt-4 text-center text-sm text-muted-foreground">
                 Sudah punya akun? <Link href="/login" className="font-semibold text-primary hover:underline">Masuk di sini</Link>
               </p>

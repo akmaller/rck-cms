@@ -21,6 +21,7 @@ type LoginPageProps = {
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const callbackUrl = typeof params?.callbackUrl === "string" ? params.callbackUrl : undefined;
+  const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null;
 
   if (params?.next) {
     redirect(params.next as string);
@@ -56,7 +57,7 @@ Jika fitur keamanan 2FA aktif, sistem akan meminta kode OTP setelah Anda berhasi
             </CardHeader>
             <CardContent>
               <Suspense fallback={<div className="text-sm text-muted-foreground">Memuat formulir...</div>}>
-                <LoginForm callbackUrl={callbackUrl} />
+                <LoginForm callbackUrl={callbackUrl} turnstileSiteKey={turnstileSiteKey} />
               </Suspense>
               <p className="mt-4 text-center text-sm text-muted-foreground">
                 Lupa password?{" "}

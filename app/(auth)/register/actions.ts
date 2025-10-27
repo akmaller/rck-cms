@@ -3,11 +3,15 @@
 import { randomBytes } from "crypto";
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
+import { headers } from "next/headers";
 
 import { hashPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { sendActivationEmail } from "@/lib/email/send-activation-email";
+import { extractClientIp } from "@/lib/security/ip-block";
+import { verifyTurnstileToken } from "@/lib/security/turnstile";
+import { logSecurityIncident } from "@/lib/security/activity-log";
 
 const registerSchema = z
   .object({
@@ -15,6 +19,7 @@ const registerSchema = z
     email: z.string().email("Email tidak valid"),
     password: z.string().min(8, "Password minimal 8 karakter"),
     confirmPassword: z.string().min(8, "Password minimal 8 karakter"),
+    turnstileToken: z.string().optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     path: ["confirmPassword"],
@@ -40,6 +45,7 @@ export async function registerAction(_: RegisterActionState | undefined, formDat
     email: formData.get("email"),
     password: formData.get("password"),
     confirmPassword: formData.get("confirmPassword"),
+    turnstileToken: formData.get("turnstileToken"),
   });
 
   if (!parsed.success) {
@@ -54,7 +60,25 @@ export async function registerAction(_: RegisterActionState | undefined, formDat
     return { error: "Validasi gagal", fieldErrors };
   }
 
-  const { name, email, password } = parsed.data;
+  const { name, email, password, turnstileToken } = parsed.data;
+
+  const headersList = await headers();
+  const ip = extractClientIp({ headers: headersList, ip: null });
+
+  const verification = await verifyTurnstileToken(turnstileToken ?? null, ip);
+  if (!verification.success) {
+    await logSecurityIncident({
+      category: "registration",
+      source: "turnstile",
+      ip,
+      description: "Verifikasi anti-robot gagal pada formulir registrasi.",
+      metadata: {
+        email,
+        errors: verification.errors ?? [],
+      },
+    });
+    return { error: "Verifikasi anti-robot gagal. Silakan coba lagi." };
+  }
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
