@@ -1,11 +1,17 @@
-import type { CommentStatus } from "@prisma/client";
+export const COMMENT_STATUS = {
+  PUBLISHED: "PUBLISHED",
+  PENDING: "PENDING",
+  ARCHIVED: "ARCHIVED",
+} as const;
+
+export type CommentStatusValue = (typeof COMMENT_STATUS)[keyof typeof COMMENT_STATUS];
 
 export type CommentsView = "received" | "authored" | "moderation";
 
 export type CommentListItem = {
   id: string;
   content: string;
-  status: CommentStatus;
+  status: CommentStatusValue;
   createdAt: string;
   updatedAt: string;
   articleTitle: string;

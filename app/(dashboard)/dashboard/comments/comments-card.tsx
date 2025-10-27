@@ -4,7 +4,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useMemo, useState, useTransition } from "react";
-import { CommentStatus } from "@prisma/client";
 
 import { Badge } from "@/components/ui/badge";
 import { CardContent, CardHeader } from "@/components/ui/card";
@@ -18,7 +17,7 @@ import { notifySuccess, notifyWarning } from "@/lib/notifications/client";
 import { cn } from "@/lib/utils";
 
 import { deleteCommentAction, setCommentStatusAction, updateCommentAction } from "./actions";
-import type { CommentListItem, CommentsView } from "./types";
+import type { CommentListItem, CommentsView, CommentStatusValue } from "./types";
 
 type CommentsCardProps = {
   comments: CommentListItem[];
@@ -31,16 +30,16 @@ type CommentsCardProps = {
 
 const DEFAULT_PAGE_SIZE = 10;
 
-const STATUS_LABEL: Record<CommentStatus, string> = {
-  [CommentStatus.PUBLISHED]: "Dipublikasikan",
-  [CommentStatus.PENDING]: "Menunggu",
-  [CommentStatus.ARCHIVED]: "Diarsipkan",
+const STATUS_LABEL: Record<CommentStatusValue, string> = {
+  PUBLISHED: "Dipublikasikan",
+  PENDING: "Menunggu",
+  ARCHIVED: "Diarsipkan",
 };
 
-const STATUS_BADGE_VARIANT: Record<CommentStatus, "default" | "secondary" | "outline"> = {
-  [CommentStatus.PUBLISHED]: "default",
-  [CommentStatus.PENDING]: "secondary",
-  [CommentStatus.ARCHIVED]: "outline",
+const STATUS_BADGE_VARIANT: Record<CommentStatusValue, "default" | "secondary" | "outline"> = {
+  PUBLISHED: "default",
+  PENDING: "secondary",
+  ARCHIVED: "outline",
 };
 
 export function CommentsCard({
@@ -91,18 +90,7 @@ export function CommentsCard({
         setActionFeedback({ type: "error", message: result.message });
         return;
       }
-      if (!("status" in result)) {
-        setActionFeedback({
-          type: "success",
-          message: result.message ?? "Komentar berhasil diperbarui.",
-        });
-        setEditingId(null);
-        setEditingValue("");
-        router.refresh();
-        return;
-      }
-      const movedToPending =
-        result.status === CommentStatus.PENDING && comment.status !== CommentStatus.PENDING;
+      const movedToPending = result.status === "PENDING" && comment.status !== "PENDING";
       if (movedToPending && !isAdmin) {
         notifyWarning(
           "Komentar Anda diperbarui dan menunggu peninjauan sebelum dipublikasikan kembali.",
@@ -145,7 +133,7 @@ export function CommentsCard({
     });
   };
 
-  const handleSetStatus = (comment: CommentListItem, status: CommentStatus) => {
+  const handleSetStatus = (comment: CommentListItem, status: CommentStatusValue) => {
     if (!canModerate) return;
     if (comment.status === status) {
       setActionFeedback({
@@ -476,24 +464,24 @@ export function CommentsCard({
                               <button
                                 type="button"
                                 className={actionButtonClass}
-                                onClick={() => handleSetStatus(comment, CommentStatus.PENDING)}
-                                disabled={isPending || comment.status === CommentStatus.PENDING}
+                                onClick={() => handleSetStatus(comment, "PENDING")}
+                                disabled={isPending || comment.status === "PENDING"}
                               >
                                 Tandai Pending
                               </button>
                               <button
                                 type="button"
                                 className={actionButtonClass}
-                                onClick={() => handleSetStatus(comment, CommentStatus.PUBLISHED)}
-                                disabled={isPending || comment.status === CommentStatus.PUBLISHED}
+                                onClick={() => handleSetStatus(comment, "PUBLISHED")}
+                                disabled={isPending || comment.status === "PUBLISHED"}
                               >
                                 Terbitkan
                               </button>
                               <button
                                 type="button"
                                 className={actionButtonClass}
-                                onClick={() => handleSetStatus(comment, CommentStatus.ARCHIVED)}
-                                disabled={isPending || comment.status === CommentStatus.ARCHIVED}
+                                onClick={() => handleSetStatus(comment, "ARCHIVED")}
+                                disabled={isPending || comment.status === "ARCHIVED"}
                               >
                                 Arsipkan
                               </button>

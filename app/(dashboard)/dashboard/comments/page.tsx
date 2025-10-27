@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { CommentStatus, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
@@ -10,7 +10,8 @@ import { prisma } from "@/lib/prisma";
 import { cn } from "@/lib/utils";
 
 import { CommentsCard } from "./comments-card";
-import type { CommentListItem, CommentsView } from "./types";
+import { COMMENT_STATUS } from "./types";
+import type { CommentListItem, CommentsView, CommentStatusValue } from "./types";
 import type { RoleKey } from "@/lib/auth/permissions";
 
 type CommentsSearchParams = {
@@ -78,7 +79,7 @@ export default async function DashboardCommentsPage({ searchParams }: CommentsPa
         }
       : activeView === "moderation"
         ? {
-            status: CommentStatus.PENDING,
+            status: COMMENT_STATUS.PENDING,
           }
         : {
             userId: session.user.id,
@@ -110,7 +111,7 @@ export default async function DashboardCommentsPage({ searchParams }: CommentsPa
   const commentItems: CommentListItem[] = comments.map((comment) => ({
     id: comment.id,
     content: comment.content,
-    status: comment.status,
+    status: comment.status as CommentStatusValue,
     createdAt: comment.createdAt.toISOString(),
     updatedAt: comment.updatedAt.toISOString(),
     articleTitle: comment.article?.title ?? "Artikel tidak ditemukan",

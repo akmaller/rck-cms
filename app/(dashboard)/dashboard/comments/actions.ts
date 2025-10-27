@@ -1,15 +1,20 @@
 "use server";
 
-import { CommentStatus } from "@prisma/client";
-
 import { auth } from "@/auth";
 import { sanitizeCommentContent } from "@/lib/comments/service";
 import type { RoleKey } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit/log";
+import { COMMENT_STATUS } from "./types";
+import type { CommentStatusValue } from "./types";
 
 type UpdateActionResult =
-  | { success: true; status: CommentStatus; previousStatus: CommentStatus; message?: string }
+  | {
+      success: true;
+      status: CommentStatusValue;
+      previousStatus: CommentStatusValue;
+      message?: string;
+    }
   | { success: false; message: string };
 
 type DeleteActionResult =
@@ -17,7 +22,7 @@ type DeleteActionResult =
   | { success: false; message: string };
 
 type ModerateActionResult =
-  | { success: true; status: CommentStatus; previousStatus: CommentStatus; message?: string }
+  | { success: true; status: CommentStatusValue; previousStatus: CommentStatusValue; message?: string }
   | { success: false; message: string };
 
 async function resolveSession() {
@@ -64,7 +69,9 @@ export async function updateCommentAction(params: { commentId: string; content: 
     return { success: false, message: "Komentar tidak boleh kosong." };
   }
 
-  const nextStatus = isAdmin || isEditorManagingArticle ? comment.status : CommentStatus.PENDING;
+  const currentStatus = comment.status as CommentStatusValue;
+  const nextStatus: CommentStatusValue =
+    isAdmin || isEditorManagingArticle ? currentStatus : COMMENT_STATUS.PENDING;
 
   await prisma.comment.update({
     where: { id: comment.id },
@@ -74,12 +81,18 @@ export async function updateCommentAction(params: { commentId: string; content: 
     },
   });
 
+  const baseResult = {
+    success: true as const,
+    status: nextStatus,
+    previousStatus: currentStatus,
+  };
+
   await writeAuditLog({
     action: "comment.update",
     entity: "Comment",
     entityId: comment.id,
     metadata: {
-      previousStatus: comment.status,
+      previousStatus: currentStatus,
       status: nextStatus,
       isAdmin: isAdmin || isEditorManagingArticle,
       editorManaged: isEditorManagingArticle,
@@ -87,12 +100,11 @@ export async function updateCommentAction(params: { commentId: string; content: 
   });
 
   return {
-    success: true,
-    status: nextStatus,
-    previousStatus: comment.status,
-    message: isAdmin
-      ? "Komentar berhasil diperbarui."
-      : "Komentar diperbarui dan menunggu peninjauan sebelum dipublikasikan kembali.",
+    ...baseResult,
+    message:
+      isAdmin || isEditorManagingArticle
+        ? "Komentar berhasil diperbarui."
+        : "Komentar diperbarui dan menunggu peninjauan sebelum dipublikasikan kembali.",
   };
 }
 
@@ -142,13 +154,13 @@ export async function deleteCommentAction(params: { commentId: string }): Promis
   return { success: true, message: "Komentar berhasil dihapus." };
 }
 
-export async function setCommentStatusAction(params: { commentId: string; status: CommentStatus }): Promise<ModerateActionResult> {
+export async function setCommentStatusAction(params: { commentId: string; status: CommentStatusValue }): Promise<ModerateActionResult> {
   const { commentId, status } = params;
   if (!commentId || typeof commentId !== "string") {
     return { success: false, message: "Komentar tidak ditemukan." };
   }
 
-  if (!Object.values(CommentStatus).includes(status)) {
+  if (!Object.values(COMMENT_STATUS).includes(status)) {
     return { success: false, message: "Status komentar tidak valid." };
   }
 
@@ -170,7 +182,7 @@ export async function setCommentStatusAction(params: { commentId: string; status
     return {
       success: true,
       status,
-      previousStatus: comment.status,
+      previousStatus: comment.status as CommentStatusValue,
       message: "Status komentar tidak berubah.",
     };
   }
@@ -191,11 +203,16 @@ export async function setCommentStatusAction(params: { commentId: string; status
   });
 
   const message =
-    status === CommentStatus.PUBLISHED
+    status === COMMENT_STATUS.PUBLISHED
       ? "Komentar diterbitkan."
-      : status === CommentStatus.PENDING
+      : status === COMMENT_STATUS.PENDING
         ? "Komentar ditandai menunggu moderasi."
         : "Komentar diarsipkan.";
 
-  return { success: true, status, previousStatus: comment.status, message };
+  return {
+    success: true,
+    status,
+    previousStatus: comment.status as CommentStatusValue,
+    message,
+  };
 }
