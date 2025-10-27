@@ -233,7 +233,7 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
               <CardContent>
                 <ShareActions
                   title={article.title}
-                  articleUrl={`${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/articles/${article.slug}`}
+                  articleUrl={`${process.env.NEXT_PUBLIC_APP_URL}/articles/${article.slug}`}
                   className="space-y-3"
                 />
               </CardContent>
