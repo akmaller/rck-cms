@@ -50,7 +50,7 @@ export function TurnstileField({
   const [token, setToken] = useState("");
   const containerRef = useRef<HTMLDivElement | null>(null);
   const widgetIdRef = useRef<string | null>(null);
-  const scriptLoadedRef = useRef(false);
+  const scriptLoadingRef = useRef<Promise<void> | null>(null);
 
   const normalizedSiteKey = typeof siteKey === "string" && siteKey.trim().length > 0 ? siteKey.trim() : null;
 
@@ -91,30 +91,36 @@ export function TurnstileField({
 
     const existingScript = document.querySelector<HTMLScriptElement>("script[data-turnstile-script]");
     if (existingScript) {
+      const loadHandler = () => renderTurnstile();
+      existingScript.addEventListener("load", loadHandler);
       if (window.turnstile) {
         renderTurnstile();
-      } else {
-        existingScript.addEventListener("load", renderTurnstile, { once: true });
       }
-      return () => existingScript.removeEventListener("load", renderTurnstile);
+      return () => existingScript.removeEventListener("load", loadHandler);
     }
 
-    if (!scriptLoadedRef.current) {
-      const script = document.createElement("script");
-      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
-      script.async = true;
-      script.defer = true;
-      script.dataset.turnstileScript = "true";
-      script.addEventListener("load", renderTurnstile, { once: true });
-      document.body.appendChild(script);
-      scriptLoadedRef.current = true;
-
-      return () => {
-        script.removeEventListener("load", renderTurnstile);
-      };
+    if (!scriptLoadingRef.current) {
+      scriptLoadingRef.current = new Promise<void>((resolve) => {
+        const script = document.createElement("script");
+        script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js";
+        script.async = true;
+        script.defer = true;
+        script.dataset.turnstileScript = "true";
+        script.addEventListener("load", () => resolve());
+        document.body.appendChild(script);
+      });
     }
 
-    return undefined;
+    let cancelled = false;
+    scriptLoadingRef.current.then(() => {
+      if (!cancelled) {
+        renderTurnstile();
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
   }, [normalizedSiteKey, action, cData, handleTokenChange]);
 
   useEffect(() => {
