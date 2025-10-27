@@ -40,9 +40,10 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <Link href="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground">
             &larr; Kembali ke {config.name}
           </Link>
-          <h1 className="text-3xl font-bold tracking-tight">Kelola konten Anda</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Masuk dan Mulai Berkarya</h1>
           <p className="max-w-md text-muted-foreground">
-            Gunakan kredensial ADMIN, EDITOR, atau AUTHOR untuk masuk. Jika 2FA diaktifkan, kami akan meminta kode OTP setelah email dan password tervalidasi.
+            Gunakan akun Anda untuk mengakses dashboard penulis dan kelola seluruh konten dengan aman.<br></br>
+Jika fitur keamanan 2FA aktif, sistem akan meminta kode OTP setelah Anda berhasil masuk.
           </p>
         </section>
         <section className="flex-1">
