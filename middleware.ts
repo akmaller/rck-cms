@@ -14,10 +14,12 @@ const buildCspHeader = () => {
   if (!isProduction) {
     scriptSrc.push("'unsafe-eval'");
   }
+  const turnstileScriptSrc = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? "https://challenges.cloudflare.com" : null;
+  const scriptSrcValues = turnstileScriptSrc ? [...scriptSrc, `${turnstileScriptSrc}`] : scriptSrc;
 
   return [
     "default-src 'self'",
-    `script-src ${scriptSrc.join(" ")}`,
+    `script-src ${scriptSrcValues.join(" ")}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
