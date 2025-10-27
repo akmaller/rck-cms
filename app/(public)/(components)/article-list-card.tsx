@@ -1,8 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 
-import { deriveThumbnailUrl } from "@/lib/storage/media";
-
 type ArticleListCardProps = {
   href: string;
   title: string;
@@ -41,7 +39,7 @@ export function ArticleListCard({
   category,
   image,
 }: ArticleListCardProps) {
-  const thumbnail = image?.url ? deriveThumbnailUrl(image.url) ?? image.url : null;
+  const thumbnail = image?.url ?? null;
   const alt = image?.alt?.trim() || title;
 
   return (

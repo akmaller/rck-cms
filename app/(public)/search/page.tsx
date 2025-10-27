@@ -3,33 +3,34 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { ArticleStatus, Prisma } from "@prisma/client";
 
-import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArticleListCard } from "@/app/(public)/(components)/article-list-card";
+import { Button } from "@/components/ui/button";
 import { ArticleSidebar } from "@/app/(public)/(components)/article-sidebar";
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { createMetadata } from "@/lib/seo/metadata";
 import { logPageView } from "@/lib/visits/log-page-view";
 import { getArticleSidebarData } from "@/lib/articles/sidebar";
+import { ArticleLoadMoreList } from "@/app/(public)/(components)/article-load-more-list";
+import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
 
-const PAGE_SIZE = 10;
+const INITIAL_LIMIT = 20;
+const LOAD_MORE_LIMIT = 10;
 
 type SearchPageProps = {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string }>;
 };
 
 export async function generateMetadata({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; page?: string }>;
+  searchParams: Promise<{ q?: string }>;
 }): Promise<Metadata> {
   const resolved = await searchParams;
   const query = (resolved?.q ?? "").trim();
-  const currentPage = Math.max(1, Number(resolved?.page ?? 1));
   const config = await getSiteConfig();
 
   if (!query) {
@@ -41,61 +42,29 @@ export async function generateMetadata({
     });
   }
 
-  const path = currentPage > 1
-    ? `/search?q=${encodeURIComponent(query)}&page=${currentPage}`
-    : `/search?q=${encodeURIComponent(query)}`;
-
   return createMetadata({
     config,
     title: `Pencarian: ${query}`,
     description: `Hasil pencarian untuk “${query}” di ${config.name}.`,
-    path,
+    path: `/search?q=${encodeURIComponent(query)}`,
     keywords: [query],
   });
-}
-
-function buildPaginationLinks({
-  current,
-  total,
-  basePath,
-  query,
-}: {
-  current: number;
-  total: number;
-  basePath: string;
-  query: string;
-}) {
-  const items: Array<{ label: string; href: string; active: boolean } | "ellipsis"> = [];
-  for (let i = 1; i <= total; i++) {
-    if (i === 1 || i === total || Math.abs(i - current) <= 1) {
-      items.push({ label: `${i}`, href: `${basePath}?q=${encodeURIComponent(query)}&page=${i}`, active: i === current });
-    } else if (items[items.length - 1] !== "ellipsis") {
-      items.push("ellipsis");
-    }
-  }
-  return items;
 }
 
 export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolved = await searchParams;
   const query = (resolved.q ?? "").trim();
-  const currentPage = Math.max(1, Number(resolved.page ?? 1));
 
-  const queryParams = new URLSearchParams();
-  if (query) queryParams.set("q", query);
-  if (resolved.page && resolved.page !== "1") {
-    queryParams.set("page", resolved.page);
-  }
-  const pathWithQuery = queryParams.toString() ? `/search?${queryParams.toString()}` : "/search";
   const headerList = await headers();
   const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
   const userAgent = headerList.get("user-agent");
   const referrer = headerList.get("referer");
   const protocol = headerList.get("x-forwarded-proto") ?? "https";
   const host = headerList.get("host");
-  const url = host ? `${protocol}://${host}${pathWithQuery}` : undefined;
+  const path = query ? `/search?q=${encodeURIComponent(query)}` : "/search";
+  const url = host ? `${protocol}://${host}${path}` : undefined;
 
-  await logPageView({ path: pathWithQuery, url, referrer, ip, userAgent });
+  await logPageView({ path, url, referrer, ip, userAgent });
 
   const sidebarDataPromise = getArticleSidebarData();
 
@@ -144,111 +113,56 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     prisma.article.findMany({
       where,
       orderBy: { publishedAt: "desc" },
-      include: {
-        author: { select: { id: true, name: true } },
-        categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
-        featuredMedia: { select: { url: true, title: true, description: true, width: true, height: true } },
-      },
-      skip: (currentPage - 1) * PAGE_SIZE,
-      take: PAGE_SIZE,
+      include: articleListInclude,
+      skip: 0,
+      take: INITIAL_LIMIT,
     }),
     prisma.article.count({ where }),
     sidebarDataPromise,
   ]);
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
-  const pagination = buildPaginationLinks({ current: currentPage, total: totalPages, basePath: "/search", query });
+  const initialArticles = articles.map((article) => serializeArticleForList(article));
 
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="space-y-8">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-8">
           <div className="space-y-4">
             <h1 className="text-3xl font-semibold tracking-tight">Pencarian</h1>
             <SearchForm defaultValue={query} />
             <p className="text-sm text-muted-foreground">
-              Menampilkan {articles.length} dari {totalCount} hasil untuk “{query}”.
+              Ditemukan {totalCount} artikel untuk “{query}”.
             </p>
           </div>
 
-          <div className="space-y-4">
-            {articles.map((article) => (
-              <ArticleListCard
-                key={article.id}
-                href={`/articles/${article.slug}`}
-                title={article.title}
-                excerpt={article.excerpt}
-                publishedAt={article.publishedAt}
-                authorName={article.author?.name}
-                category={
-                  article.categories[0]?.category
-                    ? {
-                        name: article.categories[0].category.name,
-                        slug: article.categories[0].category.slug,
-                      }
-                    : null
-                }
-                image={article.featuredMedia?.url ? { url: article.featuredMedia.url, alt: article.featuredMedia.title ?? article.title } : null}
-              />
-            ))}
-          </div>
+          <ArticleLoadMoreList
+            initialArticles={initialArticles}
+            totalCount={totalCount}
+            loadSize={LOAD_MORE_LIMIT}
+            request={{ mode: "search", query }}
+            emptyState={
+              <Card>
+                <CardHeader>
+                  <CardTitle>Hasil tidak ditemukan</CardTitle>
+                  <CardDescription>Coba kata kunci lain atau lihat artikel terbaru.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Link className={buttonVariants({ variant: "outline" })} href="/articles">
+                    Artikel Terbaru
+                  </Link>
+                </CardContent>
+              </Card>
+            }
+          />
+        </div>
 
-          {articles.length === 0 ? (
-            <Card>
-              <CardHeader>
-                <CardTitle>Hasil tidak ditemukan</CardTitle>
-                <CardDescription>Coba kata kunci lain atau lihat artikel terbaru.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link className={buttonVariants({ variant: "outline" })} href="/articles">
-                  Artikel Terbaru
-                </Link>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {totalPages > 1 ? (
-            <nav className="flex flex-wrap items-center gap-2" aria-label="Pagination">
-              <Button asChild variant="outline" size="sm" disabled={currentPage === 1}>
-                <Link href={`/search?q=${encodeURIComponent(query)}&page=${currentPage - 1}`}>Sebelumnya</Link>
-              </Button>
-              <div className="flex items-center gap-1">
-                {pagination.map((item, index) =>
-                  item === "ellipsis" ? (
-                    <span key={`ellipsis-${index}`} className="px-2 text-sm text-muted-foreground">
-                      …
-                    </span>
-                  ) : (
-                    <Link
-                      key={item.label}
-                      href={item.href}
-                      className={buttonVariants({
-                        variant: item.active ? "default" : "ghost",
-                        size: "sm",
-                      })}
-                    >
-                      {item.label}
-                    </Link>
-                  )
-                )}
-              </div>
-              <Button
-                asChild
-                variant="outline"
-                size="sm"
-                disabled={currentPage === totalPages}
-              >
-                <Link href={`/search?q=${encodeURIComponent(query)}&page=${currentPage + 1}`}>Berikutnya</Link>
-              </Button>
-            </nav>
-          ) : null}
-        </section>
-
-        <ArticleSidebar
-          latestArticles={sidebarData.latestSidebarArticles}
-          popularArticles={sidebarData.popularSidebarArticles}
-          popularTags={sidebarData.popularTags}
-        />
+        <aside className="lg:sticky lg:top-24">
+          <ArticleSidebar
+            latestArticles={sidebarData.latestSidebarArticles}
+            popularArticles={sidebarData.popularSidebarArticles}
+            popularTags={sidebarData.popularTags}
+          />
+        </aside>
       </div>
     </div>
   );

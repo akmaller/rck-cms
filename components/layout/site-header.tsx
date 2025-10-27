@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Menu } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { Suspense } from "react";
 
 import { getSiteConfig } from "@/lib/site-config/server";
@@ -18,12 +18,14 @@ export async function SiteHeader() {
           {config.logoUrl ? (
             <Image src={config.logoUrl} alt={config.name} width={32} height={32} className="h-8 w-8 rounded" />
           ) : null}
-          <div className="flex flex-col leading-tight">
-            <span className="text-lg font-semibold">{config.name}</span>
-            {config.tagline ? (
-              <span className="text-xs text-muted-foreground">{config.tagline}</span>
-            ) : null}
-          </div>
+          {!config.logoUrl ? (
+            <div className="flex flex-col leading-tight">
+              <span className="text-lg font-semibold">{config.name}</span>
+              {config.tagline ? (
+                <span className="text-xs text-muted-foreground">{config.tagline}</span>
+              ) : null}
+            </div>
+          ) : null}
         </Link>
         <nav
           className="hidden items-center gap-2 text-sm font-medium md:flex"
@@ -87,6 +89,14 @@ export async function SiteHeader() {
           })}
         </nav>
         <div className="hidden items-center gap-2 md:flex">
+          <Link
+            href="/search"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            aria-label="Cari artikel"
+          >
+            <Search className="h-4 w-4" />
+            <span>Cari</span>
+          </Link>
           <PublicAuthActions />
         </div>
         <div className="flex items-center gap-2 md:hidden">

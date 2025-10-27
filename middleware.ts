@@ -148,7 +148,10 @@ const middleware = auth(async (req) => {
   }
 
   const isProtectedApiRoute =
-    isApiRoute && !nextUrl.pathname.startsWith("/api/auth") && !nextUrl.pathname.startsWith("/api/health");
+    isApiRoute &&
+    !nextUrl.pathname.startsWith("/api/auth") &&
+    !nextUrl.pathname.startsWith("/api/health") &&
+    !nextUrl.pathname.startsWith("/api/public");
 
   if (isDashboardRoute || isApiDashboardRoute) {
     if (!request.auth?.user) {

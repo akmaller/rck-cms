@@ -9,6 +9,8 @@ import { AUTHOR_SOCIAL_FIELDS, AUTHOR_SOCIAL_KEYS, type AuthorSocialKey } from "
 import { prisma } from "@/lib/prisma";
 import { deriveThumbnailUrl } from "@/lib/storage/media";
 import { createMetadata } from "@/lib/seo/metadata";
+import { ArticleLoadMoreList } from "@/app/(public)/(components)/article-load-more-list";
+import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
 
 const sidebarArticleInclude = {
   categories: {
@@ -23,6 +25,8 @@ const sidebarArticleInclude = {
 type SidebarArticle = Prisma.ArticleGetPayload<{ include: typeof sidebarArticleInclude }>;
 
 const POPULAR_LOOKBACK_DAYS = 7;
+const INITIAL_LIMIT = 20;
+const LOAD_MORE_LIMIT = 10;
 const SOCIAL_ICON_MAP: Record<AuthorSocialKey, LucideIcon> = {
   instagram: Instagram,
   facebook: Facebook,
@@ -88,14 +92,20 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const lookbackStart = new Date(now);
   lookbackStart.setDate(lookbackStart.getDate() - POPULAR_LOOKBACK_DAYS);
 
-  const [authoredArticles, latestSidebarRaw, popularVisitLogs, popularTags] = await Promise.all([
+  const authoredWhere = { authorId, status: ArticleStatus.PUBLISHED } as const;
+
+  const [initialArticlesRaw, totalCount, authorSlugs, latestSidebarRaw, popularVisitLogs, popularTags] = await Promise.all([
     prisma.article.findMany({
-      where: { authorId, status: ArticleStatus.PUBLISHED },
-      include: {
-        categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
-        featuredMedia: { select: { url: true, title: true, width: true, height: true } },
-      },
+      where: authoredWhere,
+      include: articleListInclude,
       orderBy: { publishedAt: "desc" },
+      skip: 0,
+      take: INITIAL_LIMIT,
+    }),
+    prisma.article.count({ where: authoredWhere }),
+    prisma.article.findMany({
+      where: authoredWhere,
+      select: { slug: true },
     }),
     prisma.article.findMany({
       where: { status: ArticleStatus.PUBLISHED, authorId: { not: authorId } },
@@ -120,7 +130,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
     }),
   ]);
 
-  const articleSlugs = authoredArticles.map((article) => article.slug);
+  const articleSlugs = authorSlugs.map((article) => article.slug);
   const articlePaths = articleSlugs.map((slug) => `/articles/${slug}`);
 
   const uniqueVisitors = articlePaths.length
@@ -134,7 +144,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
       })
     : [];
 
-  const articleCount = authoredArticles.length;
+  const articleCount = totalCount;
   const viewerCount = uniqueVisitors.length;
 
   const popularSlugs = popularVisitLogs
@@ -168,7 +178,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
 
   const formatJoinDate = formatDate(author.createdAt);
 
-  const getPrimaryCategory = (entry: SidebarArticle | (typeof authoredArticles)[number]) =>
+  const getPrimaryCategory = (entry: { categories: { category: { name: string } }[] }) =>
     entry.categories[0]?.category.name ?? "Umum";
 
   const getThumbnailUrl = (entry: { featuredMedia?: { url: string | null } | null }) => {
@@ -184,11 +194,6 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
 
   const sidebarPopularList = popularSidebarArticles.map((item) => ({
     article: item,
-    thumbnail: getThumbnailUrl(item),
-  }));
-
-  const articlesWithThumbs = authoredArticles.map((item) => ({
-    ...item,
     thumbnail: getThumbnailUrl(item),
   }));
 
@@ -251,13 +256,15 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
     };
   });
 
+  const initialArticles = initialArticlesRaw.map((article) => serializeArticleForList(article));
+
   return (
     <div className="mx-auto w-full max-w-6xl">
-      <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <section className="space-y-8">
-          <div className="flex flex-col gap-6 rounded-2xl border border-border/60 bg-card p-6 shadow-sm sm:p-8">
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
-              <div className="relative h-28 w-28 overflow-hidden rounded-full border border-border/60 shadow-sm sm:h-32 sm:w-32">
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="space-y-8">
+          <div className="flex flex-col gap-5 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:gap-6 sm:p-6 lg:p-8">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+              <div className="relative h-24 w-24 overflow-hidden rounded-full border border-border/60 shadow-sm sm:h-28 sm:w-28 lg:h-32 lg:w-32">
                 {author.avatarUrl ? (
                   <Image
                     src={author.avatarUrl}
@@ -284,17 +291,17 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-xl border border-border/60 bg-card/80 px-4 py-4">
+              <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-3 sm:px-4 sm:py-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Artikel Ditulis</p>
                 <p className="text-2xl font-semibold text-foreground">{articleCount.toLocaleString("id-ID")}</p>
               </div>
-              <div className="rounded-xl border border-border/60 bg-card/80 px-4 py-4">
+              <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-3 sm:px-4 sm:py-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Pembaca Unik</p>
                 <p className="text-2xl font-semibold text-foreground">{viewerCount.toLocaleString("id-ID")}</p>
               </div>
             </div>
 
-            <div className="rounded-2xl border border-border/60 bg-card/90 p-6">
+            <div className="rounded-2xl border border-border/60 bg-card/90 p-4 sm:p-6">
               <h2 className="text-lg font-semibold">Media Sosial</h2>
               {socialLinks.length > 0 ? (
                 <ul className="mt-4 flex flex-wrap gap-3">
@@ -325,68 +332,34 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
             </div>
           </div>
 
-          <div className="space-y-4">
+          <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-semibold tracking-tight">Tulisan {author.name}</h2>
               <span className="text-sm text-muted-foreground">
                 {articleCount > 0 ? `${articleCount} artikel` : "Belum ada artikel"}
               </span>
             </div>
-            {articlesWithThumbs.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border/70 bg-card/80 p-8 text-center text-sm text-muted-foreground">
-                Penulis ini belum memiliki artikel yang dipublikasikan.
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {articlesWithThumbs.map((article) => (
-                  <Link
-                    key={article.id}
-                    href={`/articles/${article.slug}`}
-                    className="group flex h-full flex-col overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm transition hover:border-primary/60 hover:shadow-lg"
-                  >
-                    {article.thumbnail ? (
-                      <div className="relative aspect-[16/9] w-full overflow-hidden">
-                        <Image
-                          src={article.thumbnail}
-                          alt={article.featuredMedia?.title ?? article.title}
-                          fill
-                          className="object-cover transition duration-500 group-hover:scale-105"
-                          sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
-                        />
-                      </div>
-                    ) : (
-                      <div className="aspect-[16/9] w-full bg-gradient-to-br from-primary/10 via-primary/5 to-card" />
-                    )}
-                    <div className="flex flex-1 flex-col gap-3 p-5">
-                      <div className="space-y-1">
-                        <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                          {getPrimaryCategory(article)}
-                        </span>
-                        <h3 className="line-clamp-2 text-base font-semibold leading-snug text-foreground transition group-hover:text-primary">
-                          {article.title}
-                        </h3>
-                      </div>
-                      <p className="line-clamp-3 text-sm text-muted-foreground">
-                        {article.excerpt ?? "Baca ulasan lengkap dari penulis kami."}
-                      </p>
-                      <div className="mt-auto text-xs text-muted-foreground">
-                        {formatDate(article.publishedAt)}
-                      </div>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
+            <ArticleLoadMoreList
+              initialArticles={initialArticles}
+              totalCount={totalCount}
+              loadSize={LOAD_MORE_LIMIT}
+              request={{ mode: "author", authorId }}
+              emptyState={
+                <div className="rounded-2xl border border-dashed border-border/70 bg-card/80 p-6 text-center text-sm text-muted-foreground">
+                  Penulis ini belum memiliki artikel yang dipublikasikan.
+                </div>
+              }
+            />
+          </section>
+        </div>
 
-        <aside className="space-y-6">
+        <aside className="space-y-6 lg:sticky lg:top-24">
           <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
             <div className="bg-gradient-to-r from-primary to-primary/80 px-4 py-2.5 text-primary-foreground sm:px-5 sm:py-3">
               <p className="text-xs font-semibold uppercase tracking-[0.15em]">Sorotan Terbaru</p>
               <h2 className="text-lg font-semibold">Artikel Pilihan Hari Ini</h2>
             </div>
-            <div className="space-y-2.5 px-3.5 py-3 sm:px-5 sm:py-3.5">
+            <div className="space-y-2.5 px-3 py-3 sm:px-5 sm:py-3.5">
               {sidebarLatestList.length > 0 ? (
                 sidebarLatestList.map((item) => {
                   const fallbackInitial = item.title.trim().charAt(0).toUpperCase() || "R";
@@ -427,7 +400,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
           </div>
 
           <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
-            <div className="flex items-center gap-2 border-b border-border/70 px-5 py-4">
+            <div className="flex items-center gap-2 border-b border-border/70 px-4 py-3 sm:px-5 sm:py-4">
               <span className="inline-flex h-8 w-1 rounded-full bg-primary" aria-hidden />
               <div>
                 <h2 className="text-lg font-semibold leading-tight">Populer Minggu Ini</h2>
@@ -439,7 +412,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
                 {sidebarPopularList.map((entry, index) => {
                   const fallbackInitial = entry.article.title.trim().charAt(0).toUpperCase() || "R";
                   return (
-                    <li key={entry.article.id} className="flex gap-3 px-5 py-4">
+                    <li key={entry.article.id} className="flex gap-3 px-4 py-3 sm:px-5 sm:py-4">
                       <span className="min-w-[2.5rem] text-2xl font-bold leading-none text-primary">
                         {String(index + 1).padStart(2, "0")}
                       </span>
@@ -478,19 +451,19 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
                 })}
               </ol>
             ) : (
-              <p className="px-5 py-6 text-sm text-muted-foreground">Data kunjungan belum tersedia. Silakan kembali lagi nanti.</p>
+              <p className="px-4 py-5 text-sm text-muted-foreground sm:px-5 sm:py-6">Data kunjungan belum tersedia. Silakan kembali lagi nanti.</p>
             )}
           </div>
 
           <div className="rounded-2xl border border-border/70 bg-card shadow-sm">
-            <div className="flex items-center gap-2 border-b border-border/70 px-5 py-4">
+            <div className="flex items-center gap-2 border-b border-border/70 px-4 py-3 sm:px-5 sm:py-4">
               <span className="inline-flex h-8 w-1 rounded-full bg-primary" aria-hidden />
               <div>
                 <h2 className="text-lg font-semibold leading-tight">Topik Pilihan</h2>
                 <p className="text-xs text-muted-foreground">Hashtag populer untuk eksplorasi cepat.</p>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2 px-5 py-4">
+            <div className="flex flex-wrap gap-2 px-4 py-3 sm:px-5 sm:py-4">
               {popularTags.length > 0 ? (
                 popularTags.map((tag) => (
                   <Link

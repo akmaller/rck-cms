@@ -183,17 +183,17 @@ export function HeroSlider({ articles }: HeroSliderProps) {
   }
 
   return (
-    <div className="relative hero-slider-wrapper">
+    <div className="relative h-full hero-slider-wrapper">
       <div
         ref={containerRef}
         onScroll={handleScroll}
-        className="hero-slider-inner flex overflow-x-auto scroll-smooth snap-x snap-mandatory rounded-xl border border-border/70"
+        className="hero-slider-inner flex h-full overflow-x-auto scroll-smooth snap-x snap-mandatory rounded-2xl border border-border/70"
       >
         {articles.map((article, index) => (
           <Link
             key={article.id}
             href={`/articles/${article.slug}`}
-            className="relative block aspect-[16/9] w-full flex-shrink-0 snap-start"
+            className="relative block h-full w-full flex-shrink-0 snap-start overflow-hidden rounded-2xl"
             aria-label={`Baca ${article.title}`}
           >
             {article.featuredImage ? (
@@ -203,20 +203,20 @@ export function HeroSlider({ articles }: HeroSliderProps) {
                 fill
                 priority={index === 0}
                 className="object-cover"
-                sizes="(min-width: 1280px) 65vw, (min-width: 1024px) 60vw, 90vw"
+                sizes="(min-width: 1280px) 50vw, (min-width: 1024px) 55vw, (min-width: 768px) 70vw, 90vw"
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-primary/20 via-primary/10 to-primary/5" />
             )}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
-            <div className="absolute bottom-0 left-0 right-0 flex flex-col gap-2 p-4 text-white sm:p-6">
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/45 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 flex flex-col gap-1.5 p-4 text-white sm:p-5">
               {article.categories.length ? (
-                <span className="text-[10px] uppercase tracking-wide text-white/80 sm:text-xs">
-                  {article.categories.join(" • ")}
+                <span className="inline-flex w-fit rounded-full bg-white/20 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-white/90 sm:text-xs">
+                  {article.categories[0]}
                 </span>
               ) : null}
-              <h2 className="text-xl font-semibold leading-tight sm:text-2xl">{article.title}</h2>
-              <span className="text-xs text-white/70 sm:text-sm">{article.publishDateLabel}</span>
+              <h2 className="text-lg font-semibold leading-tight sm:text-xl">{article.title}</h2>
+              <span className="text-[11px] text-white/70 sm:text-xs">{article.publishDateLabel}</span>
             </div>
           </Link>
         ))}

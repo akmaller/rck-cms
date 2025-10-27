@@ -1,9 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition, type ComponentType } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type ComponentType,
+} from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Facebook, Instagram, Twitter, Youtube, X } from "lucide-react";
+import { Facebook, Instagram, Search, Twitter, Youtube, X } from "lucide-react";
 
 import { PublicAuthActions } from "@/app/(public)/(components)/auth-actions";
 import type { ResolvedSiteConfig } from "@/lib/site-config/types";
@@ -19,6 +26,7 @@ export function MobileNavigation({ siteConfig, mainMenu }: MobileNavigationProps
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [, startCloseTransition] = useTransition();
+  const isOpenRef = useRef(isOpen);
 
   useEffect(() => {
     const triggers = Array.from(
@@ -57,11 +65,15 @@ export function MobileNavigation({ siteConfig, mainMenu }: MobileNavigationProps
   }, [isOpen]);
 
   useEffect(() => {
-    if (!isOpen) {
+    isOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpenRef.current) {
       return;
     }
     startCloseTransition(() => setIsOpen(false));
-  }, [pathname, isOpen, startCloseTransition]);
+  }, [pathname, startCloseTransition]);
 
   const menuItems = useMemo(() => mainMenu, [mainMenu]);
   const socialLinks = useMemo(() => {
@@ -123,6 +135,14 @@ export function MobileNavigation({ siteConfig, mainMenu }: MobileNavigationProps
         </div>
         <div className="border-b border-border px-4 py-3">
           <div className="flex w-full flex-col gap-2">
+            <Link
+              href="/search"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-semibold text-foreground transition hover:border-primary/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+              onClick={() => setIsOpen(false)}
+            >
+              <Search className="h-4 w-4" />
+              <span>Cari Artikel</span>
+            </Link>
             <PublicAuthActions />
           </div>
         </div>
