@@ -10,9 +10,6 @@ import { deriveThumbnailUrl } from "@/lib/storage/media";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { createMetadata } from "@/lib/seo/metadata";
 import { logPageView } from "@/lib/visits/log-page-view";
-import type { HeroSliderArticle } from "./(components)/hero-slider";
-import { HeroSlider } from "./(components)/hero-slider";
-
 const POPULAR_LOOKBACK_DAYS = 7;
 
 const articleInclude = {
@@ -23,6 +20,7 @@ const articleInclude = {
   featuredMedia: {
     select: { url: true, title: true, width: true, height: true },
   },
+  author: { select: { id: true, name: true } },
 } satisfies Prisma.ArticleInclude;
 
 type ArticleWithRelations = Prisma.ArticleGetPayload<{ include: typeof articleInclude }>;
@@ -108,27 +106,24 @@ export default async function HomePage() {
   ]);
   const heroArticles = latestArticles.slice(0, 5);
   const remainingAfterHero = latestArticles.slice(heroArticles.length);
+  const heroMainArticle = heroArticles[0] ?? null;
+  const heroSecondaryArticles = heroArticles.slice(1);
   const sidebarArticles = remainingAfterHero.slice(0, 4);
+  const featuredAsideArticles = (() => {
+    const seen = new Set<string>();
+    return [...heroSecondaryArticles, ...sidebarArticles]
+      .filter((article) => {
+        if (!article) return false;
+        if (seen.has(article.id)) return false;
+        seen.add(article.id);
+        return true;
+      })
+      .slice(0, 5);
+  })();
   const latestArticlesAfterSidebar = remainingAfterHero.slice(sidebarArticles.length);
   const latestArticlesForCards = (
     latestArticlesAfterSidebar.length > 0 ? latestArticlesAfterSidebar : latestArticles
   ).slice(0, 9);
-
-  const heroSliderArticles: HeroSliderArticle[] = heroArticles.map((article) => ({
-    id: article.id,
-    slug: article.slug,
-    title: article.title,
-    publishDateLabel: formatDate(article.publishedAt),
-    categories: article.categories.map((entry) => entry.category.name),
-    featuredImage: article.featuredMedia
-      ? {
-          url: article.featuredMedia.url,
-          title: article.featuredMedia.title ?? article.title,
-          width: article.featuredMedia.width ?? 1280,
-          height: article.featuredMedia.height ?? 720,
-        }
-      : null,
-  }));
 
   const randomCategory =
     randomizableCategories.length > 0
@@ -198,61 +193,103 @@ export default async function HomePage() {
   return (
     <div className="flex flex-col gap-12">
       <section className="flex flex-col gap-4">
-        <div className="grid gap-4 md:grid-cols-[70%_30%] lg:grid-cols-[65%_35%]">
-          <div>
-            {heroSliderArticles.length > 0 ? (
-              <HeroSlider
-                key={heroSliderArticles.map((article) => article.id).join(":")}
-                articles={heroSliderArticles}
-              />
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="min-h-[320px]">
+            {heroMainArticle ? (
+              <Link
+                href={`/articles/${heroMainArticle.slug}`}
+                className="group relative flex h-full min-h-[320px] overflow-hidden rounded-2xl border border-border/70 bg-muted"
+              >
+                {heroMainArticle.featuredMedia?.url ? (
+                  <Image
+                    src={heroMainArticle.featuredMedia.url}
+                    alt={heroMainArticle.featuredMedia.title ?? heroMainArticle.title}
+                    fill
+                    priority
+                    className="object-cover transition duration-700 group-hover:scale-105"
+                    sizes="(min-width: 1280px) 60vw, (min-width: 1024px) 55vw, 100vw"
+                  />
+                ) : null}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/10" />
+                <div className="relative z-10 mt-auto flex w-full flex-col gap-3 p-6 text-white sm:p-8">
+                  <span className="inline-flex w-fit rounded-full bg-primary px-3 py-1 text-xs font-semibold uppercase tracking-wide text-primary-foreground">
+                    {getPrimaryCategory(heroMainArticle)}
+                  </span>
+                  <h2 className="text-3xl font-bold leading-tight sm:text-4xl">
+                    {heroMainArticle.title}
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 text-sm text-white/80">
+                    {heroMainArticle.author?.name ? (
+                      <>
+                        <span>{heroMainArticle.author.name}</span>
+                        <span aria-hidden>•</span>
+                      </>
+                    ) : null}
+                    <span>{formatDate(heroMainArticle.publishedAt)}</span>
+                  </div>
+                </div>
+              </Link>
             ) : (
               <Card className="border-dashed border-border/70">
-                <CardContent className="flex h-full min-h-[260px] items-center justify-center text-sm text-muted-foreground">
+                <CardContent className="flex h-full min-h-[320px] items-center justify-center text-sm text-muted-foreground">
                   Belum ada artikel yang dipublikasikan.
                 </CardContent>
               </Card>
             )}
           </div>
-          <div className="space-y-4">
-            {sidebarArticles.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Artikel terbaru akan tampil di sini setelah tersedia.
-              </p>
+          <div>
+            {featuredAsideArticles.length === 0 ? (
+              <Card className="border-dashed border-border/70">
+                <CardContent className="flex h-full min-h-[200px] items-center justify-center text-sm text-muted-foreground">
+                  Artikel terbaru akan tampil di sini setelah tersedia.
+                </CardContent>
+              </Card>
             ) : (
-              sidebarArticles.map((article) => {
-                const thumbnail = getThumbnailUrl(article);
-                return (
-                  <Link
-                    key={article.id}
-                    href={`/articles/${article.slug}`}
-                    className="group flex w-full items-center gap-3 rounded-xl border border-border/60 bg-card/60 p-2.5 transition hover:border-primary/60 hover:bg-primary/5"
-                  >
-                    {thumbnail ? (
-                      <div className="relative aspect-video w-24 flex-shrink-0 overflow-hidden rounded-lg border border-border/60">
-                        <Image
-                          src={thumbnail}
-                          alt={article.featuredMedia?.title ?? article.title}
-                          fill
-                          className="object-cover transition duration-300 group-hover:scale-105"
-                          sizes="(min-width: 1024px) 96px, 30vw"
-                        />
-                      </div>
-                    ) : (
-                      <div className="flex aspect-video w-24 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {getPrimaryCategory(article)}
-                      </div>
-                    )}
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <p className="line-clamp-3 text-sm font-semibold leading-snug text-foreground transition group-hover:text-primary">
-                        {article.title}
-                      </p>
-                      <span className="text-xs text-muted-foreground">
-                        {getPrimaryCategory(article)} • {formatDate(article.publishedAt)}
-                      </span>
-                    </div>
-                  </Link>
-                );
-              })
+              <div className="overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm">
+                <ul className="divide-y divide-border/60">
+                  {featuredAsideArticles.map((article) => {
+                    const thumbnail = getThumbnailUrl(article);
+                    const hasAuthor = Boolean(article.author?.name);
+                    return (
+                      <li key={article.id}>
+                        <Link
+                          href={`/articles/${article.slug}`}
+                          className="group flex items-center gap-3 px-4 py-3 transition hover:bg-primary/5"
+                        >
+                          {thumbnail ? (
+                            <div className="relative h-16 w-20 flex-shrink-0 overflow-hidden rounded-lg border border-border/60">
+                              <Image
+                                src={thumbnail}
+                                alt={article.featuredMedia?.title ?? article.title}
+                                fill
+                                className="object-cover transition duration-300 group-hover:scale-105"
+                                sizes="(min-width: 1280px) 120px, (min-width: 1024px) 96px, 24vw"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-16 w-20 flex-shrink-0 items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                              {getPrimaryCategory(article)}
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <span className="inline-flex rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
+                              {getPrimaryCategory(article)}
+                            </span>
+                            <p className="line-clamp-2 text-sm font-semibold leading-snug text-foreground transition group-hover:text-primary">
+                              {article.title}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              {hasAuthor ? <span>{article.author?.name}</span> : null}
+                              {hasAuthor ? <span aria-hidden>•</span> : null}
+                              <span>{formatDate(article.publishedAt)}</span>
+                            </div>
+                          </div>
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
           </div>
         </div>
