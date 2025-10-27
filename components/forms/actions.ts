@@ -15,6 +15,10 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 const EMPTY_TIPTAP_DOC = { type: "doc", content: [] } as const;
+const bulkArticleStatusSchema = z.object({
+  articleIds: z.array(z.string().cuid()).min(1, "Pilih setidaknya satu artikel."),
+  intent: z.enum(["publish", "draft"]),
+});
 
 type PrismaClientLike = Prisma.TransactionClient | typeof prisma;
 
@@ -1177,5 +1181,106 @@ export async function deleteArticle(articleId: string) {
   } catch (error) {
     console.error(error);
     return { error: "Gagal menghapus artikel" };
+  }
+}
+
+export async function bulkUpdateArticleStatus(formData: FormData) {
+  try {
+    const session = await assertRole(["AUTHOR", "EDITOR", "ADMIN"]);
+    const rawIds = formData
+      .getAll("articleIds")
+      .map((value) => (typeof value === "string" ? value : String(value)))
+      .filter(Boolean);
+    const uniqueIds = Array.from(new Set(rawIds));
+    const parsed = bulkArticleStatusSchema.safeParse({
+      articleIds: uniqueIds,
+      intent: formData.get("intent"),
+    });
+
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Data tidak valid" };
+    }
+
+    const articleIds = parsed.data.articleIds;
+    const targetStatus =
+      parsed.data.intent === "publish" ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
+
+    if (session.user.role === "AUTHOR" && targetStatus === ArticleStatus.PUBLISHED) {
+      const author = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { canPublish: true },
+      });
+      if (!author?.canPublish) {
+        return {
+          error: "Akun penulis Anda menunggu persetujuan admin sebelum dapat mempublikasikan artikel.",
+        };
+      }
+    }
+
+    const articles = await prisma.article.findMany({
+      where: {
+        id: { in: articleIds },
+        ...(session.user.role === "AUTHOR" ? { authorId: session.user.id } : {}),
+      },
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        status: true,
+        publishedAt: true,
+      },
+    });
+
+    if (articles.length === 0) {
+      return { error: "Artikel tidak ditemukan atau tidak diizinkan." };
+    }
+
+    if (articles.length !== articleIds.length) {
+      return { error: "Beberapa artikel tidak dapat diperbarui." };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      for (const article of articles) {
+        const nextPublishedAt =
+          targetStatus === ArticleStatus.PUBLISHED
+            ? article.publishedAt ?? new Date()
+            : null;
+        await tx.article.update({
+          where: { id: article.id },
+          data: {
+            status: targetStatus,
+            publishedAt: nextPublishedAt,
+          },
+        });
+      }
+    });
+
+    await Promise.all(
+      articles.map((article) =>
+        writeAuditLog({
+          action: "ARTICLE_UPDATE",
+          entity: "Article",
+          entityId: article.id,
+          metadata: {
+            title: article.title,
+            status: targetStatus,
+            bulk: true,
+          },
+        })
+      )
+    );
+
+    revalidateTag("content");
+    revalidatePath("/dashboard/articles");
+    for (const article of articles) {
+      if (article.slug) {
+        revalidatePath(`/articles/${article.slug}`);
+      }
+    }
+
+    return { success: true, updated: articles.length, status: targetStatus };
+  } catch (error) {
+    console.error(error);
+    return { error: "Gagal memperbarui status artikel secara massal." };
   }
 }
