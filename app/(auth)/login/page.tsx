@@ -44,11 +44,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <p className="max-w-md text-muted-foreground">
             Gunakan kredensial ADMIN, EDITOR, atau AUTHOR untuk masuk. Jika 2FA diaktifkan, kami akan meminta kode OTP setelah email dan password tervalidasi.
           </p>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li>• ADMIN: akses penuh ke konfigurasi, pengguna, dan audit</li>
-            <li>• EDITOR: kelola artikel tim, media, dan penjadwalan</li>
-            <li>• AUTHOR: publikasi dan kelola artikel milik sendiri</li>
-          </ul>
         </section>
         <section className="flex-1">
           <Card className="shadow-lg">
@@ -63,6 +58,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 <LoginForm callbackUrl={callbackUrl} />
               </Suspense>
               <p className="mt-4 text-center text-sm text-muted-foreground">
+                Lupa password?{" "}
+                <Link href="/forgot-password" className="font-semibold text-primary hover:underline">
+                  Reset di sini
+                </Link>
+              </p>
+              <p className="mt-2 text-center text-sm text-muted-foreground">
                 Belum punya akun?{" "}
                 <Link href="/register" className="font-semibold text-primary hover:underline">
                   Daftar sebagai penulis
