@@ -10,6 +10,7 @@ import { deriveThumbnailUrl } from "@/lib/storage/media";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { createMetadata } from "@/lib/seo/metadata";
 import { logPageView } from "@/lib/visits/log-page-view";
+import { formatRelativeTime } from "@/lib/datetime/relative";
 import type { HeroSliderArticle } from "./(components)/hero-slider";
 import { HeroSlider } from "./(components)/hero-slider";
 const POPULAR_LOOKBACK_DAYS = 7;
@@ -48,14 +49,9 @@ export async function generateMetadata(): Promise<Metadata> {
   });
 }
 
-function formatDate(date: Date | string | null | undefined) {
-  if (!date) return "-";
-  const value = typeof date === "string" ? new Date(date) : date;
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(value);
+function formatRelativeLabel(date: Date | string | null | undefined) {
+  const label = formatRelativeTime(date);
+  return label || "-";
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -111,7 +107,7 @@ export default async function HomePage() {
     id: article.id,
     slug: article.slug,
     title: article.title,
-    publishDateLabel: formatDate(article.publishedAt),
+    publishDateLabel: formatRelativeLabel(article.publishedAt ?? article.createdAt),
     categories: article.categories.map((entry) => entry.category.name),
     featuredImage: article.featuredMedia
       ? {
@@ -259,7 +255,7 @@ export default async function HomePage() {
                             {article.title}
                           </p>
                           <span className="text-[10px] text-muted-foreground">
-                            {formatDate(article.publishedAt)}
+                            {formatRelativeLabel(article.publishedAt)}
                           </span>
                         </div>
                       </Link>
@@ -299,7 +295,7 @@ export default async function HomePage() {
                             {article.title}
                           </p>
                           <span className="text-[10px] text-muted-foreground">
-                            {formatDate(article.publishedAt)}
+                            {formatRelativeLabel(article.publishedAt)}
                           </span>
                         </div>
                       </Link>
@@ -337,7 +333,7 @@ export default async function HomePage() {
                               {getPrimaryCategory(article)}
                             </span>
                             <span className="text-[10px] text-muted-foreground">
-                              {formatDate(article.publishedAt)}
+                              {formatRelativeLabel(article.publishedAt)}
                             </span>
                           </div>
                           <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-foreground transition group-hover:text-primary">
@@ -393,7 +389,9 @@ export default async function HomePage() {
                       <h3 className="line-clamp-2 text-[13px] font-semibold leading-snug text-foreground transition group-hover:text-primary">
                         {article.title}
                       </h3>
-                      <span className="text-[11px] text-muted-foreground">{formatDate(article.publishedAt)}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {formatRelativeLabel(article.publishedAt)}
+                      </span>
                     </div>
                   </Link>
                 );
@@ -436,7 +434,7 @@ export default async function HomePage() {
                         {article.title}
                       </p>
                       <span className="text-xs text-muted-foreground">
-                        {getPrimaryCategory(article)} • {formatDate(article.publishedAt)}
+                        {getPrimaryCategory(article)} • {formatRelativeLabel(article.publishedAt)}
                       </span>
                     </Link>
                   ))}
@@ -500,7 +498,7 @@ export default async function HomePage() {
                       {article.title}
                     </h3>
                     <span className="text-xs text-muted-foreground">
-                      {formatDate(article.publishedAt)}
+                      {formatRelativeLabel(article.publishedAt)}
                     </span>
                   </div>
                 </Link>
@@ -559,7 +557,7 @@ export default async function HomePage() {
                                 {article.title}
                               </p>
                               <span className="text-xs text-muted-foreground">
-                                {getPrimaryCategory(article)} • {formatDate(article.publishedAt)}
+                                {getPrimaryCategory(article)} • {formatRelativeLabel(article.publishedAt)}
                               </span>
                             </div>
                           </Link>

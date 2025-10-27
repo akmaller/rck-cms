@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import type { SidebarArticle } from "@/lib/articles/sidebar";
 import { deriveThumbnailUrl } from "@/lib/storage/media";
+import { formatRelativeTime } from "@/lib/datetime/relative";
 
 type PopularTag = {
   id: string;
@@ -20,17 +21,9 @@ type ArticleSidebarProps = {
   relatedArticles?: SidebarArticle[];
 };
 
-const dateFormatter = new Intl.DateTimeFormat("id-ID", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-
 function formatDateLabel(date: Date | string | null | undefined) {
-  if (!date) return "-";
-  const value = typeof date === "string" ? new Date(date) : date;
-  if (Number.isNaN(value.getTime())) return "-";
-  return dateFormatter.format(value);
+  const label = formatRelativeTime(date);
+  return label || "-";
 }
 
 function getPrimaryCategory(entry: { categories: { category: { name: string } }[] }) {

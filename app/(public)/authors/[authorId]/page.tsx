@@ -11,6 +11,7 @@ import { deriveThumbnailUrl } from "@/lib/storage/media";
 import { createMetadata } from "@/lib/seo/metadata";
 import { ArticleLoadMoreList } from "@/app/(public)/(components)/article-load-more-list";
 import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
+import { formatRelativeTime } from "@/lib/datetime/relative";
 
 const sidebarArticleInclude = {
   categories: {
@@ -167,13 +168,8 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const latestSidebarArticles = latestSidebarRaw.slice(0, 4);
 
   const formatDate = (date: Date | string | null | undefined) => {
-    if (!date) return "-";
-    const value = typeof date === "string" ? new Date(date) : date;
-    return new Intl.DateTimeFormat("id-ID", {
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    }).format(value);
+    const label = formatRelativeTime(date);
+    return label || "-";
   };
 
   const formatJoinDate = formatDate(author.createdAt);

@@ -1,18 +1,11 @@
 import { type ArticleComment } from "@/lib/comments/service";
+import { formatRelativeTime } from "@/lib/datetime/relative";
 import { cn } from "@/lib/utils";
 
 type CommentListProps = {
   comments: ArticleComment[];
   currentUserId?: string | null;
 };
-
-const timeFormatter = new Intl.DateTimeFormat("id-ID", {
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 function getInitialLetter(name: string | null | undefined) {
   const trimmed = name?.trim();
@@ -38,6 +31,7 @@ export function CommentList({ comments, currentUserId }: CommentListProps) {
         const authorName = comment.user?.name ?? "Pengunjung";
         const isCurrentUser = currentUserId ? comment.userId === currentUserId : false;
         const initials = getInitialLetter(authorName);
+        const relativeLabel = formatRelativeTime(createdAt);
 
         return (
           <article
@@ -56,7 +50,7 @@ export function CommentList({ comments, currentUserId }: CommentListProps) {
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="font-semibold text-foreground">{authorName}</span>
                   <span aria-hidden>•</span>
-                  <time dateTime={createdAt.toISOString()}>{timeFormatter.format(createdAt)}</time>
+                  <time dateTime={createdAt.toISOString()}>{relativeLabel}</time>
                   {isCurrentUser ? (
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
                       Komentar Anda

@@ -17,6 +17,7 @@ import { getSiteConfig } from "@/lib/site-config/server";
 import { ArticleSidebar } from "@/app/(public)/(components)/article-sidebar";
 import { getArticleSidebarData } from "@/lib/articles/sidebar";
 import { ShareActions } from "@/app/(public)/(components)/share-actions";
+import { formatRelativeTime } from "@/lib/datetime/relative";
 import { CommentForm } from "./comment-form";
 import { CommentList } from "./comment-list";
 
@@ -126,18 +127,8 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
     userAgent,
   });
 
-  const dateFormatter = new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-
-  const formatDateLabel = (date: Date | string | null | undefined) => {
-    if (!date) return "-";
-    const value = typeof date === "string" ? new Date(date) : date;
-    if (Number.isNaN(value.getTime())) return "-";
-    return dateFormatter.format(value);
-  };
+  const publishedAtLabel =
+    formatRelativeTime(article.publishedAt ?? article.createdAt) || "-";
 
   const sessionUserName =
     session?.user?.name?.trim() ||
@@ -168,7 +159,7 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
                     <span aria-hidden>•</span>
                   </>
                 ) : null}
-                <span>{formatDateLabel(article.publishedAt)}</span>
+                <span>{publishedAtLabel}</span>
                 {article.author ? (
                   <>
                     <span aria-hidden>•</span>

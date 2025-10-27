@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { ArticleStatus } from "@prisma/client";
 
 import { buttonVariants } from "@/lib/button-variants";
+import { formatRelativeTime } from "@/lib/datetime/relative";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config/server";
@@ -64,26 +65,29 @@ export default async function StaticPagesIndex() {
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {pages.map((page) => (
-            <Card key={page.id} className="border-border/70">
-              <CardHeader>
-                <CardTitle>{page.title}</CardTitle>
-                <CardDescription>
-                  Diperbarui {page.updatedAt.toLocaleDateString("id-ID")}
-                </CardDescription>
-              </CardHeader>
-              {page.excerpt ? (
+          {pages.map((page) => {
+            const updatedLabel = formatRelativeTime(page.updatedAt);
+            return (
+              <Card key={page.id} className="border-border/70">
+                <CardHeader>
+                  <CardTitle>{page.title}</CardTitle>
+                  <CardDescription>
+                    {updatedLabel ? `Diperbarui ${updatedLabel}` : ""}
+                  </CardDescription>
+                </CardHeader>
+                {page.excerpt ? (
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground line-clamp-3">{page.excerpt}</p>
+                  </CardContent>
+                ) : null}
                 <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-3">{page.excerpt}</p>
+                  <Link className={buttonVariants({ variant: "outline", size: "sm" })} href={`/pages/${page.slug}`}>
+                    Baca Halaman
+                  </Link>
                 </CardContent>
-              ) : null}
-              <CardContent>
-                <Link className={buttonVariants({ variant: "outline", size: "sm" })} href={`/pages/${page.slug}`}>
-                  Baca Halaman
-                </Link>
-              </CardContent>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       )}
     </section>

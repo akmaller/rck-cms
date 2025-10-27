@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { formatRelativeTime } from "@/lib/datetime/relative";
+
 type ArticleListCardProps = {
   href: string;
   title: string;
@@ -17,17 +19,9 @@ type ArticleListCardProps = {
   } | null;
 };
 
-const dateFormatter = new Intl.DateTimeFormat("id-ID", {
-  day: "numeric",
-  month: "short",
-  year: "numeric",
-});
-
 function formatDateLabel(date: Date | string | null | undefined) {
-  if (!date) return "-";
-  const value = typeof date === "string" ? new Date(date) : date;
-  if (Number.isNaN(value.getTime())) return "-";
-  return dateFormatter.format(value);
+  const label = formatRelativeTime(date);
+  return label || "-";
 }
 
 export function ArticleListCard({

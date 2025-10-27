@@ -20,6 +20,7 @@ export const publicNavigation: NavItem[] = [
 export const dashboardNavigation: NavItem[] = [
   { name: "Dasbor", href: "/dashboard", roles: ["ADMIN", "EDITOR", "AUTHOR"] },
   { name: "Artikel", href: "/dashboard/articles", roles: ["ADMIN", "EDITOR", "AUTHOR"] },
+  { name: "Komentar", href: "/dashboard/comments", roles: ["ADMIN", "EDITOR", "AUTHOR"] },
   { name: "Kategori & Tag", href: "/dashboard/taxonomies", roles: ["ADMIN", "EDITOR"] },
   { name: "Media", href: "/dashboard/media", roles: ["ADMIN", "EDITOR", "AUTHOR"] },
   { name: "Album", href: "/dashboard/albums", roles: ["ADMIN", "EDITOR"] },

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import { ArticleStatus, CommentStatus, Prisma } from "@prisma/client";
 
+import { writeAuditLog } from "@/lib/audit/log";
 import { isRateLimited } from "@/lib/rate-limit";
 import { getPrismaClient } from "@/lib/security/prisma-client";
 import { getSiteConfig } from "@/lib/site-config/server";
@@ -196,7 +197,7 @@ export async function createArticleComment(params: {
   const sanitizedAgent = sanitizeMetadata(params.userAgent, 500);
 
   if (commentDelegate?.create) {
-    return commentDelegate.create({
+    const created = await commentDelegate.create({
       data: {
         articleId: params.articleId,
         userId: params.userId,
@@ -206,6 +207,17 @@ export async function createArticleComment(params: {
         userAgent: sanitizedAgent,
       },
     });
+    await writeAuditLog({
+      action: "comment.create",
+      entity: "Comment",
+      entityId: created.id,
+      metadata: {
+        articleId: params.articleId,
+        ipAddress: sanitizedIp,
+        userAgent: sanitizedAgent,
+      },
+    });
+    return created;
   }
 
   // Fallback when Prisma client belum digenerate ulang.
@@ -217,6 +229,17 @@ export async function createArticleComment(params: {
       VALUES (${generatedId}, ${params.articleId}, ${params.userId}, ${sanitizedContent}, ${statusLiteral}, ${sanitizedIp}, ${sanitizedAgent})
     `
   );
+
+  await writeAuditLog({
+    action: "comment.create",
+    entity: "Comment",
+    entityId: generatedId,
+    metadata: {
+      articleId: params.articleId,
+      ipAddress: sanitizedIp,
+      userAgent: sanitizedAgent,
+    },
+  });
 
   return null;
 }
