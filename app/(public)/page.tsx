@@ -34,6 +34,17 @@ export async function generateMetadata(): Promise<Metadata> {
     title: config.metadata.title ?? config.name,
     description: config.metadata.description ?? config.description,
     path: "/",
+    image: config.logoUrl
+      ? {
+          url: config.logoUrl,
+          alt: `${config.name} logo`,
+        }
+      : config.ogImage
+        ? {
+            url: config.ogImage,
+            alt: config.name,
+          }
+        : null,
   });
 }
 

@@ -5,6 +5,14 @@ import { siteConfig as defaultSiteConfig } from "@/config/site";
 import type { ConfigValues } from "@/components/forms/config-form";
 import type { ResolvedSiteConfig } from "./types";
 
+const trimOrNull = (value: unknown) => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
   const metadata = values?.metadata ?? {};
   const social = values?.social ?? {};
@@ -19,20 +27,26 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
     normalizePolicySlug(registrationSetting.privacyPolicyPageSlug) ??
     normalizePolicySlug(registrationDefaults.privacyPolicyPageSlug);
 
+  const resolvedLogoUrl = trimOrNull(values?.logoUrl) ?? defaultSiteConfig.logoUrl;
+  const resolvedIconUrl = trimOrNull(values?.iconUrl) ?? defaultSiteConfig.iconUrl;
+  const resolvedSiteUrl = trimOrNull(values?.siteUrl) ?? defaultSiteConfig.url;
+  const resolvedContactEmail = trimOrNull(values?.contactEmail) ?? defaultSiteConfig.contactEmail;
+  const resolvedOgImage = trimOrNull(defaultSiteConfig.ogImage) ?? defaultSiteConfig.ogImage;
+
   return {
     ...defaultSiteConfig,
     name: values?.siteName?.trim() || defaultSiteConfig.name,
     description:
       metadata.description?.trim() || values?.tagline?.trim() || defaultSiteConfig.description,
     tagline: values?.tagline?.trim() || defaultSiteConfig.tagline,
-    logoUrl: values?.logoUrl?.trim() || defaultSiteConfig.logoUrl,
-    iconUrl: values?.iconUrl?.trim() || defaultSiteConfig.iconUrl,
-    contactEmail: values?.contactEmail?.trim() || defaultSiteConfig.contactEmail,
+    logoUrl: resolvedLogoUrl,
+    iconUrl: resolvedIconUrl,
+    contactEmail: resolvedContactEmail,
     links: {
-      facebook: social.facebook?.trim() || defaultSiteConfig.links.facebook,
-      instagram: social.instagram?.trim() || defaultSiteConfig.links.instagram,
-      twitter: social.twitter?.trim() || defaultSiteConfig.links.twitter,
-      youtube: social.youtube?.trim() || defaultSiteConfig.links.youtube,
+      facebook: trimOrNull(social.facebook) ?? defaultSiteConfig.links.facebook,
+      instagram: trimOrNull(social.instagram) ?? defaultSiteConfig.links.instagram,
+      twitter: trimOrNull(social.twitter) ?? defaultSiteConfig.links.twitter,
+      youtube: trimOrNull(social.youtube) ?? defaultSiteConfig.links.youtube,
     },
     metadata: {
       title: metadata.title?.trim() || defaultSiteConfig.metadata?.title || defaultSiteConfig.name,
@@ -40,11 +54,13 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
         metadata.description?.trim() || defaultSiteConfig.metadata?.description || defaultSiteConfig.description,
       keywords:
         Array.isArray(metadata.keywords) && metadata.keywords.length > 0
-          ? metadata.keywords.filter(Boolean)
+          ? metadata.keywords
+              .map((keyword) => (typeof keyword === "string" ? keyword.trim() : ""))
+              .filter((keyword) => Boolean(keyword && keyword.length > 0))
           : defaultSiteConfig.metadata?.keywords ?? [],
     },
-    ogImage: defaultSiteConfig.ogImage,
-    url: defaultSiteConfig.url,
+    ogImage: resolvedOgImage,
+    url: resolvedSiteUrl,
     registration: {
       enabled:
         registrationSetting.enabled ?? registrationDefaults.enabled ?? true,
