@@ -11,7 +11,14 @@ export type AuditLogInput = {
   userId?: string;
 };
 
-type PendingLog = AuditLogInput & { userId: string | null; createdAt: Date };
+type PendingLog = {
+  action: string;
+  entity: string;
+  entityId: string;
+  metadata?: Prisma.InputJsonValue | Prisma.NullTypes.JsonNull;
+  userId: string | null;
+  createdAt: Date;
+};
 
 const globalScope = globalThis as unknown as {
   __auditLogQueue?: PendingLog[];
@@ -122,9 +129,14 @@ export async function writeAuditLog(entry: AuditLogInput) {
   const userId = entry.userId ?? session?.user?.id ?? null;
 
   const queue = getQueue();
+  const normalizedMetadata =
+    entry.metadata === undefined ? undefined : entry.metadata ?? Prisma.JsonNull;
+
   queue.push({
-    ...entry,
-    metadata: entry.metadata ?? Prisma.JsonNull,
+    action: entry.action,
+    entity: entry.entity,
+    entityId: entry.entityId,
+    metadata: normalizedMetadata,
     userId,
     createdAt: new Date(),
   });
