@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="w-full" disabled={pending || disabled}>
+    <Button type="submit" className="h-11 w-full text-base font-semibold" disabled={pending || disabled}>
       {pending ? "Memproses..." : "Perbarui Password"}
     </Button>
   );
@@ -22,7 +22,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
   const disabled = Boolean(state?.success);
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <input type="hidden" name="token" value={token} />
       <div className="space-y-2">
         <Label htmlFor="password">Password Baru</Label>
@@ -33,6 +33,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
           autoComplete="new-password"
           required
           disabled={disabled}
+          className="h-11"
         />
         {state?.fieldErrors?.password ? <p className="text-xs text-destructive">{state.fieldErrors.password}</p> : null}
       </div>
@@ -45,6 +46,7 @@ export function ResetPasswordForm({ token }: { token: string }) {
           autoComplete="new-password"
           required
           disabled={disabled}
+          className="h-11"
         />
         {state?.fieldErrors?.confirmPassword ? (
           <p className="text-xs text-destructive">{state.fieldErrors.confirmPassword}</p>

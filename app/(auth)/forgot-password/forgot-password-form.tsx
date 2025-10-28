@@ -12,7 +12,7 @@ import { TurnstileField } from "@/components/security/turnstile-field";
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="w-full" disabled={pending || disabled}>
+    <Button type="submit" className="h-11 w-full text-base font-semibold" disabled={pending || disabled}>
       {pending ? "Memproses..." : "Kirim Tautan Reset"}
     </Button>
   );
@@ -39,15 +39,16 @@ export function ForgotPasswordForm({ turnstileSiteKey }: ForgotPasswordFormProps
   }, [state?.success, turnstileSiteKey]);
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <div className="space-y-2">
         <Label htmlFor="email">Email Terdaftar</Label>
         <Input
           id="email"
           name="email"
           type="email"
-          placeholder="nama@contoh.com"
+          placeholder="email@anda.com"
           autoComplete="email"
+          className="h-11"
           required
         />
         {state?.fieldErrors?.email ? <p className="text-xs text-destructive">{state.fieldErrors.email}</p> : null}

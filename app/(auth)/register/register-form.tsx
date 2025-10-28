@@ -18,7 +18,7 @@ type RegisterFormProps = {
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="w-full" disabled={pending || disabled}>
+    <Button type="submit" className="h-11 w-full text-base font-semibold" disabled={pending || disabled}>
       {pending ? "Memproses..." : "Daftar"}
     </Button>
   );
@@ -54,36 +54,58 @@ export function RegisterForm({ privacyPolicyUrl, turnstileSiteKey }: RegisterFor
   const disableSubmit = turnstileSiteKey ? !turnstileValid : false;
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <div className="space-y-2">
         <Label htmlFor="name">Nama Lengkap</Label>
-        <Input id="name" name="name" type="text" placeholder="Nama lengkap Anda" required />
+        <Input id="name" name="name" type="text" placeholder="Nama lengkap Anda" className="h-11" required />
         {state?.fieldErrors?.name ? <p className="text-xs text-destructive">{state.fieldErrors.name}</p> : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" placeholder="nama@contoh.com" autoComplete="email" required />
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          placeholder="email@anda.com"
+          autoComplete="email"
+          className="h-11"
+          required
+        />
         {state?.fieldErrors?.email ? <p className="text-xs text-destructive">{state.fieldErrors.email}</p> : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" autoComplete="new-password" required />
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          className="h-11"
+          required
+        />
         {state?.fieldErrors?.password ? <p className="text-xs text-destructive">{state.fieldErrors.password}</p> : null}
       </div>
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">Konfirmasi Password</Label>
-        <Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" required />
+        <Input
+          id="confirmPassword"
+          name="confirmPassword"
+          type="password"
+          autoComplete="new-password"
+          className="h-11"
+          required
+        />
         {state?.fieldErrors?.confirmPassword ? (
           <p className="text-xs text-destructive">{state.fieldErrors.confirmPassword}</p>
         ) : null}
       </div>
       {privacyPolicyUrl ? (
         <p className="text-xs text-muted-foreground">
-          Dengan mendaftar, Anda menyetujui{" "}
+          Dengan melakukan registrasi, Anda menyetujui{" "}
           <Link href={privacyPolicyUrl} className="font-medium text-primary hover:underline">
-            Kebijakan &amp; Privasi
-          </Link>{" "}
-          kami.
+            Kebijakan &amp; Privasi kami
+          </Link>
+          .
         </p>
       ) : null}
       <TurnstileField

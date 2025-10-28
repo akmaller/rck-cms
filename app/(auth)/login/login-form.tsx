@@ -12,7 +12,7 @@ import { TurnstileField } from "@/components/security/turnstile-field";
 function SubmitButton({ disabled }: { disabled: boolean }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" className="w-full" disabled={pending || disabled}>
+    <Button type="submit" className="h-11 w-full text-base font-semibold" disabled={pending || disabled}>
       {pending ? "Memproses..." : "Masuk"}
     </Button>
   );
@@ -53,21 +53,29 @@ export function LoginForm({ callbackUrl, turnstileSiteKey }: LoginFormProps) {
   const disableSubmit = turnstileSiteKey ? !turnstileValid : false;
 
   return (
-    <form action={formAction} className="space-y-4">
+    <form action={formAction} className="space-y-5">
       <div className="space-y-2">
         <Label htmlFor="email">Email</Label>
         <Input
           id="email"
           name="email"
           type="email"
-          placeholder="admin@roemahcita.local"
+          placeholder="email@anda.com"
           autoComplete="email"
+          className="h-11"
           required
         />
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
-        <Input id="password" name="password" type="password" required autoComplete="current-password" />
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          required
+          autoComplete="current-password"
+          className="h-11"
+        />
       </div>
       <TurnstileField
         siteKey={turnstileSiteKey}
