@@ -14,9 +14,11 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { notifyError, notifyInfo, notifySuccess, notifyWarning } from "@/lib/notifications/client";
+import { notifyError, notifyInfo, notifySuccess } from "@/lib/notifications/client";
 
 import { deleteUserAction, resetTwoFactorAction, updateUserAction } from "../actions";
+import type { DeleteUserOptions } from "../delete-user-types";
+import { UserDeleteDialog } from "../user-delete-dialog";
 
 type UserEditFormProps = {
   userId: string;
@@ -27,6 +29,8 @@ type UserEditFormProps = {
   initialEmailVerified: boolean;
   initialCanPublish: boolean;
   initialTwoFactorEnabled: boolean;
+  currentUserId: string;
+  availableUsers: Array<{ id: string; name: string; email: string }>;
 };
 
 export function UserEditForm({
@@ -38,13 +42,15 @@ export function UserEditForm({
   initialEmailVerified,
   initialCanPublish,
   initialTwoFactorEnabled,
+  currentUserId,
+  availableUsers,
 }: UserEditFormProps) {
   const router = useRouter();
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [isSaving, startSaving] = useTransition();
   const [isDeleting, startDeleting] = useTransition();
   const [isResetting, startResetting] = useTransition();
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedRole, setSelectedRole] = useState<"ADMIN" | "EDITOR" | "AUTHOR">(initialRole);
   const [emailVerified, setEmailVerified] = useState<boolean>(
     initialRole === "AUTHOR" ? initialEmailVerified : true
@@ -106,23 +112,20 @@ export function UserEditForm({
   };
 
   const handleDelete = () => {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      notifyWarning("Klik hapus sekali lagi untuk konfirmasi.");
-      return;
-    }
+    setDeleteDialogOpen(true);
+  };
 
+  const handleConfirmDeletion = (options: DeleteUserOptions) => {
     startDeleting(async () => {
-      const result = await deleteUserAction(userId);
+      const result = await deleteUserAction(userId, options);
       if (!result.success) {
         const message = result.message ?? "Gagal menghapus pengguna.";
         notifyError(message);
         setStatus({ type: "error", message });
-        setConfirmDelete(false);
         return;
       }
 
-      notifySuccess("Pengguna telah dihapus.");
+      notifySuccess(result.message ?? "Pengguna telah dihapus.");
       router.push("/dashboard/users");
       router.refresh();
     });
@@ -305,41 +308,38 @@ export function UserEditForm({
         <CardHeader>
           <CardTitle>Hapus Pengguna</CardTitle>
           <CardDescription>
-            Tindakan ini akan menghapus akun dan memindahkan artikel ke akun Anda. Harap berhati-hati.
+            Tentukan terlebih dahulu bagaimana komentar dan artikel pengguna ini akan ditangani sebelum penghapusan.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            Setelah dihapus, pengguna tidak dapat dikembalikan kecuali ditambahkan kembali secara manual.
+            Penghapusan bersifat permanen. Komentar dan artikel dapat dipindahkan ke pengguna lain, akun anonim, atau dihapus.
           </p>
-          {confirmDelete ? (
-            <p className="text-sm font-medium text-destructive">
-              Klik &ldquo;Hapus Sekarang&rdquo; untuk konfirmasi. Artikel akan dialihkan ke akun Anda.
-            </p>
-          ) : null}
         </CardContent>
-        <CardFooter className="flex items-center justify-between">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isDeleting}
-            onClick={() => {
-              setConfirmDelete(false);
-              setStatus(null);
-            }}
-          >
-            Batal
-          </Button>
-          <Button
-            type="button"
-            variant="destructive"
-            disabled={isDeleting}
-            onClick={handleDelete}
-          >
-            {isDeleting ? "Menghapus..." : confirmDelete ? "Hapus Sekarang" : "Hapus Pengguna"}
+        <CardFooter className="flex items-center justify-end">
+          <Button type="button" variant="destructive" disabled={isDeleting} onClick={handleDelete}>
+            {isDeleting ? "Menghapus..." : "Hapus Pengguna"}
           </Button>
         </CardFooter>
       </Card>
+
+      <UserDeleteDialog
+        key={deleteDialogOpen ? userId : "closed"}
+        open={deleteDialogOpen}
+        user={{ id: userId, name: initialName, email: initialEmail }}
+        currentUserId={currentUserId}
+        availableUsers={availableUsers}
+        isSubmitting={isDeleting}
+        onClose={() => {
+          if (!isDeleting) {
+            setDeleteDialogOpen(false);
+          }
+        }}
+        onConfirm={(options) => {
+          setDeleteDialogOpen(false);
+          handleConfirmDeletion(options);
+        }}
+      />
     </div>
   );
 }

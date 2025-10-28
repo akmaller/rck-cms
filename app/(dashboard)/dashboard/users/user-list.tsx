@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { notifyError, notifySuccess } from "@/lib/notifications/client";
 
 import { deleteUserAction } from "./actions";
+import type { DeleteUserOptions } from "./delete-user-types";
+import { UserDeleteDialog } from "./user-delete-dialog";
 
 type UserListEntry = {
   id: string;
@@ -19,35 +21,41 @@ type UserListEntry = {
 type UserListProps = {
   users: UserListEntry[];
   currentUserId: string;
+  availableUsers: Array<{ id: string; name: string; email: string }>;
   emptyMessage?: string;
 };
 
-export function UserList({ users, currentUserId, emptyMessage }: UserListProps) {
+export function UserList({ users, currentUserId, availableUsers, emptyMessage }: UserListProps) {
   const router = useRouter();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [isDeleting, startDeleting] = useTransition();
+  const [dialogUser, setDialogUser] = useState<UserListEntry | null>(null);
 
   const handleRowClick = (userId: string) => {
     router.push(`/dashboard/users/${userId}`);
   };
 
-  const handleDelete = (userId: string) => {
-    const confirmMessage =
-      "Hapus pengguna ini? Artikel pengguna akan dialihkan ke akun Anda.";
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
+  const closeDialog = () => {
+    if (isDeleting) return;
+    setDialogUser(null);
+  };
 
+  const initiateDelete = (user: UserListEntry) => {
+    setDialogUser(user);
+  };
+
+  const handleConfirmDelete = (user: UserListEntry, options: DeleteUserOptions) => {
     startDeleting(async () => {
-      setPendingDeleteId(userId);
-      const result = await deleteUserAction(userId);
+      setPendingDeleteId(user.id);
+      const result = await deleteUserAction(user.id, options);
       if (!result.success) {
         notifyError(result.message ?? "Gagal menghapus pengguna.");
         setPendingDeleteId(null);
         return;
       }
-      notifySuccess("Pengguna dihapus.");
+      notifySuccess(result.message ?? "Pengguna dihapus.");
       setPendingDeleteId(null);
+      setDialogUser(null);
       router.refresh();
     });
   };
@@ -101,7 +109,7 @@ export function UserList({ users, currentUserId, emptyMessage }: UserListProps) 
                     notifyError("Tidak dapat menghapus akun Anda sendiri.");
                     return;
                   }
-                  handleDelete(user.id);
+                  initiateDelete(user);
                 }}
               >
                 {isDeleting && pendingDeleteId === user.id ? "Menghapus..." : "Hapus"}
@@ -115,6 +123,19 @@ export function UserList({ users, currentUserId, emptyMessage }: UserListProps) 
           {emptyMessage ?? "Belum ada pengguna."}
         </p>
       ) : null}
+      <UserDeleteDialog
+        key={dialogUser ? dialogUser.id : "closed"}
+        open={dialogUser !== null}
+        user={dialogUser}
+        currentUserId={currentUserId}
+        availableUsers={availableUsers}
+        onClose={closeDialog}
+        onConfirm={(options) => {
+          if (!dialogUser) return;
+          handleConfirmDelete(dialogUser, options);
+        }}
+        isSubmitting={isDeleting}
+      />
     </div>
   );
 }

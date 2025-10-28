@@ -1,14 +1,21 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 
-import type { UserRole } from "@prisma/client";
+import { Prisma, type UserRole } from "@prisma/client";
 
 import { requireAuth } from "@/lib/auth/permissions";
 import { hashPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
 import { userUpdateSchema } from "@/lib/validators/user";
 import { writeAuditLog } from "@/lib/audit/log";
+import {
+  USER_DELETE_TARGET_ANON,
+  type DeleteUserArticleStrategy,
+  type DeleteUserCommentStrategy,
+  type DeleteUserOptions,
+} from "./delete-user-types";
 
 function sanitize(value: unknown) {
   if (typeof value !== "string") {
@@ -89,7 +96,7 @@ export async function updateUserAction(userId: string, formData: FormData) {
     if (typeof canPublishSetting === "boolean" && canPublishSetting !== targetUser.canPublish) {
       await prisma.$executeRawUnsafe(
         `UPDATE "User" SET "canPublish" = ${canPublishSetting ? "TRUE" : "FALSE"} WHERE "id" = $1`,
-        userId
+        userId,
       );
     }
 
@@ -118,7 +125,96 @@ export async function updateUserAction(userId: string, formData: FormData) {
   }
 }
 
-export async function deleteUserAction(userId: string) {
+type DeleteActionResult =
+  | { success: true; message?: string }
+  | { success: false; message: string };
+
+const ANON_EMAIL = "anonim@system.local";
+const ANON_NAME = "Pengguna Anonim";
+
+async function ensureAnonymousUser(tx: Prisma.TransactionClient) {
+  const existing = await tx.user.findUnique({
+    where: { email: ANON_EMAIL },
+    select: { id: true },
+  });
+  if (existing) {
+    return existing.id;
+  }
+
+  const randomPassword = randomUUID();
+  const passwordHash = await hashPassword(randomPassword);
+
+  const created = await tx.user.create({
+    data: {
+      email: ANON_EMAIL,
+      name: ANON_NAME,
+      role: "AUTHOR",
+      passwordHash,
+      canPublish: false,
+    },
+    select: { id: true },
+  });
+  return created.id;
+}
+
+async function resolveTransferTarget(
+  tx: Prisma.TransactionClient,
+  requestedTarget: string,
+  fallbackUserId: string,
+  userBeingDeletedId: string,
+) {
+  if (!requestedTarget) {
+    requestedTarget = fallbackUserId;
+  }
+
+  if (requestedTarget === USER_DELETE_TARGET_ANON) {
+    return ensureAnonymousUser(tx);
+  }
+
+  if (requestedTarget === userBeingDeletedId) {
+    throw new Error("TARGET_SAME_AS_SOURCE");
+  }
+
+  const target = await tx.user.findUnique({
+    where: { id: requestedTarget },
+    select: { id: true },
+  });
+  if (!target) {
+    throw new Error("TARGET_USER_NOT_FOUND");
+  }
+  return target.id;
+}
+
+function normalizeCommentStrategy(
+  strategy: DeleteUserCommentStrategy | undefined,
+  fallbackUserId: string,
+): DeleteUserCommentStrategy {
+  if (!strategy) {
+    return { mode: "transfer", targetUserId: fallbackUserId };
+  }
+  if (strategy.mode === "transfer" && !strategy.targetUserId) {
+    return { mode: "transfer", targetUserId: fallbackUserId };
+  }
+  return strategy;
+}
+
+function normalizeArticleStrategy(
+  strategy: DeleteUserArticleStrategy | undefined,
+  fallbackUserId: string,
+): DeleteUserArticleStrategy {
+  if (!strategy) {
+    return { mode: "transfer", targetUserId: fallbackUserId };
+  }
+  if (strategy.mode === "transfer" && !strategy.targetUserId) {
+    return { mode: "transfer", targetUserId: fallbackUserId };
+  }
+  return strategy;
+}
+
+export async function deleteUserAction(
+  userId: string,
+  options?: DeleteUserOptions,
+): Promise<DeleteActionResult> {
   try {
     const session = await requireAuth();
     if ((session.user.role ?? "") !== "ADMIN") {
@@ -134,24 +230,58 @@ export async function deleteUserAction(userId: string) {
       return { success: false, message: "Pengguna tidak ditemukan." };
     }
 
-    await prisma.$transaction([
-      prisma.article.updateMany({
-        where: { authorId: targetUser.id },
-        data: { authorId: session.user.id },
-      }),
-      prisma.user.delete({ where: { id: targetUser.id } }),
-    ]);
+    const commentStrategy = normalizeCommentStrategy(options?.commentStrategy, session.user.id);
+    const articleStrategy = normalizeArticleStrategy(options?.articleStrategy, session.user.id);
+
+    await prisma.$transaction(async (tx) => {
+      if (commentStrategy.mode === "delete") {
+        await tx.comment.deleteMany({ where: { userId: targetUser.id } });
+      } else {
+        const commentTarget = await resolveTransferTarget(
+          tx,
+          commentStrategy.targetUserId,
+          session.user.id,
+          targetUser.id,
+        );
+        await tx.comment.updateMany({
+          where: { userId: targetUser.id },
+          data: { userId: commentTarget },
+        });
+      }
+
+      if (articleStrategy.mode === "delete") {
+        await tx.article.deleteMany({ where: { authorId: targetUser.id } });
+      } else {
+        const articleTarget = await resolveTransferTarget(
+          tx,
+          articleStrategy.targetUserId,
+          session.user.id,
+          targetUser.id,
+        );
+        await tx.article.updateMany({
+          where: { authorId: targetUser.id },
+          data: { authorId: articleTarget },
+        });
+      }
+
+      await tx.user.delete({ where: { id: targetUser.id } });
+    });
 
     await writeAuditLog({
       action: "USER_DELETE",
       entity: "User",
       entityId: targetUser.id,
-      metadata: { email: targetUser.email, deletedBy: session.user.id },
+      metadata: {
+        email: targetUser.email,
+        deletedBy: session.user.id,
+        commentStrategy,
+        articleStrategy,
+      },
     });
 
     revalidatePath("/dashboard/users");
 
-    return { success: true };
+    return { success: true, message: "Pengguna dihapus." };
   } catch (error) {
     console.error(error);
     return { success: false, message: "Gagal menghapus pengguna." };
@@ -203,12 +333,9 @@ export async function resetTwoFactorAction(userId: string) {
       },
     });
 
-    revalidatePath("/dashboard/users");
-    revalidatePath(`/dashboard/users/${userId}`);
-
-    return { success: true, message: "Autentikator pengguna telah dinonaktifkan." };
+    return { success: true, message: "Autentikator pengguna dinonaktifkan." };
   } catch (error) {
     console.error(error);
-    return { success: false, message: "Gagal mereset autentikator pengguna." };
+    return { success: false, message: "Gagal mengatur ulang autentikator pengguna." };
   }
 }

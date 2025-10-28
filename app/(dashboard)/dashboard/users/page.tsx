@@ -79,6 +79,11 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
     take: PAGE_SIZE,
   });
 
+  const transferableUsers = await prisma.user.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true },
+  });
+
   const userEntries = users.map((user) => ({
     id: user.id,
     name: user.name,
@@ -169,6 +174,7 @@ export default async function UsersPage({ searchParams }: UsersPageProps) {
             <UserList
               users={userEntries}
               currentUserId={session.user.id}
+              availableUsers={transferableUsers}
               emptyMessage={emptyMessage}
             />
             {totalEntries > 0 ? (

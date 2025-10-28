@@ -44,6 +44,11 @@ export default async function UserEditPage({ params }: UserEditPageProps) {
     redirect("/dashboard/users");
   }
 
+  const availableUsers = await prisma.user.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, email: true },
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -77,6 +82,8 @@ export default async function UserEditPage({ params }: UserEditPageProps) {
         initialEmailVerified={Boolean(user.emailVerified)}
         initialCanPublish={Boolean(user.canPublish)}
         initialTwoFactorEnabled={Boolean(user.twoFactorEnabled)}
+        currentUserId={session.user.id}
+        availableUsers={availableUsers}
       />
     </div>
   );
