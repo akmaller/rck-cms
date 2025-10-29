@@ -1,9 +1,10 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, User } from "@prisma/client";
 import type { NextAuthConfig } from "next-auth";
-import type { Adapter, AdapterUser } from "next-auth/adapters";
+import type { Adapter, AdapterSession, AdapterUser } from "next-auth/adapters";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
+import { UserRole } from "@prisma/client";
 import { z } from "zod";
 
 import { verifyPassword } from "@/lib/auth/password";
@@ -34,9 +35,102 @@ const credentialsSchema = z
     return Boolean(data.email && data.password);
   }, { message: "Kredensial tidak valid" });
 
-// Cast required because Prisma adapter ships with its own @auth/core types which
-// don't pick up our AdapterUser augmentation (role). Runtime still returns role.
-const prismaAdapter = PrismaAdapter(prisma) as Adapter;
+function toAdapterUser(user: User | null): (AdapterUser & { avatarUrl: string | null }) | null {
+  if (!user) {
+    return null;
+  }
+
+  const { avatarUrl, ...rest } = user;
+  return {
+    ...rest,
+    image: avatarUrl,
+    avatarUrl,
+  } as AdapterUser & { avatarUrl: string | null };
+}
+
+function omitUndefined<T extends Record<string, unknown>>(obj: T): T {
+  const filteredEntries = Object.entries(obj).filter(([, value]) => value !== undefined);
+  return Object.fromEntries(filteredEntries) as T;
+}
+
+const baseAdapter = PrismaAdapter(prisma);
+
+const prismaAdapter: Adapter = {
+  ...baseAdapter,
+  createUser: async (adapterData) => {
+    const data = adapterData as AdapterUser & { role?: string | null };
+    const email = data.email;
+    if (!email) {
+      throw new Error("Email is required for user creation");
+    }
+
+    const roleValue = data.role && Object.values(UserRole).includes(data.role as UserRole)
+      ? (data.role as UserRole)
+      : UserRole.AUTHOR;
+
+    const user = await prisma.user.create({
+      data: {
+        email,
+        name: data.name ?? email,
+        avatarUrl: data.image ?? null,
+        emailVerified: data.emailVerified ?? new Date(),
+        role: roleValue,
+      },
+    });
+
+    return toAdapterUser(user)!;
+  },
+  getUser: async (id) => toAdapterUser(await prisma.user.findUnique({ where: { id } })),
+  getUserByEmail: async (email) => toAdapterUser(await prisma.user.findUnique({ where: { email } })),
+  getUserByAccount: async (provider_providerAccountId) => {
+    const account = await prisma.account.findUnique({
+      where: provider_providerAccountId,
+      include: { user: true },
+    });
+    return toAdapterUser(account?.user ?? null);
+  },
+  updateUser: async (adapterData) => {
+    const data = adapterData as AdapterUser & { role?: string | null };
+    if (!data.id) {
+      throw new Error("User ID is required for update");
+    }
+
+    const updates = omitUndefined<Prisma.UserUpdateInput>({
+      name: data.name,
+      email: data.email,
+      emailVerified: data.emailVerified,
+      role:
+        data.role && Object.values(UserRole).includes(data.role as UserRole)
+          ? (data.role as UserRole)
+          : undefined,
+      avatarUrl: data.image ?? undefined,
+    });
+
+    const user = await prisma.user.update({
+      where: { id: data.id },
+      data: updates,
+    });
+
+    return toAdapterUser(user)!;
+  },
+  deleteUser: async (id) => toAdapterUser(await prisma.user.delete({ where: { id } }))!,
+  getSessionAndUser: async (sessionToken) => {
+    const result = await prisma.session.findUnique({
+      where: { sessionToken },
+      include: { user: true },
+    });
+
+    if (!result) {
+      return null;
+    }
+
+    const { user, ...session } = result;
+    return {
+      user: toAdapterUser(user)!,
+      session: session as unknown as AdapterSession,
+    };
+  },
+};
 
 export const authConfig: NextAuthConfig = {
   adapter: prismaAdapter,
