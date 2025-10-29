@@ -360,6 +360,7 @@ export const authConfig: NextAuthConfig = {
           Google({
             clientId: googleClientId,
             clientSecret: googleClientSecret,
+            allowDangerousEmailAccountLinking: true,
             profile(profile) {
               return {
                 id: profile.sub,
