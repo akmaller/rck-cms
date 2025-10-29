@@ -82,6 +82,7 @@ export function ArticleLoadMoreList({
           excerpt={article.excerpt}
           publishedAt={article.publishedAt}
           authorName={article.authorName}
+          authorAvatarUrl={article.authorAvatarUrl}
           category={article.category}
           image={article.image}
         />

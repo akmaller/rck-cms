@@ -23,7 +23,7 @@ const articleInclude = {
   featuredMedia: {
     select: { url: true, title: true, width: true, height: true },
   },
-  author: { select: { id: true, name: true } },
+  author: { select: { id: true, name: true, avatarUrl: true } },
 } satisfies Prisma.ArticleInclude;
 
 type ArticleWithRelations = Prisma.ArticleGetPayload<{ include: typeof articleInclude }>;
@@ -339,9 +339,30 @@ export default async function HomePage() {
                           <p className="line-clamp-2 text-[13px] font-semibold leading-snug text-foreground transition group-hover:text-primary">
                             {article.title}
                           </p>
-                          <span className="text-[10px] text-muted-foreground">
-                            {article.author?.name ?? "Administrator"}
-                          </span>
+                          {(() => {
+                            const authorName = article.author?.name?.trim() || "Administrator";
+                            const avatarUrl = article.author?.avatarUrl ?? null;
+                            const authorInitial = authorName.charAt(0).toUpperCase();
+                            return (
+                              <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                {avatarUrl ? (
+                                  <Image
+                                    src={avatarUrl}
+                                    alt={`Foto ${authorName}`}
+                                    width={20}
+                                    height={20}
+                                    className="h-5 w-5 rounded-full object-cover"
+                                    sizes="20px"
+                                  />
+                                ) : (
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[9px] font-semibold uppercase text-muted-foreground/70">
+                                    {authorInitial}
+                                  </span>
+                                )}
+                                <span className="font-medium text-foreground">{authorName}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                       </Link>
                     );

@@ -68,8 +68,14 @@ export async function createCommentAction(
   }
 
   const rawContent = formData.get("content");
+  const rawParentId = formData.get("parentId");
+  const parentId =
+    typeof rawParentId === "string" && rawParentId.trim().length > 0
+      ? rawParentId.trim()
+      : undefined;
   const parsed = commentCreateSchema.safeParse({
     content: typeof rawContent === "string" ? rawContent : "",
+    parentId,
   });
 
   if (!parsed.success) {
@@ -112,6 +118,7 @@ export async function createCommentAction(
       articleId,
       userId: session.user.id,
       content: parsed.data.content,
+      parentId: parsed.data.parentId,
       ipAddress,
       userAgent,
     });
@@ -141,6 +148,11 @@ export async function createCommentAction(
       if (error.message === "EMPTY_COMMENT") {
         return {
           error: "Komentar tidak boleh kosong.",
+        };
+      }
+      if (error.message === "INVALID_PARENT") {
+        return {
+          error: "Komentar yang ingin Anda balas tidak ditemukan atau sudah tidak tersedia.",
         };
       }
     }

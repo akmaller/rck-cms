@@ -20,8 +20,39 @@ const ENUM_STATUS_PUBLISHED =
     ? (CommentStatus as Record<string, CommentStatus>).PUBLISHED
     : undefined) ?? (("PUBLISHED" as unknown) as CommentStatus);
 
-export type ArticleComment = Prisma.CommentGetPayload<{
-  include: {
+export type ArticleCommentUser = {
+  id: string;
+  name: string | null;
+  avatarUrl: string | null;
+};
+
+export type ArticleComment = {
+  id: string;
+  articleId: string;
+  userId: string;
+  parentId: string | null;
+  content: string;
+  status: CommentStatus;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  user: ArticleCommentUser;
+  replies: ArticleComment[];
+};
+
+type CommentRowSelect = Prisma.CommentGetPayload<{
+  select: {
+    id: true;
+    articleId: true;
+    userId: true;
+    parentId: true;
+    content: true;
+    status: true;
+    ipAddress: true;
+    userAgent: true;
+    createdAt: true;
+    updatedAt: true;
     user: {
       select: {
         id: true;
@@ -65,6 +96,52 @@ export function sanitizeMetadata(value: string | null | undefined, maxLength = 2
   return cleaned.slice(0, maxLength);
 }
 
+function buildCommentTree(rows: CommentRowSelect[]): ArticleComment[] {
+  const nodes = new Map<string, ArticleComment>();
+  const roots: ArticleComment[] = [];
+
+  for (const row of rows) {
+    nodes.set(row.id, {
+      id: row.id,
+      articleId: row.articleId,
+      userId: row.userId,
+      parentId: row.parentId ?? null,
+      content: row.content,
+      status: row.status,
+      ipAddress: row.ipAddress ?? null,
+      userAgent: row.userAgent ?? null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      user: {
+        id: row.user.id,
+        name: row.user.name,
+        avatarUrl: row.user.avatarUrl,
+      },
+      replies: [],
+    });
+  }
+
+  for (const node of nodes.values()) {
+    if (node.parentId && nodes.has(node.parentId)) {
+      nodes.get(node.parentId)?.replies.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  const sortTree = (items: ArticleComment[]) => {
+    items.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+    for (const item of items) {
+      if (item.replies.length) {
+        sortTree(item.replies);
+      }
+    }
+  };
+
+  sortTree(roots);
+  return roots;
+}
+
 export async function getArticleComments(articleId: string) {
   const prisma = await getPrismaClient();
   if (!prisma) {
@@ -76,24 +153,36 @@ export async function getArticleComments(articleId: string) {
   }).comment;
 
   if (commentDelegate?.findMany) {
-    return commentDelegate.findMany({
+    const rows = await commentDelegate.findMany({
       where: {
         articleId,
         status: ENUM_STATUS_PUBLISHED,
       },
-      include: {
+      select: {
+        id: true,
+        articleId: true,
+        userId: true,
+        parentId: true,
+        content: true,
+        status: true,
+        ipAddress: true,
+        userAgent: true,
+        createdAt: true,
+        updatedAt: true,
         user: {
           select: { id: true, name: true, avatarUrl: true },
         },
       },
       orderBy: { createdAt: "asc" },
     });
+    return buildCommentTree(rows as CommentRowSelect[]);
   }
 
   const rows = await prisma.$queryRaw<Array<{
     id: string;
     articleId: string;
     userId: string;
+    parentId: string | null;
     content: string;
     status: string;
     ipAddress: string | null;
@@ -108,6 +197,7 @@ export async function getArticleComments(articleId: string) {
       SELECT c."id",
              c."articleId",
              c."userId",
+             c."parentId",
              c."content",
              c."status",
              c."ipAddress",
@@ -125,10 +215,11 @@ export async function getArticleComments(articleId: string) {
     `
   );
 
-  return rows.map((row) => ({
+  const mapped: CommentRowSelect[] = rows.map((row) => ({
     id: row.id,
     articleId: row.articleId,
     userId: row.userId,
+    parentId: row.parentId,
     content: row.content,
     status: (row.status as CommentStatus) ?? ENUM_STATUS_PUBLISHED,
     ipAddress: row.ipAddress,
@@ -141,6 +232,8 @@ export async function getArticleComments(articleId: string) {
       avatarUrl: row.user_avatarUrl,
     },
   }));
+
+  return buildCommentTree(mapped);
 }
 
 export async function verifyCommentTarget(articleId: string) {
@@ -169,11 +262,16 @@ export async function createArticleComment(params: {
   articleId: string;
   userId: string;
   content: string;
+  parentId?: string | null;
   ipAddress?: string | null;
   userAgent?: string | null;
 }) {
-  const parsed = commentCreateSchema.parse({ content: params.content });
+  const parsed = commentCreateSchema.parse({
+    content: params.content,
+    parentId: params.parentId ?? undefined,
+  });
   const sanitizedContent = sanitizeCommentContent(parsed.content);
+  const targetParentId = parsed.parentId ?? null;
 
   const forbiddenMatch = await detectForbiddenPhrase(sanitizedContent);
   if (forbiddenMatch) {
@@ -186,14 +284,29 @@ export async function createArticleComment(params: {
 
   await verifyCommentTarget(params.articleId);
 
-  const config = await getSiteConfig();
-  if (!(config?.comments?.enabled ?? true)) {
-    throw new Error("COMMENTS_DISABLED");
-  }
-
   const prisma = await getPrismaClient();
   if (!prisma) {
     throw new Error("TARGET_UNAVAILABLE");
+  }
+
+  let parentComment: { id: string; parentId: string | null } | null = null;
+  if (targetParentId) {
+    parentComment = await prisma.comment.findFirst({
+      where: {
+        id: targetParentId,
+        articleId: params.articleId,
+        status: ENUM_STATUS_PUBLISHED,
+      },
+      select: { id: true, parentId: true },
+    });
+    if (!parentComment || parentComment.parentId) {
+      throw new Error("INVALID_PARENT");
+    }
+  }
+
+  const config = await getSiteConfig();
+  if (!(config?.comments?.enabled ?? true)) {
+    throw new Error("COMMENTS_DISABLED");
   }
 
   const commentDelegate = (prisma as {
@@ -211,6 +324,7 @@ export async function createArticleComment(params: {
         status: ENUM_STATUS_PUBLISHED,
         ipAddress: sanitizedIp,
         userAgent: sanitizedAgent,
+        parentId: parentComment?.id ?? null,
       },
     });
     await writeAuditLog({
@@ -231,8 +345,8 @@ export async function createArticleComment(params: {
   const generatedId = randomUUID();
   await prisma.$executeRaw(
     Prisma.sql`
-      INSERT INTO "Comment" ("id", "articleId", "userId", "content", "status", "ipAddress", "userAgent")
-      VALUES (${generatedId}, ${params.articleId}, ${params.userId}, ${sanitizedContent}, ${statusLiteral}, ${sanitizedIp}, ${sanitizedAgent})
+      INSERT INTO "Comment" ("id", "articleId", "userId", "content", "status", "ipAddress", "userAgent", "parentId")
+      VALUES (${generatedId}, ${params.articleId}, ${params.userId}, ${sanitizedContent}, ${statusLiteral}, ${sanitizedIp}, ${sanitizedAgent}, ${parentComment?.id ?? null})
     `
   );
 

@@ -74,7 +74,7 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
     prisma.article.findMany({
       where,
       include: {
-        author: { select: { id: true, name: true } },
+        author: { select: { id: true, name: true, avatarUrl: true } },
         categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
         featuredMedia: { select: { url: true, title: true, width: true, height: true } },
       },
@@ -121,6 +121,7 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
                 excerpt={article.excerpt}
                 publishedAt={article.publishedAt}
                 authorName={article.author?.name}
+                authorAvatarUrl={article.author?.avatarUrl ?? null}
                 category={
                   article.categories[0]?.category
                     ? {

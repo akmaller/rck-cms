@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { ArticleStatus } from "@prisma/client";
 
 import Image from "next/image";
+import { Eye } from "lucide-react";
 import { auth } from "@/auth";
 import { ArticleViewer } from "@/components/article/article-viewer";
 import { buttonVariants } from "@/lib/button-variants";
@@ -26,7 +27,7 @@ async function getArticle(slug: string) {
   return prisma.article.findUnique({
     where: { slug },
     include: {
-      author: { select: { id: true, name: true } },
+      author: { select: { id: true, name: true, avatarUrl: true } },
       categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
       tags: { include: { tag: true } },
       featuredMedia: { select: { url: true, title: true, description: true, width: true, height: true } },
@@ -130,6 +131,16 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
     userAgent,
   });
 
+  const uniqueViews = await prisma.visitLog.findMany({
+    where: {
+      path,
+      ip: { not: null },
+    },
+    select: { ip: true },
+    distinct: ["ip"],
+  });
+  const viewCountLabel = new Intl.NumberFormat("id-ID").format(uniqueViews.length);
+
   const publishedAtLabel =
     formatRelativeTime(article.publishedAt ?? article.createdAt) || "-";
 
@@ -137,6 +148,9 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
     session?.user?.name?.trim() ||
     session?.user?.email?.split("@")[0] ||
     "Pengguna Terdaftar";
+  const authorNameDisplay = article.author?.name?.trim() ?? null;
+  const authorAvatarUrl = article.author?.avatarUrl ?? null;
+  const authorInitial = authorNameDisplay?.charAt(0).toUpperCase() ?? "A";
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -163,16 +177,39 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
                   </>
                 ) : null}
                 <span>{publishedAtLabel}</span>
+                <span aria-hidden>•</span>
+                <span
+                  className="flex items-center gap-1"
+                  title={`${viewCountLabel} kunjungan unik`}
+                  aria-label={`${viewCountLabel} kunjungan unik`}
+                >
+                  <Eye className="h-4 w-4" aria-hidden="true" />
+                  <span>{viewCountLabel}</span>
+                </span>
                 {article.author ? (
                   <>
                     <span aria-hidden>•</span>
-                    <span>
-                      oleh{" "}
+                    <span className="flex items-center gap-2">
+                      <span>oleh</span>
                       <Link
                         href={`/authors/${article.author.id}`}
-                        className="font-medium text-primary hover:underline"
+                        className="flex items-center gap-2 font-medium text-primary hover:underline"
                       >
-                        {article.author.name}
+                        {authorAvatarUrl ? (
+                          <Image
+                            src={authorAvatarUrl}
+                            alt={`Foto ${authorNameDisplay ?? "Penulis"}`}
+                            width={24}
+                            height={24}
+                            className="h-6 w-6 rounded-full object-cover"
+                            sizes="24px"
+                          />
+                        ) : (
+                          <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold uppercase text-primary">
+                            {authorInitial}
+                          </span>
+                        )}
+                        <span>{authorNameDisplay ?? article.author.name}</span>
                       </Link>
                     </span>
                   </>
@@ -281,7 +318,15 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
             )}
 
             {(commentsEnabled || comments.length > 0) ? (
-              <CommentList comments={comments} currentUserId={session?.user?.id ?? null} />
+              <CommentList
+                comments={comments}
+                articleId={article.id}
+                articleSlug={article.slug}
+                currentUserId={session?.user?.id ?? null}
+                currentUserName={sessionUserName}
+                canReply={commentsEnabled && Boolean(session?.user)}
+                forbiddenPhrases={forbiddenPhrases}
+              />
             ) : null}
           </section>
         </article>

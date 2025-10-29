@@ -25,21 +25,21 @@ export function formatRelativeTime(
   const diffAbs = Math.abs(diff);
 
   if (diffAbs < 2 * MS_PER_MINUTE) {
-    return "beberapa detik yang lalu";
+    return "beberapa detik lalu";
   }
 
   if (diffAbs < MS_PER_HOUR) {
     const minutes = Math.max(1, Math.round(diffAbs / MS_PER_MINUTE));
-    return `${minutes} menit yang lalu`;
+    return `${minutes} menit lalu`;
   }
 
   if (diffAbs < 12 * MS_PER_HOUR) {
     const hours = Math.max(1, Math.round(diffAbs / MS_PER_HOUR));
-    return `${hours} jam yang lalu`;
+    return `${hours} jam lalu`;
   }
 
   if (diffAbs < 24 * MS_PER_HOUR) {
-    return "beberapa jam yang lalu";
+    return "beberapa jam lalu";
   }
 
   const startOfToday = new Date(now);
@@ -54,7 +54,7 @@ export function formatRelativeTime(
 
   const diffDays = Math.floor(diffAbs / MS_PER_DAY);
   if (diffDays < 4) {
-    return `${diffDays} hari yang lalu`;
+    return `${diffDays} hari lalu`;
   }
 
   return new Intl.DateTimeFormat("id-ID", {

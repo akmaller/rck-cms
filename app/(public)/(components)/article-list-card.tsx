@@ -9,6 +9,7 @@ type ArticleListCardProps = {
   excerpt?: string | null;
   publishedAt?: Date | string | null;
   authorName?: string | null;
+  authorAvatarUrl?: string | null;
   category?: {
     name: string;
     slug: string;
@@ -30,11 +31,14 @@ export function ArticleListCard({
   excerpt,
   publishedAt,
   authorName,
+  authorAvatarUrl,
   category,
   image,
 }: ArticleListCardProps) {
   const thumbnail = image?.url ?? null;
   const alt = image?.alt?.trim() || title;
+  const authorLabel = authorName?.trim() || "Anonim";
+  const authorInitial = authorLabel.charAt(0).toUpperCase();
 
   return (
     <article className="group overflow-hidden rounded-2xl border border-border/60 bg-card shadow-sm transition hover:border-primary/60 hover:bg-primary/5">
@@ -78,7 +82,23 @@ export function ArticleListCard({
             <p className="line-clamp-3 text-sm text-muted-foreground">{excerpt ?? "Belum ada ringkasan."}</p>
           </div>
           <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <span>{authorName ?? "Anonim"}</span>
+            <span className="flex items-center gap-2">
+              {authorAvatarUrl ? (
+                <Image
+                  src={authorAvatarUrl}
+                  alt={`Foto ${authorLabel}`}
+                  width={24}
+                  height={24}
+                  className="h-6 w-6 rounded-full object-cover"
+                  sizes="24px"
+                />
+              ) : (
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase text-muted-foreground/70">
+                  {authorInitial}
+                </span>
+              )}
+              <span className="font-medium text-foreground">{authorLabel}</span>
+            </span>
             <Link
               href={href}
               className="inline-flex items-center gap-1 font-medium text-primary transition hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"

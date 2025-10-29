@@ -14,6 +14,13 @@ export const commentCreateSchema = z.object({
       (value) => value.replace(/[\s\r\n\t]/g, "").length > 0,
       "Komentar tidak boleh hanya berisi spasi."
     ),
+  parentId: z
+    .string()
+    .trim()
+    .cuid()
+    .optional()
+    .or(z.literal(""))
+    .transform((value) => (value ? value : undefined)),
 });
 
 export type CommentCreateInput = z.infer<typeof commentCreateSchema>;
