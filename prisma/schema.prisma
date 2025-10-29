@@ -41,6 +41,8 @@ model User {
   twoFactorTokens        TwoFactorToken[]
   passwordResetTokens    PasswordResetToken[]
   forbiddenTerms         ForbiddenTerm[]
+  articleLikes           ArticleLike[]
+  commentLikes           CommentLike[]
 
   @@index([role])
 }
@@ -103,6 +105,7 @@ model Article {
   categories      ArticleCategory[]
   tags            ArticleTag[]
   comments        Comment[]
+  likes           ArticleLike[]
 
   @@index([status, publishedAt])
   @@index([authorId])
@@ -143,10 +146,37 @@ model Comment {
   user       User           @relation(fields: [userId], references: [id])
   parent     Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies    Comment[]      @relation("CommentReplies")
+  likes      CommentLike[]
 
   @@index([articleId, status, createdAt])
   @@index([userId, createdAt])
   @@index([parentId])
+}
+
+model ArticleLike {
+  id        String   @id @default(cuid())
+  articleId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([articleId, userId])
+  @@index([userId, createdAt])
+}
+
+model CommentLike {
+  id        String   @id @default(cuid())
+  commentId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  comment Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@unique([commentId, userId])
+  @@index([userId, createdAt])
 }
 
 model Album {

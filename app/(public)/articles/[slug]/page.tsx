@@ -22,6 +22,8 @@ import { formatRelativeTime } from "@/lib/datetime/relative";
 import { CommentForm } from "./comment-form";
 import { CommentList } from "./comment-list";
 import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
+import { getArticleLikeSummary } from "@/lib/likes/service";
+import { ArticleLikeButton } from "./article-like-button";
 
 async function getArticle(slug: string) {
   return prisma.article.findUnique({
@@ -94,7 +96,6 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
 
   const categories = article.categories.map((item) => item.category);
   const tags = article.tags.map((item) => item.tag);
-  const commentsPromise = getArticleComments(article.id);
   const sessionPromise = auth();
   const siteConfigPromise = getSiteConfig();
   const forbiddenPhrasesPromise = getForbiddenPhrases();
@@ -105,11 +106,15 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
       relatedCategoryIds: categories.map((category) => category.id),
     });
 
-  const [comments, session, siteConfig, forbiddenPhrases] = await Promise.all([
+  const session = await sessionPromise;
+  const commentsPromise = getArticleComments(article.id, session?.user?.id ?? null);
+  const articleLikeSummaryPromise = getArticleLikeSummary(article.id, session?.user?.id ?? null);
+
+  const [comments, siteConfig, forbiddenPhrases, articleLikeSummary] = await Promise.all([
     commentsPromise,
-    sessionPromise,
     siteConfigPromise,
     forbiddenPhrasesPromise,
+    articleLikeSummaryPromise,
   ]);
   const commentsEnabled = siteConfig?.comments?.enabled ?? true;
   const commentCount = comments.length;
@@ -277,6 +282,13 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
                 Kami meninjau komentar untuk menjaga percakapan tetap sehat. Hindari membagikan informasi sensitif.
               </p>
             </div>
+            <ArticleLikeButton
+              articleId={article.id}
+              slug={article.slug}
+              initialLikeCount={articleLikeSummary.likeCount}
+              initialViewerHasLiked={articleLikeSummary.viewerHasLiked}
+              isAuthenticated={Boolean(session?.user)}
+            />
 
             {commentsEnabled ? (
               session?.user ? (

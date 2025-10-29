@@ -38,30 +38,34 @@ export type ArticleComment = {
   createdAt: Date;
   updatedAt: Date;
   user: ArticleCommentUser;
+  likeCount: number;
+  viewerHasLiked: boolean;
   replies: ArticleComment[];
 };
 
-type CommentRowSelect = Prisma.CommentGetPayload<{
-  select: {
-    id: true;
-    articleId: true;
-    userId: true;
-    parentId: true;
-    content: true;
-    status: true;
-    ipAddress: true;
-    userAgent: true;
-    createdAt: true;
-    updatedAt: true;
-    user: {
-      select: {
-        id: true;
-        name: true;
-        avatarUrl: true;
-      };
-    };
-  };
-}>;
+type CommentNodeInput = {
+  id: string;
+  articleId: string;
+  userId: string;
+  parentId: string | null;
+  content: string;
+  status: CommentStatus;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  user: ArticleCommentUser;
+  likeCount: number;
+  viewerHasLiked: boolean;
+};
+
+function isLikesTableUnavailable(error: unknown) {
+  if (!error || typeof error !== "object") {
+    return false;
+  }
+  const code = (error as { code?: string }).code;
+  return code === "P2021" || code === "P2026";
+}
 
 export function sanitizeCommentContent(input: string): string {
   const normalized = input
@@ -96,7 +100,7 @@ export function sanitizeMetadata(value: string | null | undefined, maxLength = 2
   return cleaned.slice(0, maxLength);
 }
 
-function buildCommentTree(rows: CommentRowSelect[]): ArticleComment[] {
+function buildCommentTree(rows: CommentNodeInput[]): ArticleComment[] {
   const nodes = new Map<string, ArticleComment>();
   const roots: ArticleComment[] = [];
 
@@ -117,6 +121,8 @@ function buildCommentTree(rows: CommentRowSelect[]): ArticleComment[] {
         name: row.user.name,
         avatarUrl: row.user.avatarUrl,
       },
+      likeCount: row.likeCount,
+      viewerHasLiked: row.viewerHasLiked,
       replies: [],
     });
   }
@@ -142,7 +148,7 @@ function buildCommentTree(rows: CommentRowSelect[]): ArticleComment[] {
   return roots;
 }
 
-export async function getArticleComments(articleId: string) {
+export async function getArticleComments(articleId: string, viewerUserId?: string | null) {
   const prisma = await getPrismaClient();
   if (!prisma) {
     return [];
@@ -153,29 +159,130 @@ export async function getArticleComments(articleId: string) {
   }).comment;
 
   if (commentDelegate?.findMany) {
-    const rows = await commentDelegate.findMany({
-      where: {
-        articleId,
-        status: ENUM_STATUS_PUBLISHED,
-      },
+    type CommentQueryRow = Prisma.CommentGetPayload<{
       select: {
-        id: true,
-        articleId: true,
-        userId: true,
-        parentId: true,
-        content: true,
-        status: true,
-        ipAddress: true,
-        userAgent: true,
-        createdAt: true,
-        updatedAt: true,
+        id: true;
+        articleId: true;
+        userId: true;
+        parentId: true;
+        content: true;
+        status: true;
+        ipAddress: true;
+        userAgent: true;
+        createdAt: true;
+        updatedAt: true;
         user: {
-          select: { id: true, name: true, avatarUrl: true },
+          select: { id: true, name: true, avatarUrl: true };
+        };
+        _count: { select: { likes: true } };
+        likes: { select: { userId: true } };
+      };
+    }>;
+
+    try {
+      const rows = (await commentDelegate.findMany({
+        where: {
+          articleId,
+          status: ENUM_STATUS_PUBLISHED,
         },
-      },
-      orderBy: { createdAt: "asc" },
-    });
-    return buildCommentTree(rows as CommentRowSelect[]);
+        select: {
+          id: true,
+          articleId: true,
+          userId: true,
+          parentId: true,
+          content: true,
+          status: true,
+          ipAddress: true,
+          userAgent: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: { id: true, name: true, avatarUrl: true },
+          },
+          _count: { select: { likes: true } },
+          ...(viewerUserId
+            ? {
+                likes: {
+                  where: { userId: viewerUserId },
+                  select: { userId: true },
+                },
+              }
+            : {}),
+        },
+        orderBy: { createdAt: "asc" },
+      })) as (CommentQueryRow & { likes?: Array<{ userId: string }> })[];
+
+      const mapped: CommentNodeInput[] = rows.map((row) => ({
+        id: row.id,
+        articleId: row.articleId,
+        userId: row.userId,
+        parentId: row.parentId ?? null,
+        content: row.content,
+        status: row.status,
+        ipAddress: row.ipAddress,
+        userAgent: row.userAgent,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        user: {
+          id: row.user.id,
+          name: row.user.name,
+          avatarUrl: row.user.avatarUrl,
+        },
+        likeCount: row._count?.likes ?? 0,
+        viewerHasLiked: Boolean(viewerUserId && row.likes && row.likes.length > 0),
+      }));
+
+      return buildCommentTree(mapped);
+    } catch (error) {
+      if (!isLikesTableUnavailable(error)) {
+        throw error;
+      }
+
+      const rows = await commentDelegate.findMany({
+        where: {
+          articleId,
+          status: ENUM_STATUS_PUBLISHED,
+        },
+        select: {
+          id: true,
+          articleId: true,
+          userId: true,
+          parentId: true,
+          content: true,
+          status: true,
+          ipAddress: true,
+          userAgent: true,
+          createdAt: true,
+          updatedAt: true,
+          user: {
+            select: { id: true, name: true, avatarUrl: true },
+          },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      const mapped: CommentNodeInput[] = rows.map((row) => ({
+        id: row.id,
+        articleId: row.articleId,
+        userId: row.userId,
+        parentId: row.parentId ?? null,
+        content: row.content,
+        status: row.status,
+        ipAddress: row.ipAddress ?? null,
+        userAgent: row.userAgent ?? null,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+        user: {
+          id: row.user.id,
+          name: row.user.name,
+          avatarUrl: row.user.avatarUrl,
+        },
+        likeCount: 0,
+        viewerHasLiked: false,
+      }));
+
+      return buildCommentTree(mapped);
+    }
   }
 
   const rows = await prisma.$queryRaw<Array<{
@@ -215,7 +322,7 @@ export async function getArticleComments(articleId: string) {
     `
   );
 
-  const mapped: CommentRowSelect[] = rows.map((row) => ({
+  const mapped: CommentNodeInput[] = rows.map((row) => ({
     id: row.id,
     articleId: row.articleId,
     userId: row.userId,
@@ -231,7 +338,63 @@ export async function getArticleComments(articleId: string) {
       name: row.user_name ?? "Pengunjung",
       avatarUrl: row.user_avatarUrl,
     },
+    likeCount: 0,
+    viewerHasLiked: false,
   }));
+
+  const commentIds = mapped.map((row) => row.id);
+  if (commentIds.length > 0) {
+    let likeCounts: Array<{
+      commentId: string;
+      likeCount: bigint;
+    }> = [];
+    try {
+      likeCounts = await prisma.$queryRaw<Array<{
+        commentId: string;
+        likeCount: bigint;
+      }>>(
+        Prisma.sql`
+          SELECT cl."commentId" AS "commentId", COUNT(*) AS "likeCount"
+          FROM "CommentLike" cl
+          WHERE cl."commentId" IN (${Prisma.join(commentIds)})
+          GROUP BY cl."commentId"
+        `
+      );
+    } catch (error) {
+      if (!isLikesTableUnavailable(error)) {
+        throw error;
+      }
+    }
+    const countMap = new Map<string, number>();
+    for (const entry of likeCounts) {
+      countMap.set(entry.commentId, Number(entry.likeCount));
+    }
+    for (const row of mapped) {
+      row.likeCount = countMap.get(row.id) ?? 0;
+    }
+
+    if (viewerUserId) {
+      let userLikes: Array<{ commentId: string }> = [];
+      try {
+        userLikes = await prisma.$queryRaw<Array<{ commentId: string }>>(
+          Prisma.sql`
+            SELECT cl."commentId"
+            FROM "CommentLike" cl
+            WHERE cl."commentId" IN (${Prisma.join(commentIds)})
+              AND cl."userId" = ${viewerUserId}
+          `
+        );
+      } catch (error) {
+        if (!isLikesTableUnavailable(error)) {
+          throw error;
+        }
+      }
+      const likedSet = new Set(userLikes.map((entry) => entry.commentId));
+      for (const row of mapped) {
+        row.viewerHasLiked = likedSet.has(row.id);
+      }
+    }
+  }
 
   return buildCommentTree(mapped);
 }

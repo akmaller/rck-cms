@@ -11,6 +11,7 @@ import {
 import { getSiteConfig } from "@/lib/site-config/server";
 import { commentCreateSchema } from "@/lib/validators/comment";
 import { findForbiddenPhraseInInputs } from "@/lib/moderation/forbidden-terms";
+import { toggleArticleLike, toggleCommentLike } from "@/lib/likes/service";
 
 const USER_COMMENT_LIMIT = 10;
 const USER_COMMENT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -25,6 +26,17 @@ type CommentFormState = {
   success?: boolean;
   error?: string;
 };
+
+type ToggleLikeActionResult =
+  | {
+      success: true;
+      liked: boolean;
+      likeCount: number;
+    }
+  | {
+      success: false;
+      error?: string;
+    };
 
 function extractClientIp(headerList: Headers): string | null {
   const forwarded = headerList.get("x-forwarded-for");
@@ -167,3 +179,79 @@ export async function createCommentAction(
 }
 
 export type { CommentFormState };
+
+export async function toggleArticleLikeAction(
+  articleId: string,
+  slug: string
+): Promise<ToggleLikeActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return {
+      success: false,
+      error: "Silakan masuk untuk menyukai artikel.",
+    };
+  }
+
+  try {
+    const result = await toggleArticleLike({
+      articleId,
+      userId: session.user.id,
+    });
+    revalidatePath(`/articles/${slug}`);
+    return {
+      success: true,
+      liked: result.liked,
+      likeCount: result.likeCount,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === "LIKES_TABLE_UNAVAILABLE") {
+      return {
+        success: false,
+        error: "Fitur suka belum tersedia karena migrasi database belum dijalankan.",
+      };
+    }
+    console.error("Failed to toggle article like", error);
+    return {
+      success: false,
+      error: "Gagal memperbarui suka artikel. Coba lagi.",
+    };
+  }
+}
+
+export async function toggleCommentLikeAction(
+  commentId: string,
+  slug: string
+): Promise<ToggleLikeActionResult> {
+  const session = await auth();
+  if (!session?.user?.id) {
+    return {
+      success: false,
+      error: "Silakan masuk untuk menyukai komentar.",
+    };
+  }
+
+  try {
+    const result = await toggleCommentLike({
+      commentId,
+      userId: session.user.id,
+    });
+    revalidatePath(`/articles/${slug}`);
+    return {
+      success: true,
+      liked: result.liked,
+      likeCount: result.likeCount,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === "LIKES_TABLE_UNAVAILABLE") {
+      return {
+        success: false,
+        error: "Fitur suka belum tersedia karena migrasi database belum dijalankan.",
+      };
+    }
+    console.error("Failed to toggle comment like", error);
+    return {
+      success: false,
+      error: "Gagal memperbarui suka komentar. Coba lagi.",
+    };
+  }
+}
