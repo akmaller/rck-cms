@@ -13,6 +13,9 @@ import { TiptapEditor } from "@/components/editor/tiptap-editor";
 import { FeaturedImagePicker, type SelectedMedia } from "@/components/media/featured-image-picker";
 import type { MediaItem } from "@/components/media/media-grid";
 import { useUnsavedChangesPrompt } from "@/components/forms/use-unsaved-changes";
+import { extractPlainTextFromContent } from "@/lib/articles/plain-text";
+import { findForbiddenMatch, normalizeForComparison } from "@/lib/moderation/filter-utils";
+import { notifyError } from "@/lib/notifications/client";
 
 
 const emptyContent = { type: "doc", content: [] } as const;
@@ -30,6 +33,7 @@ type PageFormProps = {
   submitLabel?: string;
   redirectTo?: string;
   publishLabel?: string;
+  forbiddenPhrases?: string[];
 };
 
 export function PageForm({
@@ -38,6 +42,7 @@ export function PageForm({
   submitLabel = "Simpan Draft",
   publishLabel = "Publikasikan",
   redirectTo = "/dashboard/pages",
+  forbiddenPhrases = [],
 }: PageFormProps) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -72,6 +77,28 @@ export function PageForm({
   const [isPending, startTransition] = useTransition();
   const [pendingIntent, setPendingIntent] = useState<"draft" | "publish">("draft");
   const intentRef = useRef<"draft" | "publish">("draft");
+  const forbiddenEntries = useMemo(
+    () =>
+      forbiddenPhrases
+        .map((phrase) => ({ phrase, normalized: normalizeForComparison(phrase) }))
+        .filter((item) => item.normalized.length > 0),
+    [forbiddenPhrases]
+  );
+  const findForbiddenInValues = useCallback(
+    (values: Array<string | null | undefined>) => {
+      if (!forbiddenEntries.length) {
+        return null;
+      }
+      for (const value of values) {
+        const match = findForbiddenMatch(value, forbiddenEntries);
+        if (match) {
+          return match.phrase;
+        }
+      }
+      return null;
+    },
+    [forbiddenEntries]
+  );
 
   const serializePageState = useCallback(
     (params: {
@@ -150,26 +177,44 @@ export function PageForm({
           <CardDescription>Isi konten halaman dan pilih media unggulan (opsional).</CardDescription>
         </CardHeader>
         <form
-        ref={formRef}
-        onSubmit={(event) => {
-          event.preventDefault();
-          const formElement = event.currentTarget;
-          const formData = new FormData(formElement);
-          formData.set("content", JSON.stringify(content));
-          const isEditing = Boolean(initialValues?.id);
-          if (featuredMedia?.id) {
-            formData.set("featuredMediaId", featuredMedia.id);
-          } else if (isEditing) {
-            formData.set("featuredMediaId", "__REMOVE__");
-          } else {
-            formData.delete("featuredMediaId");
-          }
-          formData.set("intent", intentRef.current);
+          ref={formRef}
+          onSubmit={(event) => {
+            event.preventDefault();
+            const formElement = event.currentTarget;
+            const formData = new FormData(formElement);
+            formData.set("content", JSON.stringify(content));
+            const isEditing = Boolean(initialValues?.id);
+            if (featuredMedia?.id) {
+              formData.set("featuredMediaId", featuredMedia.id);
+            } else if (isEditing) {
+              formData.set("featuredMediaId", "__REMOVE__");
+            } else {
+              formData.delete("featuredMediaId");
+            }
+            formData.set("intent", intentRef.current);
 
-          startTransition(async () => {
-            try {
-              const execution = isEditing ? updatePage : createPage;
-              const result = await execution(formData);
+            const titleValue = formData.get("title");
+            const excerptValue = formData.get("excerpt");
+            const contentPlainText = extractPlainTextFromContent(content);
+            const forbiddenPhrase = findForbiddenInValues([
+              typeof titleValue === "string" ? titleValue : null,
+              typeof excerptValue === "string" ? excerptValue : null,
+              contentPlainText,
+            ]);
+            if (forbiddenPhrase) {
+              const message = `Konten mengandung kata/kalimat terlarang "${forbiddenPhrase}". Hapus kata tersebut sebelum melanjutkan.`;
+              setState({ error: message });
+              notifyError(message);
+              saveAndExitResolverRef.current?.(false);
+              saveAndExitResolverRef.current = null;
+              pendingRedirectRef.current = redirectTo;
+              return;
+            }
+
+            startTransition(async () => {
+              try {
+                const execution = isEditing ? updatePage : createPage;
+                const result = await execution(formData);
               if (result && "error" in result && result.error) {
                 setState({ error: result.error });
                 saveAndExitResolverRef.current?.(false);

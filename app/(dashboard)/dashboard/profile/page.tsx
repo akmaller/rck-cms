@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 
 import { PasswordUpdateForm } from "./password-form";
 import { ProfileInfoForm } from "./profile-info-form";
@@ -16,19 +17,22 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      bio: true,
-      role: true,
-      avatarUrl: true,
-      twoFactorEnabled: true,
-      socialLinks: true,
-    },
-  });
+  const [user, forbiddenPhrases] = await Promise.all([
+    prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        bio: true,
+        role: true,
+        avatarUrl: true,
+        twoFactorEnabled: true,
+        socialLinks: true,
+      },
+    }),
+    getForbiddenPhrases(),
+  ]);
 
   if (!user) {
     redirect("/login");
@@ -49,6 +53,7 @@ export default async function ProfilePage() {
             bio: user.bio ?? null,
             socialLinks: (user.socialLinks as Record<string, string | null> | null) ?? {},
           }}
+          forbiddenPhrases={forbiddenPhrases}
         />
         <div className="space-y-6">
           <AvatarUploader initialAvatarUrl={user.avatarUrl} userName={user.name} />

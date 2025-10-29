@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { AUTHOR_SOCIAL_FIELDS, type AuthorSocialKey } from "@/lib/authors/social-links";
 import { notifyError, notifySuccess } from "@/lib/notifications/client";
+import { findForbiddenMatch, normalizeForComparison } from "@/lib/moderation/filter-utils";
 
 type ProfileInfoFormProps = {
   initialData: {
@@ -18,12 +19,20 @@ type ProfileInfoFormProps = {
     bio: string | null;
     socialLinks: Partial<Record<AuthorSocialKey, string | null>> | Record<string, string | null>;
   };
+  forbiddenPhrases?: string[];
 };
 
-export function ProfileInfoForm({ initialData }: ProfileInfoFormProps) {
+export function ProfileInfoForm({ initialData, forbiddenPhrases = [] }: ProfileInfoFormProps) {
   const [status, setStatus] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [isPending, startTransition] = useTransition();
   const socialInitialValues = useMemo(() => initialData.socialLinks ?? {}, [initialData.socialLinks]);
+  const forbiddenEntries = useMemo(
+    () =>
+      forbiddenPhrases
+        .map((phrase) => ({ phrase, normalized: normalizeForComparison(phrase) }))
+        .filter((item) => item.normalized.length > 0),
+    [forbiddenPhrases]
+  );
 
   return (
     <Card>
@@ -38,6 +47,19 @@ export function ProfileInfoForm({ initialData }: ProfileInfoFormProps) {
           event.preventDefault();
           const formElement = event.currentTarget;
           const formData = new FormData(formElement);
+          if (forbiddenEntries.length) {
+            const bioValue = formData.get("bio");
+            const match = findForbiddenMatch(
+              typeof bioValue === "string" ? bioValue : null,
+              forbiddenEntries
+            );
+            if (match) {
+              const message = `Bio mengandung kata/kalimat terlarang "${match.phrase}". Hapus kata tersebut sebelum melanjutkan.`;
+              setStatus({ type: "error", message });
+              notifyError(message);
+              return;
+            }
+          }
           startTransition(async () => {
             const result = await updateProfile(formData);
             if (!result.success) {

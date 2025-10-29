@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ArticleEditorShell } from "@/app/(dashboard)/dashboard/articles/_components/editor-shell";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
+import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 
 export default async function NewArticlePage() {
   const session = await auth();
@@ -11,10 +12,11 @@ export default async function NewArticlePage() {
 
   const role = (session.user.role ?? "AUTHOR") as "ADMIN" | "EDITOR" | "AUTHOR";
 
-  const [media, tags, categories] = await Promise.all([
+  const [media, tags, categories, forbiddenPhrases] = await Promise.all([
     prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
     prisma.category.findMany({ orderBy: { name: "asc" } }),
+    getForbiddenPhrases(),
   ]);
 
   let canPublishContent = role !== "AUTHOR";
@@ -59,6 +61,7 @@ export default async function NewArticlePage() {
         draftLabel="Simpan Draft"
         publishLabel="Publikasikan"
         canPublishContent={canPublishContent}
+        forbiddenPhrases={forbiddenPhrases}
       />
     </>
   );

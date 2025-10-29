@@ -1,0 +1,1 @@
+ALTER TABLE IF EXISTS "ForbiddenTerm" ALTER COLUMN "updatedAt" DROP DEFAULT;

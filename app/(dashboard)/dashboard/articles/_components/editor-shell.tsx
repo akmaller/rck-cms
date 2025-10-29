@@ -13,6 +13,7 @@ export type ArticleEditorShellProps = {
   allCategories: string[];
   currentRole: Parameters<typeof ArticleForm>[0]["currentRole"];
   canPublishContent?: boolean;
+  forbiddenPhrases?: string[];
 };
 
 export function ArticleEditorShell({
@@ -25,6 +26,7 @@ export function ArticleEditorShell({
   allCategories,
   currentRole,
   canPublishContent = true,
+  forbiddenPhrases = [],
 }: ArticleEditorShellProps) {
   return (
     <div className="space-y-6">
@@ -39,6 +41,7 @@ export function ArticleEditorShell({
         allCategories={allCategories}
         currentRole={currentRole}
         canPublishContent={canPublishContent}
+        forbiddenPhrases={forbiddenPhrases}
       />
     </div>
   );

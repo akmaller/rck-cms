@@ -15,7 +15,7 @@ enum UserTheme {
 model User {
   id                     String                 @id @default(cuid())
   email                  String                 @unique
-  passwordHash           String
+  passwordHash           String?
   name                   String
   avatarUrl              String?
   role                   UserRole               @default(AUTHOR)
@@ -40,6 +40,7 @@ model User {
   twoFactorConfirmations TwoFactorConfirmation?
   twoFactorTokens        TwoFactorToken[]
   passwordResetTokens    PasswordResetToken[]
+  forbiddenTerms         ForbiddenTerm[]
 
   @@index([role])
 }
@@ -198,6 +199,19 @@ model SiteConfig {
   value     Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model ForbiddenTerm {
+  id                String   @id @default(cuid())
+  phrase            String
+  normalizedPhrase  String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  createdById       String?
+  createdBy         User?    @relation(fields: [createdById], references: [id])
+
+  @@unique([normalizedPhrase])
+  @@index([createdAt])
 }
 
 model MenuItem {

@@ -7,12 +7,13 @@ import { assertRole, assertArticleOwnership } from "@/lib/auth/permissions";
 import { hashPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils/slug";
-import { generateExcerptFromContent, ensureUniqueArticleSlug } from "@/lib/articles/utils";
+import { generateExcerptFromContent, ensureUniqueArticleSlug, extractPlainText } from "@/lib/articles/utils";
 import { menuItemCreateSchema } from "@/lib/validators/menu";
 import { pageCreateSchema, pageUpdateSchema } from "@/lib/validators/page";
 import { siteConfigSchema, type SiteConfigInput } from "@/lib/validators/config";
 import { writeAuditLog } from "@/lib/audit/log";
 import { revalidatePath, revalidateTag } from "next/cache";
+import { findForbiddenPhraseInInputs } from "@/lib/moderation/forbidden-terms";
 
 const EMPTY_TIPTAP_DOC = { type: "doc", content: [] } as const;
 const bulkArticleStatusSchema = z.object({
@@ -178,6 +179,16 @@ async function ensureCategory(client: PrismaClientLike, name: string): Promise<{
 const articleFormSchema = z.object({
   title: z.string().min(5, "Judul minimal 5 karakter"),
   slug: z.string().optional(),
+  excerpt: z
+    .string()
+    .optional()
+    .transform((value) => {
+      if (typeof value !== "string") {
+        return undefined;
+      }
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }),
   content: z.string().transform((value, ctx) => {
     try {
       const parsed = JSON.parse(value) as Record<string, unknown>;
@@ -212,15 +223,29 @@ export async function createArticle(formData: FormData) {
       }
     }
 
+    const rawExcerpt = formData.get("excerpt");
     const parsed = articleFormSchema.safeParse({
       title: formData.get("title"),
       slug: formData.get("slug") || undefined,
+      excerpt: typeof rawExcerpt === "string" ? rawExcerpt : undefined,
       content: formData.get("content") || JSON.stringify(EMPTY_TIPTAP_DOC),
       featuredMediaId: (formData.get("featuredMediaId") || null) as string | null,
     });
 
     if (!parsed.success) {
       return { error: parsed.error.issues[0]?.message ?? "Data tidak valid" };
+    }
+
+    const contentPlainText = extractPlainText(parsed.data.content as Record<string, unknown>);
+    const forbiddenMatch = await findForbiddenPhraseInInputs([
+      parsed.data.title,
+      parsed.data.excerpt ?? null,
+      contentPlainText,
+    ]);
+    if (forbiddenMatch) {
+      return {
+        error: `Konten mengandung kata/kalimat terlarang "${forbiddenMatch.phrase}". Hapus kata tersebut sebelum melanjutkan.`,
+      };
     }
 
     const intentRaw = formData.get("intent");
@@ -867,6 +892,18 @@ export async function createPage(formData: FormData) {
       return { error: parsed.error.issues[0]?.message ?? "Data halaman tidak valid" };
     }
 
+    const contentPlainText = extractPlainText(parsed.data.content as Record<string, unknown>);
+    const forbiddenMatch = await findForbiddenPhraseInInputs([
+      parsed.data.title,
+      parsed.data.excerpt ?? null,
+      contentPlainText,
+    ]);
+    if (forbiddenMatch) {
+      return {
+        error: `Konten mengandung kata/kalimat terlarang "${forbiddenMatch.phrase}". Hapus kata tersebut sebelum melanjutkan.`,
+      };
+    }
+
     const baseSlug = slugify(parsed.data.slug ?? parsed.data.title);
     const safeBase = baseSlug.length > 0 ? baseSlug : `halaman-${Date.now()}`;
     let candidate = safeBase;
@@ -968,6 +1005,20 @@ export async function updatePage(formData: FormData) {
     }
 
     const data = updatePayload.data;
+    const contentPlainText = extractPlainText(parsedContent as Record<string, unknown>);
+    const candidateTitle = data.title ?? existing.title;
+    const candidateExcerpt = data.excerpt ?? existing.excerpt ?? null;
+    const forbiddenMatch = await findForbiddenPhraseInInputs([
+      candidateTitle,
+      candidateExcerpt,
+      contentPlainText,
+    ]);
+    if (forbiddenMatch) {
+      return {
+        error: `Konten mengandung kata/kalimat terlarang "${forbiddenMatch.phrase}". Hapus kata tersebut sebelum melanjutkan.`,
+      };
+    }
+
     const updates: Prisma.PageUpdateInput = {};
 
     if (data.title) updates.title = data.title;
@@ -1070,6 +1121,18 @@ export async function updateArticle(formData: FormData) {
     );
     const generatedExcerpt =
       generateExcerptFromContent(parsed.data.content as Record<string, unknown>) ?? null;
+
+    const contentPlainText = extractPlainText(parsed.data.content as Record<string, unknown>);
+    const forbiddenMatch = await findForbiddenPhraseInInputs([
+      parsed.data.title,
+      generatedExcerpt,
+      contentPlainText,
+    ]);
+    if (forbiddenMatch) {
+      return {
+        error: `Konten mengandung kata/kalimat terlarang "${forbiddenMatch.phrase}". Hapus kata tersebut sebelum melanjutkan.`,
+      };
+    }
 
     const updateData: Prisma.ArticleUpdateInput = {
       title: parsed.data.title,

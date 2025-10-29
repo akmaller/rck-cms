@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit/log";
 import { COMMENT_STATUS } from "./types";
 import type { CommentStatusValue } from "./types";
+import { findForbiddenPhraseInInputs } from "@/lib/moderation/forbidden-terms";
 
 type UpdateActionResult =
   | {
@@ -67,6 +68,14 @@ export async function updateCommentAction(params: { commentId: string; content: 
   const sanitizedContent = sanitizeCommentContent(content ?? "");
   if (!sanitizedContent.trim()) {
     return { success: false, message: "Komentar tidak boleh kosong." };
+  }
+
+  const forbiddenMatch = await findForbiddenPhraseInInputs([sanitizedContent]);
+  if (forbiddenMatch) {
+    return {
+      success: false,
+      message: `Komentar mengandung kata/kalimat terlarang "${forbiddenMatch.phrase}". Hapus kata tersebut sebelum melanjutkan.`,
+    };
   }
 
   const currentStatus = comment.status as CommentStatusValue;

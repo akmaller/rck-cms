@@ -1,5 +1,7 @@
+import type { Prisma } from "@prisma/client";
 import type { NextAuthConfig } from "next-auth";
-import type { Adapter } from "next-auth/adapters";
+import type { Adapter, AdapterUser } from "next-auth/adapters";
+import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { z } from "zod";
@@ -10,9 +12,13 @@ import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit/log";
 import { deriveDeviceInfo } from "@/lib/device-info";
 import { getSecurityPolicy } from "@/lib/security/policy";
+import { getSiteConfig } from "@/lib/site-config/server";
 import { clearRateLimit, enforceRateLimit } from "@/lib/security/rate-limit";
 import { extractClientIp, isIpBlocked } from "@/lib/security/ip-block";
 import { logSecurityIncident } from "@/lib/security/activity-log";
+
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
 const credentialsSchema = z
   .object({
@@ -231,6 +237,23 @@ export const authConfig: NextAuthConfig = {
         };
       },
     }),
+    ...(googleClientId && googleClientSecret
+      ? [
+          Google({
+            clientId: googleClientId,
+            clientSecret: googleClientSecret,
+            profile(profile) {
+              return {
+                id: profile.sub,
+                name: profile.name,
+                email: profile.email,
+                image: profile.picture,
+                role: "AUTHOR",
+              };
+            },
+          }),
+        ]
+      : []),
   ],
   callbacks: {
     jwt: async ({ token, user }) => {
@@ -261,6 +284,58 @@ export const authConfig: NextAuthConfig = {
 
       const allowedRoles = new Set(["ADMIN", "EDITOR", "AUTHOR"]);
       return allowedRoles.has((auth.user as { role?: string }).role ?? "");
+    },
+  },
+  events: {
+    signIn: async ({ user, account, profile, isNewUser }) => {
+      if (!account || account.provider !== "google") {
+        return;
+      }
+
+      const userId = user.id ?? account.userId;
+      if (!userId) {
+        return;
+      }
+
+      const googleProfile = profile as { picture?: string | null; name?: string | null } | null;
+      const updates: Prisma.UserUpdateInput = {
+        lastLoginAt: new Date(),
+      };
+
+      const adapterUser = user as AdapterUser & { emailVerified?: Date | null };
+      if (!adapterUser.emailVerified) {
+        updates.emailVerified = new Date();
+      }
+
+      if (googleProfile?.picture) {
+        updates.avatarUrl = googleProfile.picture;
+      }
+
+      if (googleProfile?.name && googleProfile.name !== user.name) {
+        updates.name = googleProfile.name;
+      }
+
+      if (isNewUser) {
+        const config = await getSiteConfig();
+        updates.canPublish = config.registration?.autoApprove ?? false;
+      }
+
+      await prisma.user.update({
+        where: { id: userId },
+        data: updates,
+      });
+
+      await writeAuditLog({
+        action: "USER_LOGIN",
+        entity: "User",
+        entityId: userId,
+        userId,
+        metadata: {
+          loginMethod: "GOOGLE",
+          email: user.email,
+          providerAccountId: account.providerAccountId,
+        },
+      });
     },
   },
 };

@@ -20,6 +20,7 @@ import { ShareActions } from "@/app/(public)/(components)/share-actions";
 import { formatRelativeTime } from "@/lib/datetime/relative";
 import { CommentForm } from "./comment-form";
 import { CommentList } from "./comment-list";
+import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 
 async function getArticle(slug: string) {
   return prisma.article.findUnique({
@@ -95,6 +96,7 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
   const commentsPromise = getArticleComments(article.id);
   const sessionPromise = auth();
   const siteConfigPromise = getSiteConfig();
+  const forbiddenPhrasesPromise = getForbiddenPhrases();
 
   const { latestSidebarArticles, popularSidebarArticles, popularTags, relatedSidebarArticles } =
     await getArticleSidebarData({
@@ -102,10 +104,11 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
       relatedCategoryIds: categories.map((category) => category.id),
     });
 
-  const [comments, session, siteConfig] = await Promise.all([
+  const [comments, session, siteConfig, forbiddenPhrases] = await Promise.all([
     commentsPromise,
     sessionPromise,
     siteConfigPromise,
+    forbiddenPhrasesPromise,
   ]);
   const commentsEnabled = siteConfig?.comments?.enabled ?? true;
   const commentCount = comments.length;
@@ -197,7 +200,10 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
                 ) : null}
               </div>
             ) : null}
-            <ArticleViewer content={article.content} />
+            <ArticleViewer
+              content={article.content}
+              tags={tags.map((tag) => ({ name: tag.name, slug: tag.slug }))}
+            />
           </div>
 
           <footer className="space-y-6">
@@ -239,7 +245,12 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
               session?.user ? (
                 <Card>
                   <CardContent className="space-y-4 pt-6">
-                    <CommentForm articleId={article.id} slug={article.slug} userName={sessionUserName} />
+                    <CommentForm
+                      articleId={article.id}
+                      slug={article.slug}
+                      userName={sessionUserName}
+                      forbiddenPhrases={forbiddenPhrases}
+                    />
                   </CardContent>
                 </Card>
               ) : (

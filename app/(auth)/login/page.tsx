@@ -25,6 +25,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const callbackUrl = typeof params?.callbackUrl === "string" ? params.callbackUrl : undefined;
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null;
+  const googleAuthEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 
   if (params?.next) {
     redirect(params.next as string);
@@ -100,7 +101,11 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
           <CardContent className="space-y-6">
             <Suspense fallback={<div className="text-sm text-muted-foreground">Memuat formulir...</div>}>
-              <LoginForm callbackUrl={callbackUrl} turnstileSiteKey={turnstileSiteKey} />
+              <LoginForm
+                callbackUrl={callbackUrl}
+                turnstileSiteKey={turnstileSiteKey}
+                googleAuthEnabled={googleAuthEnabled}
+              />
             </Suspense>
             <div className="text-right text-sm">
               <Link href="/forgot-password" className="font-medium text-sky-600 hover:text-sky-700">

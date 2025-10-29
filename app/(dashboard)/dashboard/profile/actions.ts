@@ -11,6 +11,7 @@ import { hashPassword, verifyPassword } from "@/lib/auth/password";
 import { prisma } from "@/lib/prisma";
 import { writeAuditLog } from "@/lib/audit/log";
 import { AUTHOR_SOCIAL_FIELDS, AUTHOR_SOCIAL_KEYS, type AuthorSocialKey } from "@/lib/authors/social-links";
+import { findForbiddenPhraseInInputs } from "@/lib/moderation/forbidden-terms";
 
 const profileUpdateSchema = z.object({
   name: z
@@ -96,6 +97,14 @@ export async function updateProfile(formData: FormData) {
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     return { success: false, message: issue?.message ?? "Data profil tidak valid" };
+  }
+
+  const forbiddenMatch = await findForbiddenPhraseInInputs([parsed.data.bio ?? null]);
+  if (forbiddenMatch) {
+    return {
+      success: false,
+      message: `Bio mengandung kata/kalimat terlarang "${forbiddenMatch.phrase}". Hapus kata tersebut sebelum melanjutkan.`,
+    };
   }
 
   try {

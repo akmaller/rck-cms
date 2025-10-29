@@ -10,6 +10,7 @@ import {
 } from "@/lib/comments/service";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { commentCreateSchema } from "@/lib/validators/comment";
+import { findForbiddenPhraseInInputs } from "@/lib/moderation/forbidden-terms";
 
 const USER_COMMENT_LIMIT = 10;
 const USER_COMMENT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -77,6 +78,13 @@ export async function createCommentAction(
     };
   }
 
+  const forbiddenMatch = await findForbiddenPhraseInInputs([parsed.data.content]);
+  if (forbiddenMatch) {
+    return {
+      error: `Komentar mengandung kata/kalimat terlarang "${forbiddenMatch.phrase}". Hapus kata tersebut sebelum melanjutkan.`,
+    };
+  }
+
   const headerList = await headers();
   const ipAddress = extractClientIp(headerList);
   const userAgent = headerList.get("user-agent") ?? null;
@@ -109,6 +117,12 @@ export async function createCommentAction(
     });
   } catch (error) {
     if (error instanceof Error) {
+      if (error.message.startsWith("FORBIDDEN_TERM:")) {
+        const [, phrase] = error.message.split(":", 2);
+        return {
+          error: `Komentar mengandung kata/kalimat terlarang "${phrase ?? ""}". Hapus kata tersebut sebelum melanjutkan.`,
+        };
+      }
       if (error.message === "RATE_LIMITED") {
         return {
           error: "Terlalu banyak percobaan komentar dalam waktu singkat. Coba lagi sebentar lagi.",

@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { ArticleEditorShell } from "@/app/(dashboard)/dashboard/articles/_components/editor-shell";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
+import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 
 type EditArticlePageProps = {
   params: Promise<{ articleId: string }>;
@@ -18,7 +19,7 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
 
   const role = (session.user.role ?? "AUTHOR") as "ADMIN" | "EDITOR" | "AUTHOR";
 
-  const [article, media, tags, categories] = await Promise.all([
+  const [article, media, tags, categories, forbiddenPhrases] = await Promise.all([
     prisma.article.findUnique({
       where: { id: articleId },
       include: {
@@ -30,6 +31,7 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
     prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
     prisma.tag.findMany({ orderBy: { name: "asc" } }),
     prisma.category.findMany({ orderBy: { name: "asc" } }),
+    getForbiddenPhrases(),
   ]);
 
   if (!article) {
@@ -104,6 +106,7 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
         draftLabel="Simpan Draft"
         publishLabel={article.status === "PUBLISHED" ? "Perbarui & Publikasikan" : "Publikasikan"}
         canPublishContent={canPublishContent}
+        forbiddenPhrases={forbiddenPhrases}
       />
     </>
   );

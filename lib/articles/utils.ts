@@ -1,28 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { slugify } from "@/lib/utils/slug";
+import { extractPlainTextFromContent } from "./plain-text";
 
-function extractPlainText(node: unknown): string {
-  if (!node) return "";
-  if (typeof node === "string") return node;
-  if (Array.isArray(node)) {
-    return node.map(extractPlainText).join(" ");
-  }
-  if (typeof node === "object") {
-    const anyNode = node as { text?: unknown; content?: unknown };
-    let text = "";
-    if (typeof anyNode.text === "string") {
-      text += anyNode.text;
-    }
-    if (Array.isArray(anyNode.content)) {
-      text += ` ${anyNode.content.map(extractPlainText).join(" ")}`;
-    }
-    return text;
-  }
-  return "";
-}
+export { extractPlainTextFromContent as extractPlainText };
 
 export function generateExcerptFromContent(content: Record<string, unknown>): string | null {
-  const plainText = extractPlainText(content).replace(/\s+/g, " ").trim();
+  const plainText = extractPlainTextFromContent(content).replace(/\s+/g, " ").trim();
   if (!plainText) {
     return null;
   }

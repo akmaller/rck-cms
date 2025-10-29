@@ -12,6 +12,8 @@ import { FeaturedImagePicker, type SelectedMedia } from "@/components/media/feat
 import type { MediaItem } from "@/components/media/media-grid";
 import { ArticleStatus } from "@prisma/client";
 import { slugify } from "@/lib/utils/slug";
+import { extractPlainTextFromContent } from "@/lib/articles/plain-text";
+import { findForbiddenMatch, normalizeForComparison } from "@/lib/moderation/filter-utils";
 
 import { createArticle, updateArticle, deleteArticle } from "./actions";
 import { notifyError, notifySuccess } from "@/lib/notifications/client";
@@ -40,6 +42,7 @@ type ArticleFormProps = {
   allCategories: string[];
   currentRole: "ADMIN" | "EDITOR" | "AUTHOR";
   canPublishContent?: boolean;
+  forbiddenPhrases?: string[];
 };
 
 export function ArticleForm({
@@ -53,6 +56,7 @@ export function ArticleForm({
   allCategories,
   currentRole,
   canPublishContent = true,
+  forbiddenPhrases = [],
 }: ArticleFormProps) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement | null>(null);
@@ -86,6 +90,31 @@ export function ArticleForm({
   );
   const [isPending, startTransition] = useTransition();
   const [isDeleting, startDeleteTransition] = useTransition();
+  const forbiddenEntries = useMemo(
+    () =>
+      forbiddenPhrases
+        .map((phrase) => ({
+          phrase,
+          normalized: normalizeForComparison(phrase),
+        }))
+        .filter((entry) => entry.normalized.length > 0),
+    [forbiddenPhrases]
+  );
+  const findForbiddenInValues = useCallback(
+    (values: Array<string | null | undefined>) => {
+      if (!forbiddenEntries.length) {
+        return null;
+      }
+      for (const value of values) {
+        const match = findForbiddenMatch(value, forbiddenEntries);
+        if (match) {
+          return match.phrase;
+        }
+      }
+      return null;
+    },
+    [forbiddenEntries]
+  );
   const normalizedAllCategories = useMemo(
     () =>
       Array.from(
@@ -348,23 +377,42 @@ export function ArticleForm({
             const formElement = event.currentTarget;
             const formData = new FormData(formElement);
             if (computedSlug) {
-            formData.set("slug", computedSlug);
-          } else {
-            formData.delete("slug");
-          }
-          formData.set("content", JSON.stringify(content));
-          const isEditing = Boolean(initialValues?.id);
-          if (featuredMedia?.id) {
-            formData.set("featuredMediaId", featuredMedia.id);
-          } else if (isEditing) {
-            formData.set("featuredMediaId", "__REMOVE__");
-          } else {
-            formData.delete("featuredMediaId");
-          }
-          formData.set("tags", selectedTags.join(","));
-          formData.set("categories", selectedCategories.join(","));
-          formData.set("intent", submitIntentRef.current);
-          startTransition(async () => {
+              formData.set("slug", computedSlug);
+            } else {
+              formData.delete("slug");
+            }
+            formData.set("content", JSON.stringify(content));
+            const isEditing = Boolean(initialValues?.id);
+            if (featuredMedia?.id) {
+              formData.set("featuredMediaId", featuredMedia.id);
+            } else if (isEditing) {
+              formData.set("featuredMediaId", "__REMOVE__");
+            } else {
+              formData.delete("featuredMediaId");
+            }
+            formData.set("tags", selectedTags.join(","));
+            formData.set("categories", selectedCategories.join(","));
+            formData.set("intent", submitIntentRef.current);
+
+            const titleValue = formData.get("title");
+            const excerptValue = formData.get("excerpt");
+            const contentPlainText = extractPlainTextFromContent(content);
+            const forbiddenPhrase = findForbiddenInValues([
+              typeof titleValue === "string" ? titleValue : null,
+              typeof excerptValue === "string" ? excerptValue : null,
+              contentPlainText,
+            ]);
+            if (forbiddenPhrase) {
+              const message = `Konten mengandung kata/kalimat terlarang "${forbiddenPhrase}". Hapus kata tersebut sebelum melanjutkan.`;
+              setState({ error: message });
+              notifyError(message);
+              saveAndExitResolverRef.current?.(false);
+              saveAndExitResolverRef.current = null;
+              pendingRedirectRef.current = redirectTo;
+              return;
+            }
+
+            startTransition(async () => {
             try {
               const submitAction = isEditing ? updateArticle : createArticle;
               if (isEditing && initialValues?.id) {

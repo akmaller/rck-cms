@@ -6,6 +6,7 @@ import { PageForm } from "@/components/forms/page-form";
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DeletePageButton } from "../../_components/delete-page-button";
+import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 
 type EditPageProps = {
   params: Promise<{ pageId: string }>;
@@ -13,12 +14,13 @@ type EditPageProps = {
 
 export default async function EditPage({ params }: EditPageProps) {
   const { pageId } = await params;
-  const [page, media] = await Promise.all([
+  const [page, media, forbiddenPhrases] = await Promise.all([
     prisma.page.findUnique({
       where: { id: pageId },
       include: { featuredMedia: true },
     }),
     prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
+    getForbiddenPhrases(),
   ]);
 
   if (!page) {
@@ -71,6 +73,7 @@ export default async function EditPage({ params }: EditPageProps) {
         submitLabel="Simpan Draft"
         publishLabel="Publikasikan"
         redirectTo="/dashboard/pages"
+        forbiddenPhrases={forbiddenPhrases}
       />
       <Card className="border-destructive/40">
         <CardHeader>

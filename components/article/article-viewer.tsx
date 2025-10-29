@@ -17,9 +17,116 @@ type TiptapNode = {
   marks?: TiptapMark[];
 };
 
+type TagReference = {
+  name: string;
+  slug: string;
+};
+
 type ArticleViewerProps = {
   content: unknown;
+  tags?: TagReference[];
 };
+
+type TagLookupEntry = {
+  label: string;
+  slug: string;
+};
+
+type TagMatchContext = {
+  lookup: Map<string, TagLookupEntry>;
+  matcher: RegExp | null;
+};
+
+type TextSegment =
+  | { type: "text"; value: string }
+  | { type: "tag"; value: string; slug: string };
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeTagLabel(value: string): string {
+  return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("id-ID");
+}
+
+function createTagMatchContext(tags: TagReference[]): TagMatchContext {
+  const lookup = new Map<string, TagLookupEntry>();
+  for (const tag of tags) {
+    const name = typeof tag.name === "string" ? tag.name.trim() : "";
+    const slug = typeof tag.slug === "string" ? tag.slug.trim() : "";
+    if (!name || !slug) {
+      continue;
+    }
+    const normalized = normalizeTagLabel(name);
+    if (!lookup.has(normalized)) {
+      lookup.set(normalized, { label: name, slug });
+    }
+  }
+
+  if (lookup.size === 0) {
+    return { lookup, matcher: null };
+  }
+
+  const pattern = Array.from(lookup.values())
+    .map((entry) => entry.label)
+    .sort((a, b) => b.length - a.length)
+    .map((label) => escapeRegExp(label))
+    .join("|");
+
+  const matcher = pattern ? new RegExp(pattern, "giu") : null;
+  return { lookup, matcher };
+}
+
+function isLetterOrNumber(char: string | undefined): boolean {
+  if (!char) {
+    return false;
+  }
+  return /\p{L}|\p{N}/u.test(char);
+}
+
+function splitTextSegments(text: string, context: TagMatchContext): TextSegment[] {
+  if (!text) {
+    return [];
+  }
+  const { matcher, lookup } = context;
+  if (!matcher) {
+    return [{ type: "text", value: text }];
+  }
+
+  const workingMatcher = new RegExp(matcher.source, matcher.flags);
+  const segments: TextSegment[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = workingMatcher.exec(text)) !== null) {
+    const start = match.index;
+    const end = workingMatcher.lastIndex;
+    const matchedValue = match[0];
+
+    if (start > lastIndex) {
+      segments.push({ type: "text", value: text.slice(lastIndex, start) });
+    }
+
+    const beforeChar = start > 0 ? text[start - 1] : "";
+    const afterChar = end < text.length ? text[end] : "";
+    const normalizedMatch = normalizeTagLabel(matchedValue);
+    const tagEntry = lookup.get(normalizedMatch);
+
+    if (!tagEntry || isLetterOrNumber(beforeChar) || isLetterOrNumber(afterChar)) {
+      segments.push({ type: "text", value: matchedValue });
+    } else {
+      segments.push({ type: "tag", value: matchedValue, slug: tagEntry.slug });
+    }
+
+    lastIndex = end;
+  }
+
+  if (lastIndex < text.length) {
+    segments.push({ type: "text", value: text.slice(lastIndex) });
+  }
+
+  return segments;
+}
 
 function sanitizeHref(value: unknown): string {
   if (typeof value !== "string") {
@@ -87,9 +194,9 @@ function applyMarks(text: ReactNode, marks: TiptapMark[] = []) {
   }, text);
 }
 
-function renderNodes(nodes: TiptapNode[] | undefined, keyPrefix = "node" ): ReactNode[] {
+function renderNodes(nodes: TiptapNode[] | undefined, keyPrefix: string, context: TagMatchContext): ReactNode[] {
   if (!nodes) return [];
-  return nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`));
+  return nodes.map((node, index) => renderNode(node, `${keyPrefix}-${index}`, context));
 }
 
 function resolveWidthAttributes(value: unknown): { widthPx: number | null; widthPercent: string | null } {
@@ -133,7 +240,48 @@ function resolveHeightAttribute(value: unknown): number | null {
   return null;
 }
 
-function renderNode(node: TiptapNode, key: string): ReactNode {
+function renderTextNode(node: TiptapNode, key: string, context: TagMatchContext): ReactNode {
+  const textContent = node.text ?? "";
+  if (!textContent) {
+    return <Fragment key={key}>{applyMarks("", node.marks)}</Fragment>;
+  }
+
+  const hasLinkMark = node.marks?.some((mark) => mark.type === "link") ?? false;
+  if (hasLinkMark || context.lookup.size === 0) {
+    return <Fragment key={key}>{applyMarks(textContent, node.marks)}</Fragment>;
+  }
+
+  const segments = splitTextSegments(textContent, context);
+  if (segments.length === 0) {
+    return <Fragment key={key}>{applyMarks(textContent, node.marks)}</Fragment>;
+  }
+
+  return (
+    <Fragment key={key}>
+      {segments.map((segment, index) => {
+        const baseContent =
+          segment.type === "tag" ? (
+            <Link
+              href={`/tags/${segment.slug}`}
+              className="font-medium text-primary no-underline hover:no-underline focus-visible:no-underline"
+            >
+              {segment.value}
+            </Link>
+          ) : (
+            segment.value
+          );
+
+        return (
+          <Fragment key={`${key}-segment-${index}`}>
+            {applyMarks(baseContent, node.marks)}
+          </Fragment>
+        );
+      })}
+    </Fragment>
+  );
+}
+
+function renderNode(node: TiptapNode, key: string, context: TagMatchContext): ReactNode {
   switch (node.type) {
     case "paragraph":
       if (!node.content || node.content.length === 0) {
@@ -141,39 +289,39 @@ function renderNode(node: TiptapNode, key: string): ReactNode {
       }
       return (
         <p key={key} className="leading-7">
-          {renderNodes(node.content, key)}
+          {renderNodes(node.content, key, context)}
         </p>
       );
     case "text":
-      return <Fragment key={key}>{applyMarks(node.text ?? "", node.marks)}</Fragment>;
+      return renderTextNode(node, key, context);
     case "heading": {
       const rawLevel = Number(node.attrs?.level ?? 2);
       const safeLevel = Number.isFinite(rawLevel) ? rawLevel : 2;
       const HeadingTag = `h${Math.min(6, Math.max(1, safeLevel))}` as keyof JSX.IntrinsicElements;
       return (
         <HeadingTag key={key} className="scroll-m-20 font-semibold tracking-tight">
-          {renderNodes(node.content, key)}
+          {renderNodes(node.content, key, context)}
         </HeadingTag>
       );
     }
     case "bulletList":
       return (
         <ul key={key} className="ml-6 list-disc space-y-2">
-          {renderNodes(node.content, key)}
+          {renderNodes(node.content, key, context)}
         </ul>
       );
     case "orderedList":
       return (
         <ol key={key} className="ml-6 list-decimal space-y-2">
-          {renderNodes(node.content, key)}
+          {renderNodes(node.content, key, context)}
         </ol>
       );
     case "listItem":
-      return <li key={key}>{renderNodes(node.content, key)}</li>;
+      return <li key={key}>{renderNodes(node.content, key, context)}</li>;
     case "blockquote":
       return (
         <blockquote key={key} className="border-l-4 border-primary/40 pl-4 italic text-muted-foreground">
-          {renderNodes(node.content, key)}
+          {renderNodes(node.content, key, context)}
         </blockquote>
       );
     case "codeBlock":
@@ -217,11 +365,11 @@ function renderNode(node: TiptapNode, key: string): ReactNode {
       );
     }
     default:
-      return node.content ? <Fragment key={key}>{renderNodes(node.content, key)}</Fragment> : null;
+      return node.content ? <Fragment key={key}>{renderNodes(node.content, key, context)}</Fragment> : null;
   }
 }
 
-export function ArticleViewer({ content }: ArticleViewerProps) {
+export function ArticleViewer({ content, tags }: ArticleViewerProps) {
   if (!content || typeof content !== "object") {
     return null;
   }
@@ -231,5 +379,11 @@ export function ArticleViewer({ content }: ArticleViewerProps) {
     return null;
   }
 
-  return <div className="prose prose-neutral max-w-none dark:prose-invert">{renderNodes(doc.content)}</div>;
+  const tagContext = createTagMatchContext(tags ?? []);
+
+  return (
+    <div className="prose prose-neutral max-w-none dark:prose-invert">
+      {renderNodes(doc.content, "node", tagContext)}
+    </div>
+  );
 }

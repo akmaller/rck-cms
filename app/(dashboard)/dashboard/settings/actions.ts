@@ -49,7 +49,7 @@ type ExportedSession = {
 type ExportedUser = {
   id: string;
   email: string;
-  passwordHash: string;
+  passwordHash?: string | null;
   name: string;
   avatarUrl?: string | null;
   role?: UserRole | string;
@@ -408,7 +408,7 @@ export async function importBackupAction(formData: FormData) {
       if (Array.isArray(payload.users) && payload.users.length > 0) {
         for (const rawUser of payload.users) {
           const userRecord = rawUser as ExportedUser & { articles?: unknown; pages?: unknown };
-          if (!userRecord?.id || !userRecord.email || !userRecord.passwordHash || !userRecord.name) {
+          if (!userRecord?.id || !userRecord.email || !userRecord.name) {
             errors.push("Data pengguna tidak lengkap dan dilewati.");
             continue;
           }
@@ -418,34 +418,38 @@ export async function importBackupAction(formData: FormData) {
           const lastLoginAt = toDate(userData.lastLoginAt);
           const createdAt = toDate(userData.createdAt);
 
+          const createData: Prisma.UserUncheckedCreateInput = {
+            id: userData.id,
+            email: userData.email,
+            passwordHash: userData.passwordHash ?? null,
+            name: userData.name,
+            avatarUrl: userData.avatarUrl ?? null,
+            role: (userData.role ?? "AUTHOR") as UserRole,
+            bio: userData.bio ?? null,
+            twoFactorEnabled: userData.twoFactorEnabled ?? false,
+            twoFactorSecret: userData.twoFactorSecret ?? null,
+            lastLoginAt,
+            theme: (userData.theme ?? "LIGHT") as UserTheme,
+            createdAt: createdAt ?? undefined,
+          };
+
+          const updateData: Prisma.UserUncheckedUpdateInput = {
+            email: userData.email,
+            passwordHash: userData.passwordHash ?? null,
+            name: userData.name,
+            avatarUrl: userData.avatarUrl ?? null,
+            role: (userData.role ?? "AUTHOR") as UserRole,
+            bio: userData.bio ?? null,
+            twoFactorEnabled: userData.twoFactorEnabled ?? false,
+            twoFactorSecret: userData.twoFactorSecret ?? null,
+            lastLoginAt,
+            theme: (userData.theme ?? "LIGHT") as UserTheme,
+          };
+
           await tx.user.upsert({
             where: { id: userData.id },
-            create: {
-              id: userData.id,
-              email: userData.email,
-              passwordHash: userData.passwordHash,
-              name: userData.name,
-              avatarUrl: userData.avatarUrl ?? null,
-              role: (userData.role ?? "AUTHOR") as UserRole,
-              bio: userData.bio ?? null,
-              twoFactorEnabled: userData.twoFactorEnabled ?? false,
-              twoFactorSecret: userData.twoFactorSecret ?? null,
-              lastLoginAt,
-              theme: (userData.theme ?? "LIGHT") as UserTheme,
-              createdAt: createdAt ?? undefined,
-            },
-            update: {
-              email: userData.email,
-              passwordHash: userData.passwordHash,
-              name: userData.name,
-              avatarUrl: userData.avatarUrl ?? null,
-              role: (userData.role ?? "AUTHOR") as UserRole,
-              bio: userData.bio ?? null,
-              twoFactorEnabled: userData.twoFactorEnabled ?? false,
-              twoFactorSecret: userData.twoFactorSecret ?? null,
-              lastLoginAt,
-              theme: (userData.theme ?? "LIGHT") as UserTheme,
-            },
+            create: createData,
+            update: updateData,
           });
 
           await tx.account.deleteMany({ where: { userId: userData.id } });

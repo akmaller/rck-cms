@@ -61,6 +61,8 @@ Salin `.env.example` menjadi `.env.local` (untuk pengembangan) atau `.env.produc
 | `SMTP_USER` & `SMTP_PASSWORD` | Kredensial autentikasi SMTP. |
 | `SMTP_SECURE` | Gunakan `true` jika menggunakan TLS implicit (465), `false` jika STARTTLS (587). |
 | `SMTP_FROM` | Alamat email pengirim (contoh: `Roemah Cita <no-reply@domain.com>`). |
+| `GOOGLE_CLIENT_ID` | (Opsional) OAuth Client ID Google. Isi untuk mengaktifkan tombol masuk/daftar dengan Google. |
+| `GOOGLE_CLIENT_SECRET` | (Opsional) OAuth Client Secret Google yang berpasangan dengan client ID. |
 | `SEED_ADMIN_PASSWORD` | (Opsional) Password admin saat seeding. Jika tidak diisi, script akan membuat password acak dan menampilkannya di log. |
 
 > Gunakan `openssl rand -hex 32` atau `npx auth secret` untuk membuat nilai `NEXTAUTH_SECRET`.

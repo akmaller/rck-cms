@@ -24,6 +24,7 @@ export default async function RegisterPage() {
 
   const config = await getSiteConfig();
   const turnstileSiteKey = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ?? null;
+  const googleAuthEnabled = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
   const privacyPolicyUrl = config.registration.privacyPolicyPageSlug
     ? `/pages/${config.registration.privacyPolicyPageSlug}`
     : null;
@@ -83,7 +84,11 @@ export default async function RegisterPage() {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <RegisterForm privacyPolicyUrl={privacyPolicyUrl} turnstileSiteKey={turnstileSiteKey} />
+            <RegisterForm
+              privacyPolicyUrl={privacyPolicyUrl}
+              turnstileSiteKey={turnstileSiteKey}
+              googleAuthEnabled={googleAuthEnabled}
+            />
             <p className="text-center text-sm text-slate-600">
               Sudah punya akun?{" "}
               <Link href="/login" className="font-semibold text-sky-600 hover:text-sky-700">

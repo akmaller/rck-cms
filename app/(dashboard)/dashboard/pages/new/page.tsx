@@ -4,9 +4,10 @@ import { auth } from "@/auth";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { DashboardUnauthorized } from "@/components/layout/dashboard/dashboard-unauthorized";
 import type { RoleKey } from "@/lib/auth/permissions";
-import { prisma } from "@/lib/prisma";
 import { PageForm } from "@/components/forms/page-form";
 import { buttonVariants } from "@/lib/button-variants";
+import { prisma } from "@/lib/prisma";
+import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 
 export default async function NewPage() {
   const session = await auth();
@@ -17,7 +18,10 @@ export default async function NewPage() {
     );
   }
 
-  const media = await prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 });
+  const [media, forbiddenPhrases] = await Promise.all([
+    prisma.media.findMany({ orderBy: { createdAt: "desc" }, take: 12 }),
+    getForbiddenPhrases(),
+  ]);
   const mediaItems = media.map((item) => ({
     id: item.id,
     title: item.title,
@@ -39,7 +43,7 @@ export default async function NewPage() {
           Kembali ke Halaman
         </Link>
       </div>
-      <PageForm mediaItems={mediaItems} />
+      <PageForm mediaItems={mediaItems} forbiddenPhrases={forbiddenPhrases} />
     </div>
   );
 }

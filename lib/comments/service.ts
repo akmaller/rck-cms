@@ -7,6 +7,7 @@ import { isRateLimited } from "@/lib/rate-limit";
 import { getPrismaClient } from "@/lib/security/prisma-client";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { commentCreateSchema } from "@/lib/validators/comment";
+import { detectForbiddenPhrase } from "@/lib/moderation/forbidden-terms";
 
 const CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const ZERO_WIDTH_REGEX = /[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g;
@@ -173,6 +174,11 @@ export async function createArticleComment(params: {
 }) {
   const parsed = commentCreateSchema.parse({ content: params.content });
   const sanitizedContent = sanitizeCommentContent(parsed.content);
+
+  const forbiddenMatch = await detectForbiddenPhrase(sanitizedContent);
+  if (forbiddenMatch) {
+    throw new Error(`FORBIDDEN_TERM:${forbiddenMatch.phrase}`);
+  }
 
   if (!sanitizedContent.trim()) {
     throw new Error("EMPTY_COMMENT");
