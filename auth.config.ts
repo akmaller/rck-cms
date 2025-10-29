@@ -1,6 +1,6 @@
 import type { Prisma, User } from "@prisma/client";
 import type { NextAuthConfig } from "next-auth";
-import type { Adapter, AdapterUser } from "next-auth/adapters";
+import type { Adapter, AdapterSession, AdapterUser } from "next-auth/adapters";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
@@ -89,8 +89,14 @@ const prismaAdapter: Adapter = {
       })
     ),
   getUserByAccount: async (provider_providerAccountId) => {
+    const { provider, providerAccountId } = provider_providerAccountId;
     const account = await prisma.account.findUnique({
-      where: provider_providerAccountId,
+      where: {
+        provider_providerAccountId: {
+          provider,
+          providerAccountId,
+        },
+      },
       include: { user: true },
     });
     return toAdapterUser(account?.user ?? null);
@@ -137,13 +143,15 @@ const prismaAdapter: Adapter = {
 
     const { user, sessionToken: token, userId, expires } = sessionRecord;
 
+    const session: AdapterSession = {
+      sessionToken: token,
+      userId,
+      expires,
+    };
+
     return {
       user: toAdapterUser(user)!,
-      session: {
-        sessionToken: token,
-        userId,
-        expires,
-      },
+      session,
     };
   },
 };
