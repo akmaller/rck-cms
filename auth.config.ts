@@ -1,6 +1,6 @@
 import type { Prisma, User } from "@prisma/client";
 import type { NextAuthConfig } from "next-auth";
-import type { Adapter, AdapterSession, AdapterUser } from "next-auth/adapters";
+import type { Adapter, AdapterUser } from "next-auth/adapters";
 import Google from "next-auth/providers/google";
 import Credentials from "next-auth/providers/credentials";
 import { PrismaAdapter } from "@auth/prisma-adapter";
@@ -48,11 +48,6 @@ function toAdapterUser(user: User | null): (AdapterUser & { avatarUrl: string | 
   } as AdapterUser & { avatarUrl: string | null };
 }
 
-function omitUndefined<T extends Record<string, unknown>>(obj: T): T {
-  const filteredEntries = Object.entries(obj).filter(([, value]) => value !== undefined);
-  return Object.fromEntries(filteredEntries) as T;
-}
-
 const baseAdapter = PrismaAdapter(prisma);
 
 const prismaAdapter: Adapter = {
@@ -64,9 +59,10 @@ const prismaAdapter: Adapter = {
       throw new Error("Email is required for user creation");
     }
 
-    const roleValue = data.role && Object.values(UserRole).includes(data.role as UserRole)
-      ? (data.role as UserRole)
-      : UserRole.AUTHOR;
+    const roleValue =
+      data.role && Object.values(UserRole).includes(data.role as UserRole)
+        ? (data.role as UserRole)
+        : UserRole.AUTHOR;
 
     const user = await prisma.user.create({
       data: {
@@ -80,8 +76,18 @@ const prismaAdapter: Adapter = {
 
     return toAdapterUser(user)!;
   },
-  getUser: async (id) => toAdapterUser(await prisma.user.findUnique({ where: { id } })),
-  getUserByEmail: async (email) => toAdapterUser(await prisma.user.findUnique({ where: { email } })),
+  getUser: async (id) =>
+    toAdapterUser(
+      await prisma.user.findUnique({
+        where: { id },
+      })
+    ),
+  getUserByEmail: async (email) =>
+    toAdapterUser(
+      await prisma.user.findUnique({
+        where: { email },
+      })
+    ),
   getUserByAccount: async (provider_providerAccountId) => {
     const account = await prisma.account.findUnique({
       where: provider_providerAccountId,
@@ -95,16 +101,16 @@ const prismaAdapter: Adapter = {
       throw new Error("User ID is required for update");
     }
 
-    const updates = omitUndefined<Prisma.UserUpdateInput>({
-      name: data.name,
-      email: data.email,
-      emailVerified: data.emailVerified,
-      role:
-        data.role && Object.values(UserRole).includes(data.role as UserRole)
-          ? (data.role as UserRole)
-          : undefined,
+    const updates: Prisma.UserUpdateInput = {
+      name: data.name ?? undefined,
+      email: data.email ?? undefined,
+      emailVerified: data.emailVerified ?? undefined,
       avatarUrl: data.image ?? undefined,
-    });
+    };
+
+    if (data.role && Object.values(UserRole).includes(data.role as UserRole)) {
+      updates.role = data.role as UserRole;
+    }
 
     const user = await prisma.user.update({
       where: { id: data.id },
@@ -113,21 +119,31 @@ const prismaAdapter: Adapter = {
 
     return toAdapterUser(user)!;
   },
-  deleteUser: async (id) => toAdapterUser(await prisma.user.delete({ where: { id } }))!,
+  deleteUser: async (id) =>
+    toAdapterUser(
+      await prisma.user.delete({
+        where: { id },
+      })
+    )!,
   getSessionAndUser: async (sessionToken) => {
-    const result = await prisma.session.findUnique({
+    const sessionRecord = await prisma.session.findUnique({
       where: { sessionToken },
       include: { user: true },
     });
 
-    if (!result) {
+    if (!sessionRecord) {
       return null;
     }
 
-    const { user, ...session } = result;
+    const { user, sessionToken: token, userId, expires } = sessionRecord;
+
     return {
       user: toAdapterUser(user)!,
-      session: session as unknown as AdapterSession,
+      session: {
+        sessionToken: token,
+        userId,
+        expires,
+      },
     };
   },
 };
