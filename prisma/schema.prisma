@@ -43,6 +43,8 @@ model User {
   forbiddenTerms         ForbiddenTerm[]
   articleLikes           ArticleLike[]
   commentLikes           CommentLike[]
+  notificationsReceived  Notification[]        @relation("UserNotifications")
+  notificationsSent      Notification[]        @relation("UserNotificationActors")
 
   @@index([role])
 }
@@ -106,6 +108,7 @@ model Article {
   tags            ArticleTag[]
   comments        Comment[]
   likes           ArticleLike[]
+  notifications   Notification[]
 
   @@index([status, publishedAt])
   @@index([authorId])
@@ -147,10 +150,33 @@ model Comment {
   parent     Comment?       @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
   replies    Comment[]      @relation("CommentReplies")
   likes      CommentLike[]
+  notifications Notification[]
 
   @@index([articleId, status, createdAt])
   @@index([userId, createdAt])
   @@index([parentId])
+}
+
+model Notification {
+  id        String            @id @default(cuid())
+  userId    String
+  actorId   String
+  type      NotificationType
+  articleId String?
+  commentId String?
+  createdAt DateTime          @default(now())
+  readAt    DateTime?
+
+  user    User     @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  actor   User     @relation("UserNotificationActors", fields: [actorId], references: [id], onDelete: Cascade)
+  article Article? @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([actorId])
+  @@index([articleId])
+  @@index([commentId])
+  @@index([readAt])
 }
 
 model ArticleLike {
@@ -433,4 +459,11 @@ enum CommentStatus {
   PUBLISHED
   PENDING
   ARCHIVED
+}
+
+enum NotificationType {
+  ARTICLE_COMMENT
+  COMMENT_REPLY
+  ARTICLE_LIKE
+  COMMENT_LIKE
 }

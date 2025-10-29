@@ -1,6 +1,7 @@
-import { ArticleStatus, CommentStatus } from "@prisma/client";
+import { ArticleStatus, CommentStatus, NotificationType } from "@prisma/client";
 
 import { getPrismaClient } from "@/lib/security/prisma-client";
+import { createNotification } from "@/lib/notifications/service";
 
 type LikeToggleResult = {
   liked: boolean;
@@ -53,7 +54,7 @@ export async function toggleArticleLike(params: { articleId: string; userId: str
     const result = await prisma.$transaction(async (tx) => {
       const article = await tx.article.findUnique({
         where: { id: params.articleId },
-        select: { status: true },
+        select: { status: true, authorId: true },
       });
       if (!article || article.status !== ArticleStatus.PUBLISHED) {
         throw new Error("TARGET_UNAVAILABLE");
@@ -83,6 +84,17 @@ export async function toggleArticleLike(params: { articleId: string; userId: str
           userId: params.userId,
         },
       });
+      if (article.authorId && article.authorId !== params.userId) {
+        await createNotification(
+          {
+            recipientId: article.authorId,
+            actorId: params.userId,
+            type: NotificationType.ARTICLE_LIKE,
+            articleId: params.articleId,
+          },
+          tx
+        );
+      }
       const likeCount = await tx.articleLike.count({
         where: { articleId: params.articleId },
       });
@@ -108,7 +120,7 @@ export async function toggleCommentLike(params: { commentId: string; userId: str
     const result = await prisma.$transaction(async (tx) => {
       const comment = await tx.comment.findUnique({
         where: { id: params.commentId },
-        select: { status: true },
+        select: { status: true, userId: true, articleId: true },
       });
       if (!comment || comment.status !== CommentStatus.PUBLISHED) {
         throw new Error("TARGET_UNAVAILABLE");
@@ -138,6 +150,18 @@ export async function toggleCommentLike(params: { commentId: string; userId: str
           userId: params.userId,
         },
       });
+      if (comment.userId && comment.userId !== params.userId) {
+        await createNotification(
+          {
+            recipientId: comment.userId,
+            actorId: params.userId,
+            type: NotificationType.COMMENT_LIKE,
+            articleId: comment.articleId,
+            commentId: params.commentId,
+          },
+          tx
+        );
+      }
       const likeCount = await tx.commentLike.count({
         where: { commentId: params.commentId },
       });

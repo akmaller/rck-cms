@@ -101,6 +101,7 @@ export function CommentThread({
 
   return (
     <article
+      id={`comment-${comment.id}`}
       className={cn(
         "rounded-xl border border-border/70 bg-card px-4 py-4 shadow-sm transition-colors",
         isCurrentUser ? "border-primary/70 bg-primary/5" : "",

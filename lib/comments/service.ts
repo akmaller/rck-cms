@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { ArticleStatus, CommentStatus, Prisma } from "@prisma/client";
+import { ArticleStatus, CommentStatus, Prisma, NotificationType } from "@prisma/client";
 
 import { writeAuditLog } from "@/lib/audit/log";
 import { isRateLimited } from "@/lib/rate-limit";
@@ -8,6 +8,7 @@ import { getPrismaClient } from "@/lib/security/prisma-client";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { commentCreateSchema } from "@/lib/validators/comment";
 import { detectForbiddenPhrase } from "@/lib/moderation/forbidden-terms";
+import { createNotification } from "@/lib/notifications/service";
 
 const CONTROL_CHARS_REGEX = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g;
 const ZERO_WIDTH_REGEX = /[\u200B-\u200F\u202A-\u202E\u2060\uFEFF]/g;
@@ -428,7 +429,7 @@ export async function createArticleComment(params: {
   parentId?: string | null;
   ipAddress?: string | null;
   userAgent?: string | null;
-}) {
+}): Promise<void> {
   const parsed = commentCreateSchema.parse({
     content: params.content,
     parentId: params.parentId ?? undefined,
@@ -452,7 +453,7 @@ export async function createArticleComment(params: {
     throw new Error("TARGET_UNAVAILABLE");
   }
 
-  let parentComment: { id: string; parentId: string | null } | null = null;
+  let parentComment: { id: string; parentId: string | null; userId: string } | null = null;
   if (targetParentId) {
     parentComment = await prisma.comment.findFirst({
       where: {
@@ -460,7 +461,7 @@ export async function createArticleComment(params: {
         articleId: params.articleId,
         status: ENUM_STATUS_PUBLISHED,
       },
-      select: { id: true, parentId: true },
+      select: { id: true, parentId: true, userId: true },
     });
     if (!parentComment || parentComment.parentId) {
       throw new Error("INVALID_PARENT");
@@ -477,6 +478,15 @@ export async function createArticleComment(params: {
   }).comment;
   const sanitizedIp = sanitizeMetadata(params.ipAddress);
   const sanitizedAgent = sanitizeMetadata(params.userAgent, 500);
+  const articleOwner = await prisma.article.findUnique({
+    where: { id: params.articleId },
+    select: { authorId: true },
+  });
+  if (!articleOwner) {
+    throw new Error("TARGET_UNAVAILABLE");
+  }
+
+  let createdCommentId: string | null = null;
 
   if (commentDelegate?.create) {
     const created = await commentDelegate.create({
@@ -490,6 +500,7 @@ export async function createArticleComment(params: {
         parentId: parentComment?.id ?? null,
       },
     });
+    createdCommentId = created.id;
     await writeAuditLog({
       action: "comment.create",
       entity: "Comment",
@@ -500,29 +511,69 @@ export async function createArticleComment(params: {
         userAgent: sanitizedAgent,
       },
     });
-    return created;
+  } else {
+    // Fallback ketika Prisma client belum ter-generate dengan model terbaru.
+    const statusLiteral = Prisma.raw(`'${RAW_STATUS_PUBLISHED}'::"CommentStatus"`);
+    const generatedId = randomUUID();
+    await prisma.$executeRaw(
+      Prisma.sql`
+        INSERT INTO "Comment" ("id", "articleId", "userId", "content", "status", "ipAddress", "userAgent", "parentId")
+        VALUES (${generatedId}, ${params.articleId}, ${params.userId}, ${sanitizedContent}, ${statusLiteral}, ${sanitizedIp}, ${sanitizedAgent}, ${parentComment?.id ?? null})
+      `
+    );
+
+    createdCommentId = generatedId;
+
+    await writeAuditLog({
+      action: "comment.create",
+      entity: "Comment",
+      entityId: generatedId,
+      metadata: {
+        articleId: params.articleId,
+        ipAddress: sanitizedIp,
+        userAgent: sanitizedAgent,
+      },
+    });
   }
 
-  // Fallback when Prisma client belum digenerate ulang.
-  const statusLiteral = Prisma.raw(`'${RAW_STATUS_PUBLISHED}'::"CommentStatus"`);
-  const generatedId = randomUUID();
-  await prisma.$executeRaw(
-    Prisma.sql`
-      INSERT INTO "Comment" ("id", "articleId", "userId", "content", "status", "ipAddress", "userAgent", "parentId")
-      VALUES (${generatedId}, ${params.articleId}, ${params.userId}, ${sanitizedContent}, ${statusLiteral}, ${sanitizedIp}, ${sanitizedAgent}, ${parentComment?.id ?? null})
-    `
-  );
+  if (createdCommentId) {
+    const notificationJobs: Promise<unknown>[] = [];
+    if (
+      articleOwner.authorId &&
+      articleOwner.authorId !== params.userId &&
+      (!parentComment || parentComment.userId !== articleOwner.authorId)
+    ) {
+      notificationJobs.push(
+        createNotification(
+          {
+            recipientId: articleOwner.authorId,
+            actorId: params.userId,
+            type: NotificationType.ARTICLE_COMMENT,
+            articleId: params.articleId,
+            commentId: createdCommentId,
+          },
+          prisma
+        )
+      );
+    }
+    if (parentComment?.userId && parentComment.userId !== params.userId) {
+      notificationJobs.push(
+        createNotification(
+          {
+            recipientId: parentComment.userId,
+            actorId: params.userId,
+            type: NotificationType.COMMENT_REPLY,
+            articleId: params.articleId,
+            commentId: createdCommentId,
+          },
+          prisma
+        )
+      );
+    }
+    if (notificationJobs.length) {
+      await Promise.allSettled(notificationJobs);
+    }
+  }
 
-  await writeAuditLog({
-    action: "comment.create",
-    entity: "Comment",
-    entityId: generatedId,
-    metadata: {
-      articleId: params.articleId,
-      ipAddress: sanitizedIp,
-      userAgent: sanitizedAgent,
-    },
-  });
-
-  return null;
+  return;
 }

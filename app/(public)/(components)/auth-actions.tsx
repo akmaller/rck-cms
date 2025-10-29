@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, Loader2, LogIn } from "lucide-react";
+import { DashboardNotificationBell } from "@/components/layout/dashboard/dashboard-notification-bell";
 
 type AuthFetcherResult =
   | { authenticated: true; role?: string | null }
@@ -61,6 +62,7 @@ export function PublicAuthActions() {
   if (state.authenticated) {
     return (
       <div className="flex items-center gap-2">
+        <DashboardNotificationBell />
         <Link
           href="/dashboard"
           className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition hover:border-primary/60 hover:text-primary"

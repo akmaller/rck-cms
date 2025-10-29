@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 
 import { useDashboardHeader } from "./dashboard-header-context";
 import { DashboardSearch } from "./dashboard-search";
+import { DashboardNotificationBell } from "./dashboard-notification-bell";
 
 type DashboardTopbarProps = {
   onToggleSidebar: () => void;
@@ -45,6 +46,7 @@ export function DashboardTopbar({ onToggleSidebar, isSidebarOpen, siteName }: Da
         </div>
       </div>
       <div className="ml-auto flex items-center gap-2 [&>form]:ml-0">
+        <DashboardNotificationBell />
         <DashboardSearch />
         <Button asChild variant="outline" size="icon">
           <Link href="/" aria-label="Ke Beranda">
