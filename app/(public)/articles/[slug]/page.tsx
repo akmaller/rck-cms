@@ -61,10 +61,15 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const categories = article.categories.map((entry) => entry.category.name);
   const tags = article.tags.map((entry) => entry.tag.name);
   const keywords = [...categories, ...tags, article.title];
+  const rawDescription = article.excerpt?.trim() ?? "";
+  const description =
+    rawDescription.length > 1000
+      ? `${rawDescription.slice(0, 997).trimEnd()}...`
+      : rawDescription || undefined;
 
   return createMetadata({
     title: article.title,
-    description: article.excerpt ?? undefined,
+    description,
     keywords,
     path: `/articles/${slug}`,
     type: "article",
