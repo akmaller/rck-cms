@@ -1,13 +1,22 @@
 "use client";
 
-import { Copy, Facebook, MessageCircle, Send, Share2, type LucideIcon } from "lucide-react";
+import {
+  Copy,
+  Facebook,
+  Linkedin,
+  Mail,
+  MessageCircle,
+  Send,
+  Share2,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
 import { buttonVariants } from "@/lib/button-variants";
 import { cn, ensureTrailingSlash } from "@/lib/utils";
 
-type ShareChannel = "twitter" | "facebook" | "whatsapp" | "telegram";
+type ShareChannel = "twitter" | "facebook" | "whatsapp" | "telegram" | "linkedin" | "email";
 
 type ShareActionsProps = {
   title: string;
@@ -29,6 +38,10 @@ function buildShareUrl(channel: ShareChannel, title: string, url: string) {
       return `https://wa.me/?text=${encodedTitle}%20${encodedUrl}`;
     case "telegram":
       return `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`;
+    case "linkedin":
+      return `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
+    case "email":
+      return `mailto:?subject=${encodedTitle}&body=${encodedUrl}`;
     default:
       return normalizedUrl;
   }
@@ -72,6 +85,16 @@ export function ShareActions({ title, articleUrl, className }: ShareActionsProps
       channel: "telegram" as ShareChannel,
       label: "Telegram",
       Icon: Send,
+    },
+    {
+      channel: "linkedin" as ShareChannel,
+      label: "LinkedIn",
+      Icon: Linkedin,
+    },
+    {
+      channel: "email" as ShareChannel,
+      label: "Email",
+      Icon: Mail,
     },
   ];
 

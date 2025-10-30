@@ -30,9 +30,10 @@ type ArticleWithRelations = Prisma.ArticleGetPayload<{ include: typeof articleIn
 
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
-  return createMetadata({
+  const baseTitle = config.metadata.title ?? config.name;
+  const metadata = await createMetadata({
     config,
-    title: config.metadata.title ?? config.name,
+    title: baseTitle,
     description: config.metadata.description ?? config.description,
     path: "/",
     image: config.logoUrl
@@ -47,6 +48,10 @@ export async function generateMetadata(): Promise<Metadata> {
           }
         : null,
   });
+  return {
+    ...metadata,
+    title: { absolute: baseTitle },
+  };
 }
 
 function formatRelativeLabel(date: Date | string | null | undefined) {
@@ -71,7 +76,7 @@ export default async function HomePage() {
   const popularWindowStart = new Date(now);
   popularWindowStart.setDate(popularWindowStart.getDate() - POPULAR_LOOKBACK_DAYS);
 
-  const [latestArticles, randomizableCategories, popularArticlePaths] = await Promise.all([
+  const [latestArticles, randomizableCategories, popularArticlePaths, siteConfig] = await Promise.all([
     prisma.article.findMany({
       where: { status: ArticleStatus.PUBLISHED },
       include: articleInclude,
@@ -101,6 +106,7 @@ export default async function HomePage() {
       orderBy: { _count: { path: "desc" } },
       take: 40,
     }),
+    getSiteConfig(),
   ]);
   const heroArticles = latestArticles.slice(0, 5);
   const heroSliderArticles: HeroSliderArticle[] = heroArticles.map((article) => ({
@@ -198,10 +204,20 @@ export default async function HomePage() {
     if (!source) return null;
     return deriveThumbnailUrl(source) ?? source;
   };
+  const homepageTitle = siteConfig.metadata.title?.trim() || siteConfig.name;
 
   return (
-    <div className="flex flex-col gap-12">
-      <section className="flex flex-col gap-5">
+    <div className="flex flex-col gap-12 -mt-6 sm:-mt-8 lg:-mt-10">
+      <h1 className="sr-only">{homepageTitle}</h1>
+      <section
+        aria-labelledby="homepage-highlights-heading"
+        className="flex flex-col gap-5"
+      >
+        <div className="space-y-1.5">
+          <h2 id="homepage-highlights-heading" className="sr-only">
+            Sorotan Utama
+          </h2>
+        </div>
         <div className="grid items-stretch gap-5 md:grid-cols-[minmax(0,7fr)_minmax(0,3fr)] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
           <div className="min-h-[260px] h-full">
             {heroSliderArticles.length > 0 ? (

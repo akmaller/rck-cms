@@ -215,7 +215,7 @@ export function HeroSlider({ articles }: HeroSliderProps) {
                   {article.categories[0]}
                 </span>
               ) : null}
-              <h2 className="text-lg font-semibold leading-tight sm:text-xl">{article.title}</h2>
+              <h3 className="text-lg font-semibold leading-tight sm:text-xl">{article.title}</h3>
               <span className="text-[11px] text-white/70 sm:text-xs">{article.publishDateLabel}</span>
             </div>
           </Link>
