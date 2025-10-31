@@ -10,19 +10,28 @@ const DASHBOARD_ROLES = new Set(["ADMIN", "EDITOR", "AUTHOR"]);
 
 const buildCspHeader = () => {
   const isProduction = process.env.NODE_ENV === "production";
-  const scriptSrc = ["'self'", "'unsafe-inline'"];
+  const scriptSrc = [
+    "'self'",
+    "'unsafe-inline'",
+    "https://www.googletagmanager.com",
+    "https://www.google-analytics.com",
+    "https://static.cloudflareinsights.com"
+  ];
   const allowUnsafeEval =
     !isProduction ||
     ["1", "true", "yes", "on"].includes((process.env.CSP_ALLOW_UNSAFE_EVAL ?? "").toLowerCase());
   if (allowUnsafeEval) {
     scriptSrc.push("'unsafe-eval'");
   }
-  const turnstileScriptSrc = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY ? "https://challenges.cloudflare.com" : null;
-  const scriptSrcValues = turnstileScriptSrc ? [...scriptSrc, `${turnstileScriptSrc}`] : scriptSrc;
+  const scriptSrcExtras: string[] = [];
+  if (process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY) {
+    scriptSrcExtras.push("https://challenges.cloudflare.com");
+  }
+  const scriptSrcValues = [...scriptSrc, ...scriptSrcExtras];
   const scriptSrcElemValues = scriptSrcValues;
-  const frameSrcValues = ["'self'"];
-  if (turnstileScriptSrc) {
-    frameSrcValues.push(turnstileScriptSrc);
+  const frameSrcValues = ["'self'", "https://www.googletagmanager.com"];
+  if (scriptSrcExtras.includes("https://challenges.cloudflare.com")) {
+    frameSrcValues.push("https://challenges.cloudflare.com");
   }
 
   return [
@@ -32,7 +41,7 @@ const buildCspHeader = () => {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
-    "connect-src 'self' https:" ,
+    "connect-src 'self' https: https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com",
     `frame-src ${frameSrcValues.join(" ")}`,
     "frame-ancestors 'none'",
     "base-uri 'self'",

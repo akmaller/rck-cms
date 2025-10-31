@@ -34,10 +34,11 @@ export function GoogleTagManager({ containerId, placement }: GoogleTagManagerPro
 
   if (placement === "head" && (normalized.startsWith("G-") || normalized.startsWith("UA-"))) {
     const scriptSrc = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(trimmedId)}`;
+    const escapedId = trimmedId.replace(/'/g, "\\'");
     const inlineContent = `window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
-gtag('config', ${serializedId});`;
+gtag('config', '${escapedId}');`;
 
     return (
       <>
