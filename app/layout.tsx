@@ -55,12 +55,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const googleTagManagerId = rawTagId && rawTagId.length > 0 ? rawTagId : null;
   const normalizedTag = googleTagManagerId?.toUpperCase() ?? null;
   const useNoscript = normalizedTag?.startsWith("GTM-") ?? false;
+  const enableAnalytics =
+    process.env.NODE_ENV === "production" && googleTagManagerId !== null;
+  const resolvedContainerId = enableAnalytics ? googleTagManagerId : null;
 
   return (
     <html lang="id" suppressHydrationWarning>
       <head>
-        {googleTagManagerId ? (
-          <GoogleTagManager containerId={googleTagManagerId} placement="head" />
+        {resolvedContainerId ? (
+          <GoogleTagManager containerId={resolvedContainerId} placement="head" />
         ) : null}
       </head>
       <body
@@ -70,8 +73,8 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           geistMono.variable
         )}
       >
-        {googleTagManagerId && useNoscript ? (
-          <GoogleTagManager containerId={googleTagManagerId} placement="body" />
+        {resolvedContainerId && useNoscript ? (
+          <GoogleTagManager containerId={resolvedContainerId} placement="body" />
         ) : null}
         {children}
       </body>

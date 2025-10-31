@@ -1,10 +1,17 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Facebook, Instagram, Twitter, Youtube, type LucideIcon } from "lucide-react";
 
 import { getSiteConfig } from "@/lib/site-config/server";
 import { getMenuTree } from "@/lib/menu/server";
 import { resolveMenuHref } from "@/lib/menu/utils";
+import { ResponsiveLogoImage } from "./site-logo";
+
+function encodeEmailForAttribute(value: string) {
+  return value
+    .split("")
+    .map((char) => `&#${char.charCodeAt(0)};`)
+    .join("");
+}
 
 export async function SiteFooter() {
   const [config, footerMenu] = await Promise.all([getSiteConfig(), getMenuTree("footer")]);
@@ -47,6 +54,12 @@ export async function SiteFooter() {
     (entry): entry is { key: string; label: string; href: string; icon: LucideIcon } =>
       Boolean(entry.href)
   );
+  const obfuscatedContactEmail = config.contactEmail
+    ? {
+        href: `mailto:${encodeEmailForAttribute(config.contactEmail)}`,
+        disguised: config.contactEmail.replace(/@/g, " [at] ").replace(/\./g, " dot "),
+      }
+    : null;
 
   return (
     <footer className="border-t border-border bg-background/90">
@@ -55,17 +68,13 @@ export async function SiteFooter() {
           <div className="flex flex-col gap-6 md:pr-8">
             <Link href="/" className="flex items-center gap-4 text-foreground">
               {config.logoUrl ? (
-                <span className="flex h-12 max-w-[14rem] items-center">
-                  <Image
-                    src={config.logoUrl}
-                    alt={config.name}
-                    width={220}
-                    height={48}
-                    className="max-h-full object-contain"
-                    style={{ width: "auto", height: "auto" }}
-                    priority
-                  />
-                </span>
+                <ResponsiveLogoImage
+                  src={config.logoUrl}
+                  alt={config.name}
+                  maxHeight={50}
+                  maxWidth={300}
+                  priority
+                />
               ) : (
                 <div className="flex flex-col">
                   <span className="text-lg font-semibold">{config.name}</span>
@@ -176,12 +185,10 @@ export async function SiteFooter() {
           <p>
             &copy; {new Date().getFullYear()} {config.name}. Hak cipta dilindungi.
           </p>
-          {config.contactEmail ? (
-            <a
-              href={`mailto:${config.contactEmail}`}
-              className="transition-colors hover:text-foreground"
-            >
-              {config.contactEmail}
+          {obfuscatedContactEmail ? (
+            <a href={obfuscatedContactEmail.href} className="transition-colors hover:text-foreground">
+              Hubungi kami via email
+              <span className="sr-only">: {obfuscatedContactEmail.disguised}</span>
             </a>
           ) : null}
         </div>

@@ -1,3 +1,5 @@
+import Script from "next/script";
+
 type Placement = "head" | "body";
 
 type GoogleTagManagerProps = {
@@ -17,7 +19,13 @@ export function GoogleTagManager({ containerId, placement }: GoogleTagManagerPro
   if (normalized.startsWith("GTM-")) {
     if (placement === "head") {
       const scriptContent = `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer',${serializedId});`;
-      return <script dangerouslySetInnerHTML={{ __html: scriptContent }} />;
+      return (
+        <Script
+          id={`gtm-loader-${normalized}`}
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{ __html: scriptContent }}
+        />
+      );
     }
 
     if (placement === "body") {
@@ -42,8 +50,12 @@ gtag('config', '${escapedId}');`;
 
     return (
       <>
-        <script async src={scriptSrc} />
-        <script dangerouslySetInnerHTML={{ __html: inlineContent }} />
+        <Script src={scriptSrc} strategy="afterInteractive" />
+        <Script
+          id={`gtag-init-${normalized}`}
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{ __html: inlineContent }}
+        />
       </>
     );
   }

@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { Menu, Search } from "lucide-react";
 import { Suspense } from "react";
 
@@ -8,6 +7,7 @@ import { getMenuTree } from "@/lib/menu/server";
 import { resolveMenuHref } from "@/lib/menu/utils";
 import { PublicAuthActions } from "@/app/(public)/(components)/auth-actions";
 import { MobileNavigation } from "./site-header-mobile";
+import { ResponsiveLogoImage } from "./site-logo";
 
 export async function SiteHeader() {
   const [config, mainMenu] = await Promise.all([getSiteConfig(), getMenuTree("main")]);
@@ -16,17 +16,13 @@ export async function SiteHeader() {
       <div className="container flex h-16 items-center justify-between gap-3">
         <Link href="/" className="flex items-center gap-3">
           {config.logoUrl ? (
-            <span className="flex h-full max-w-[12rem] items-center py-[2px]">
-              <Image
-                src={config.logoUrl}
-                alt={config.name}
-                width={180}
-                height={36}
-                className="max-h-full object-contain"
-                style={{ width: "auto", height: "auto" }}
-                priority
-              />
-            </span>
+            <ResponsiveLogoImage
+              src={config.logoUrl}
+              alt={config.name}
+              maxHeight={48}
+              maxWidth={240}
+              priority
+            />
           ) : null}
           {!config.logoUrl ? (
             <div className="flex flex-col leading-tight">

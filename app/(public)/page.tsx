@@ -28,6 +28,118 @@ const articleInclude = {
 
 type ArticleWithRelations = Prisma.ArticleGetPayload<{ include: typeof articleInclude }>;
 
+type StructuredDataNode = Record<string, unknown>;
+
+function resolvePreferredSiteUrl(preferred?: string | null) {
+  const candidates = [
+    preferred,
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.APP_URL,
+    process.env.SITE_URL,
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      return new URL(candidate);
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function toAbsoluteUrl(value: string | null | undefined, base: URL | null) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    return base ? new URL(trimmed, base).toString() : new URL(trimmed).toString();
+  } catch {
+    if (!base) return null;
+    try {
+      return new URL(trimmed.replace(/^\/+/, ""), base).toString();
+    } catch {
+      return null;
+    }
+  }
+}
+
+function buildStructuredData({
+  siteConfig,
+  homepageTitle,
+  heroArticles,
+  siteUrl,
+}: {
+  siteConfig: Awaited<ReturnType<typeof getSiteConfig>>;
+  homepageTitle: string;
+  heroArticles: HeroSliderArticle[];
+  siteUrl: URL | null;
+}): StructuredDataNode[] {
+  const items: StructuredDataNode[] = [];
+  const siteOrigin = siteUrl?.origin ?? null;
+  const siteHref = siteUrl?.toString() ?? null;
+
+  if (siteHref) {
+    const searchUrl = toAbsoluteUrl("/search?q={search_term_string}", siteUrl);
+    items.push({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      name: homepageTitle,
+      url: siteHref,
+      potentialAction: searchUrl
+        ? {
+            "@type": "SearchAction",
+            target: searchUrl,
+            "query-input": "required name=search_term_string",
+          }
+        : undefined,
+    });
+  }
+
+  items.push({
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: siteConfig.name,
+    description: siteConfig.description,
+    url: siteHref ?? undefined,
+    logo: toAbsoluteUrl(siteConfig.logoUrl ?? null, siteUrl) ?? undefined,
+    sameAs: [
+      toAbsoluteUrl(siteConfig.links.facebook ?? null, siteUrl),
+      toAbsoluteUrl(siteConfig.links.instagram ?? null, siteUrl),
+      toAbsoluteUrl(siteConfig.links.twitter ?? null, siteUrl),
+      toAbsoluteUrl(siteConfig.links.youtube ?? null, siteUrl),
+    ].filter((value): value is string => Boolean(value)),
+  });
+
+  if (heroArticles.length > 0) {
+    const articleItems = heroArticles.slice(0, 6).map((article, index) => {
+      const articleUrl = toAbsoluteUrl(`/articles/${article.slug}`, siteUrl);
+      const imageUrl = article.featuredImage?.url
+        ? toAbsoluteUrl(article.featuredImage.url, siteUrl)
+        : null;
+      return {
+        "@type": "ListItem",
+        position: index + 1,
+        url: articleUrl ?? undefined,
+        name: article.title,
+        image: imageUrl ?? undefined,
+      };
+    });
+
+    items.push({
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      itemListOrder: "Descending",
+      url: siteHref ?? siteOrigin ?? undefined,
+      itemListElement: articleItems,
+    });
+  }
+
+  return items;
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
   const baseTitle = config.metadata.title ?? config.name;
@@ -205,9 +317,28 @@ export default async function HomePage() {
     return deriveThumbnailUrl(source) ?? source;
   };
   const homepageTitle = siteConfig.metadata.title?.trim() || siteConfig.name;
+  const preferredSiteUrl = resolvePreferredSiteUrl(siteConfig.url);
+  const structuredDataNodes = buildStructuredData({
+    siteConfig,
+    homepageTitle,
+    heroArticles: heroSliderArticles,
+    siteUrl: preferredSiteUrl,
+  });
+  const structuredDataScripts = structuredDataNodes.map(
+    (node) => JSON.stringify(node).replace(/</g, "\\u003c"),
+  );
 
   return (
     <div className="flex flex-col gap-12 -mt-6 sm:-mt-8 lg:-mt-10">
+      {structuredDataScripts.length > 0 ? (
+        structuredDataScripts.map((json, index) => (
+          <script
+            key={`structured-data-${index}`}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: json }}
+          />
+        ))
+      ) : null}
       <h1 className="sr-only">{homepageTitle}</h1>
       <section
         aria-labelledby="homepage-highlights-heading"

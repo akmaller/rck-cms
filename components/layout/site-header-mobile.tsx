@@ -10,7 +10,6 @@ import {
   type ComponentType,
 } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { Facebook, Instagram, Search, Twitter, Youtube, X } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -19,6 +18,7 @@ import { PublicAuthActions } from "@/app/(public)/(components)/auth-actions";
 import type { ResolvedSiteConfig } from "@/lib/site-config/types";
 import { resolveMenuHref, type MenuNode } from "@/lib/menu/utils";
 import { cn } from "@/lib/utils";
+import { ResponsiveLogoImage } from "./site-logo";
 
 type MobileNavigationProps = {
   siteConfig: ResolvedSiteConfig;
@@ -161,16 +161,12 @@ export function MobileNavigation({ siteConfig, mainMenu }: MobileNavigationProps
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
               {siteConfig.logoUrl ? (
-                <span className="flex h-10 max-w-[12rem] items-center">
-                  <Image
-                    src={siteConfig.logoUrl}
-                    alt={siteConfig.name}
-                    width={200}
-                    height={80}
-                    className="h-full w-auto object-contain"
-                    priority={false}
-                  />
-                </span>
+                <ResponsiveLogoImage
+                  src={siteConfig.logoUrl}
+                  alt={siteConfig.name}
+                  maxHeight={35}
+                  maxWidth={180}
+                />
               ) : (
                 <>
                   <p className="text-sm font-semibold text-foreground">{siteConfig.name}</p>
