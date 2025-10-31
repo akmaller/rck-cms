@@ -1,8 +1,10 @@
 import type { NextConfig } from "next";
 
-const imagesRemotePatterns: NonNullable<
+type RemotePattern = NonNullable<
   NonNullable<NextConfig["images"]>["remotePatterns"]
-> = (() => {
+>[number];
+
+const imagesRemotePatterns = (() => {
   const candidates = [
     process.env.NEXT_PUBLIC_APP_URL,
     process.env.APP_URL,
@@ -10,40 +12,85 @@ const imagesRemotePatterns: NonNullable<
     process.env.R2_PUBLIC_BASE_URL,
   ];
 
+  const patterns: RemotePattern[] = [];
   const seen = new Set<string>();
 
-  return candidates
-    .map((input) => {
-      if (!input) return null;
+  const addPattern = (pattern: RemotePattern) => {
+    const protocol = pattern.protocol ?? "https";
+    const key = `${protocol}://${pattern.hostname}${pattern.pathname ?? ""}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      patterns.push(pattern);
+    }
+  };
+
+  const addFromUrl = (input: string) => {
+    try {
+      const url = new URL(input);
+      const protocol = url.protocol.replace(":", "");
+      if (protocol !== "http" && protocol !== "https") {
+        return;
+      }
+      const normalizedPath = url.pathname.replace(/\/+$/, "");
+      const pathname =
+        normalizedPath.length > 0 && normalizedPath !== "/"
+          ? `${normalizedPath}/**`
+          : "/**";
+      addPattern({
+        protocol: protocol as "http" | "https",
+        hostname: url.hostname,
+        pathname,
+      });
+    } catch {
+      // Ignore invalid URLs
+    }
+  };
+
+  candidates.filter(Boolean).forEach((input) => addFromUrl(input!));
+
+  const defaultRemotePatterns: RemotePattern[] = [
+    { protocol: "https", hostname: "*.googleusercontent.com", pathname: "/**" },
+    { protocol: "https", hostname: "lh3.googleusercontent.com", pathname: "/**" },
+    { protocol: "https", hostname: "lh4.googleusercontent.com", pathname: "/**" },
+    { protocol: "https", hostname: "lh5.googleusercontent.com", pathname: "/**" },
+    { protocol: "https", hostname: "lh6.googleusercontent.com", pathname: "/**" },
+    { protocol: "https", hostname: "secure.gravatar.com", pathname: "/avatar/**" },
+    { protocol: "https", hostname: "gravatar.com", pathname: "/avatar/**" },
+  ];
+
+  defaultRemotePatterns.forEach(addPattern);
+
+  const extraHostsRaw =
+    process.env.NEXT_REMOTE_IMAGE_HOSTS ?? process.env.NEXT_PUBLIC_REMOTE_IMAGE_HOSTS ?? "";
+  extraHostsRaw
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .forEach((value) => {
+      const hasProtocol = /^[a-z]+:\/\//i.test(value);
+      const candidateUrl = hasProtocol ? value : `https://${value}`;
       try {
-        const url = new URL(input);
-        const key = `${url.protocol}//${url.hostname}${url.pathname}`;
-        if (seen.has(key)) {
-          return null;
-        }
-        seen.add(key);
-
-        const normalizedPath = url.pathname.replace(/\/?$/, "");
-        const pathname =
-          normalizedPath.length > 0 && normalizedPath !== "/"
-            ? `${normalizedPath.replace(/\/+$/, "")}/**`
-            : "/**";
-
+        const url = new URL(candidateUrl);
         const protocol = url.protocol.replace(":", "");
         if (protocol !== "http" && protocol !== "https") {
-          return null;
+          return;
         }
-
-        return {
+        const normalizedPath = url.pathname.replace(/\/+$/, "");
+        const pathname =
+          normalizedPath.length > 0 && normalizedPath !== "/"
+            ? `${normalizedPath}/**`
+            : "/**";
+        addPattern({
           protocol: protocol as "http" | "https",
           hostname: url.hostname,
           pathname,
-        };
+        });
       } catch {
-        return null;
+        // Ignore invalid values
       }
-    })
-    .filter((pattern): pattern is NonNullable<typeof pattern> => Boolean(pattern));
+    });
+
+  return patterns;
 })();
 
 const disableImageOptimization =
