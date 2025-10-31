@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+import { GoogleTagManager } from "@/components/analytics/google-tag-manager";
 import { createMetadata } from "@/lib/seo/metadata";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { cn } from "@/lib/utils";
@@ -49,6 +50,9 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
+  const config = await getSiteConfig();
+  const googleTagManagerId = config.analytics?.googleTagManagerId ?? null;
+
   return (
     <html lang="id" suppressHydrationWarning>
       <body
@@ -58,6 +62,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           geistMono.variable
         )}
       >
+        {googleTagManagerId ? <GoogleTagManager containerId={googleTagManagerId} /> : null}
         {children}
       </body>
     </html>

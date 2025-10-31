@@ -12,4 +12,7 @@ export type ResolvedSiteConfig = SiteConfig & {
     autoApprove: boolean;
     privacyPolicyPageSlug: string | null;
   };
+  analytics: {
+    googleTagManagerId: string | null;
+  };
 };

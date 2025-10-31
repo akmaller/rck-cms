@@ -19,6 +19,8 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
 
   const registrationDefaults = defaultSiteConfig.registration ?? { enabled: true, autoApprove: false };
   const registrationSetting = values?.registration ?? {};
+  const analyticsDefaults = defaultSiteConfig.analytics ?? {};
+  const analyticsSetting = values?.analytics ?? {};
   const commentsDefaults = defaultSiteConfig.comments ?? { enabled: true };
   const commentsSetting = values?.comments ?? {};
   const normalizePolicySlug = (value: unknown) =>
@@ -32,6 +34,10 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
   const resolvedSiteUrl = trimOrNull(values?.siteUrl) ?? defaultSiteConfig.url;
   const resolvedContactEmail = trimOrNull(values?.contactEmail) ?? defaultSiteConfig.contactEmail;
   const resolvedOgImage = trimOrNull(defaultSiteConfig.ogImage) ?? defaultSiteConfig.ogImage;
+  const resolvedGoogleTagManagerId =
+    trimOrNull(analyticsSetting.googleTagManagerId) ??
+    trimOrNull(analyticsDefaults.googleTagManagerId) ??
+    null;
 
   return {
     ...defaultSiteConfig,
@@ -70,6 +76,9 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
     },
     comments: {
       enabled: commentsSetting.enabled ?? commentsDefaults.enabled ?? true,
+    },
+    analytics: {
+      googleTagManagerId: resolvedGoogleTagManagerId,
     },
   };
 };

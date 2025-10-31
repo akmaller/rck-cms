@@ -26,6 +26,9 @@ export type SiteConfig = {
     autoApprove?: boolean;
     privacyPolicyPageSlug?: string | null;
   };
+  analytics?: {
+    googleTagManagerId?: string | null;
+  };
 };
 
 export const siteConfig: SiteConfig = {
@@ -55,5 +58,8 @@ export const siteConfig: SiteConfig = {
   registration: {
     enabled: true,
     autoApprove: false,
+  },
+  analytics: {
+    googleTagManagerId: null,
   },
 };

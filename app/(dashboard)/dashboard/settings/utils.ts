@@ -32,5 +32,8 @@ export function buildInitialConfig(value: ConfigValues | null | undefined): Conf
     comments: {
       enabled: value?.comments?.enabled ?? true,
     },
+    analytics: {
+      googleTagManagerId: value?.analytics?.googleTagManagerId ?? "",
+    },
   };
 }

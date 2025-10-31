@@ -79,6 +79,10 @@ function mergeSiteConfigValues(
     result.registration = { ...(current?.registration ?? {}), ...updates.registration };
   }
 
+  if (updates.analytics) {
+    result.analytics = { ...(current?.analytics ?? {}), ...updates.analytics };
+  }
+
   if (updates.comments) {
     result.comments = { ...(current?.comments ?? {}), ...updates.comments };
   }
@@ -778,6 +782,16 @@ export async function updateSiteConfig(formData: FormData) {
     }
     if (Object.keys(metadataValues).length > 0) {
       data.metadata = metadataValues;
+    }
+
+    const analyticsValues: NonNullable<SiteConfigInput["analytics"]> = {};
+    const analyticsGtmRaw = formData.get("analytics.googleTagManagerId");
+    if (analyticsGtmRaw !== null) {
+      const text = analyticsGtmRaw.toString().trim();
+      analyticsValues.googleTagManagerId = text.length > 0 ? text : null;
+    }
+    if (Object.keys(analyticsValues).length > 0) {
+      data.analytics = analyticsValues;
     }
 
     const registrationValues: NonNullable<SiteConfigInput["registration"]> = {};

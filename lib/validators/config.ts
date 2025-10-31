@@ -55,6 +55,16 @@ export const siteConfigSchema = z.object({
       enabled: z.boolean().optional(),
     })
     .optional(),
+  analytics: z
+    .object({
+      googleTagManagerId: z
+        .string()
+        .trim()
+        .regex(/^(?:GTM-[A-Z0-9]+|G-[A-Z0-9]+|UA-[A-Z0-9-]+)$/i, "Google Tag ID tidak valid")
+        .optional()
+        .nullable(),
+    })
+    .optional(),
   registration: z
     .object({
       enabled: z.boolean().optional(),

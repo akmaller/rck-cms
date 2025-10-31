@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/dashboard/settings/general", label: "Umum" },
   { href: "/dashboard/settings/content", label: "Konten" },
+  { href: "/dashboard/settings/configuration", label: "Konfigurasi" },
   { href: "/dashboard/settings/moderation", label: "Moderasi" },
   { href: "/dashboard/settings/wordpress-import", label: "Import WordPress" },
   { href: "/dashboard/settings/performance", label: "Performa" },

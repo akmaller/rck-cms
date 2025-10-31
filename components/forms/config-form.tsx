@@ -35,6 +35,7 @@ export type ConfigSection =
   | "branding"
   | "social"
   | "metadata"
+  | "analytics"
   | "registration"
   | "comments"
   | "cache";
@@ -70,6 +71,9 @@ export type ConfigValues = {
   comments?: {
     enabled?: boolean;
   };
+  analytics?: {
+    googleTagManagerId?: string | null;
+  };
 };
 
 type ConfigFormProps = {
@@ -84,6 +88,7 @@ const DEFAULT_SECTIONS: ConfigSection[] = [
   "branding",
   "social",
   "metadata",
+  "analytics",
   "registration",
   "comments",
   "cache",
@@ -126,6 +131,7 @@ export function ConfigForm({
   const showBranding = activeSections.has("branding");
   const showSocial = activeSections.has("social");
   const showMetadata = activeSections.has("metadata");
+  const showAnalytics = activeSections.has("analytics");
   const showRegistration = activeSections.has("registration");
   const showComments = activeSections.has("comments");
   const showCache = activeSections.has("cache");
@@ -413,6 +419,24 @@ export function ConfigForm({
                   placeholder="pisahkan dengan koma, contoh: budaya, kuliner"
                 />
                 <p className="text-xs text-muted-foreground">Maksimal 10 kata kunci, dipisahkan koma.</p>
+              </div>
+            </section>
+          ) : null}
+
+          {showAnalytics ? (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold">Integrasi Analitik</h3>
+              <div className="space-y-2">
+                <Label htmlFor="analytics.googleTagManagerId">Google Tag ID</Label>
+                <Input
+                  id="analytics.googleTagManagerId"
+                  name="analytics.googleTagManagerId"
+                  defaultValue={initialConfig.analytics?.googleTagManagerId ?? ""}
+                  placeholder="GTM-XXXXXXX atau G-XXXXXXXX"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Masukkan ID container GTM ({`"GTM-XXXXXXX"`}) atau Google Analytics 4 ({`"G-XXXXXXXX"`}).
+                </p>
               </div>
             </section>
           ) : null}
