@@ -51,10 +51,18 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const config = await getSiteConfig();
-  const googleTagManagerId = config.analytics?.googleTagManagerId ?? null;
+  const rawTagId = config.analytics?.googleTagManagerId?.trim() ?? null;
+  const googleTagManagerId = rawTagId && rawTagId.length > 0 ? rawTagId : null;
+  const normalizedTag = googleTagManagerId?.toUpperCase() ?? null;
+  const useNoscript = normalizedTag?.startsWith("GTM-") ?? false;
 
   return (
     <html lang="id" suppressHydrationWarning>
+      <head>
+        {googleTagManagerId ? (
+          <GoogleTagManager containerId={googleTagManagerId} placement="head" />
+        ) : null}
+      </head>
       <body
         className={cn(
           "min-h-screen bg-background font-sans text-foreground antialiased",
@@ -62,7 +70,9 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           geistMono.variable
         )}
       >
-        {googleTagManagerId ? <GoogleTagManager containerId={googleTagManagerId} /> : null}
+        {googleTagManagerId && useNoscript ? (
+          <GoogleTagManager containerId={googleTagManagerId} placement="body" />
+        ) : null}
         {children}
       </body>
     </html>
