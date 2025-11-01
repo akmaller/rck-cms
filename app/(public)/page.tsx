@@ -143,9 +143,11 @@ function buildStructuredData({
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getSiteConfig();
   const baseTitle = config.metadata.title ?? config.name;
+  const tagline = config.tagline?.trim();
+  const pageTitle = tagline && tagline.length > 0 ? `${baseTitle} - ${tagline}` : baseTitle;
   const metadata = await createMetadata({
     config,
-    title: baseTitle,
+    title: pageTitle,
     description: config.metadata.description ?? config.description,
     path: "/",
     image: config.logoUrl
@@ -162,7 +164,7 @@ export async function generateMetadata(): Promise<Metadata> {
   });
   return {
     ...metadata,
-    title: { absolute: baseTitle },
+    title: { absolute: pageTitle },
   };
 }
 

@@ -76,7 +76,9 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
           <section className="space-y-6">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight">Pencarian Konten</h1>
-              <p className="text-muted-foreground">Cari artikel berdasarkan judul dan ringkasan.</p>
+              <p className="text-muted-foreground">
+                Cari artikel berdasarkan judul, ringkasan, atau nama penulis.
+              </p>
             </div>
             <SearchForm defaultValue="" />
             <Card>
@@ -106,6 +108,12 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
     OR: [
       { title: { contains: query, mode: Prisma.QueryMode.insensitive } },
       { excerpt: { contains: query, mode: Prisma.QueryMode.insensitive } },
+      {
+        author: {
+          name: { contains: query, mode: Prisma.QueryMode.insensitive },
+          NOT: { role: "ADMIN" },
+        },
+      },
     ],
   };
 

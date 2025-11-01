@@ -97,6 +97,12 @@ export async function GET(request: NextRequest) {
         OR: [
           { title: { contains: query, mode: Prisma.QueryMode.insensitive } },
           { excerpt: { contains: query, mode: Prisma.QueryMode.insensitive } },
+          {
+            author: {
+              name: { contains: query, mode: Prisma.QueryMode.insensitive },
+              NOT: { role: "ADMIN" },
+            },
+          },
         ],
       };
       break;

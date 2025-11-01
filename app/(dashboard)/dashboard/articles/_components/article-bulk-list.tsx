@@ -235,7 +235,12 @@ const selectedIds = useMemo(() => rawSelectedIds.filter(id => articleIdSet.has(i
                 </div>
               </div>
             </Link>
-            <ArticleListActions articleId={article.id} showDeleteOnly publicUrl={article.publicUrl} />
+            <ArticleListActions
+              articleId={article.id}
+              showDeleteOnly
+              publicUrl={article.publicUrl}
+              editUrl={article.editUrl}
+            />
           </div>
         );
       })}

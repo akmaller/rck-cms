@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ExternalLink, Trash2 } from "lucide-react";
+import { ExternalLink, PencilLine, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
@@ -13,9 +13,15 @@ type ArticleListActionsProps = {
   articleId: string;
   showDeleteOnly?: boolean;
   publicUrl?: string;
+  editUrl?: string;
 };
 
-export function ArticleListActions({ articleId, showDeleteOnly = false, publicUrl }: ArticleListActionsProps) {
+export function ArticleListActions({
+  articleId,
+  showDeleteOnly = false,
+  publicUrl,
+  editUrl,
+}: ArticleListActionsProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -69,6 +75,30 @@ export function ArticleListActions({ articleId, showDeleteOnly = false, publicUr
         )
     : null;
 
+  const editButton = editUrl
+    ? showDeleteOnly
+      ? (
+          <Link
+            href={editUrl}
+            className={cn(
+              buttonVariants({ variant: "outline", size: "icon" }),
+              "h-8 w-8 rounded-md border border-border/60 bg-background hover:bg-accent"
+            )}
+            aria-label="Edit artikel"
+          >
+            <PencilLine className="h-4 w-4" aria-hidden />
+          </Link>
+        )
+      : (
+          <Link
+            href={editUrl}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "text-xs")}
+          >
+            Edit
+          </Link>
+        )
+    : null;
+
   const deleteButton = (
     <button
       type="button"
@@ -94,6 +124,7 @@ export function ArticleListActions({ articleId, showDeleteOnly = false, publicUr
     return (
       <div className="flex flex-col items-center gap-1">
         <div className="flex items-center gap-2">
+          {editButton}
           {viewButton}
           {deleteButton}
         </div>
@@ -104,6 +135,7 @@ export function ArticleListActions({ articleId, showDeleteOnly = false, publicUr
 
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground sm:text-[11px]">
+      {editButton}
       {viewButton}
       {deleteButton}
       {error ? <p className="basis-full text-[10px] text-destructive">{error}</p> : null}
