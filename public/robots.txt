@@ -1,5 +1,4 @@
 # Roemah Cita CMS robots.txt
-# Memungkinkan perayapan konten publik, sekaligus memblokir area sensitif.
 
 User-agent: *
 Allow: /
@@ -10,5 +9,5 @@ Disallow: /dashboard/
 Disallow: /internal/
 Disallow: /tmp/
 
-# Petakan crawler ke sitemap utama agar index lebih cepat.
+
 Sitemap: https://roemahcita.local/sitemap.xml
