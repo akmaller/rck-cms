@@ -3,8 +3,6 @@
 import {
   Copy,
   Facebook,
-  Linkedin,
-  Mail,
   MessageCircle,
   Send,
   Share2,
@@ -16,7 +14,7 @@ import { useCallback, useMemo, useState } from "react";
 import { buttonVariants } from "@/lib/button-variants";
 import { cn, ensureTrailingSlash } from "@/lib/utils";
 
-type ShareChannel = "twitter" | "facebook" | "whatsapp" | "telegram" | "linkedin" | "email";
+type ShareChannel = "twitter" | "facebook" | "whatsapp" | "telegram";
 
 type ShareActionsProps = {
   title: string;
@@ -38,10 +36,6 @@ function buildShareUrl(channel: ShareChannel, title: string, url: string) {
       return `https://wa.me/?text=${encodedTitle}%20${encodedUrl}`;
     case "telegram":
       return `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`;
-    case "linkedin":
-      return `https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`;
-    case "email":
-      return `mailto:?subject=${encodedTitle}&body=${encodedUrl}`;
     default:
       return normalizedUrl;
   }
@@ -86,16 +80,6 @@ export function ShareActions({ title, articleUrl, className }: ShareActionsProps
       label: "Telegram",
       Icon: Send,
     },
-    {
-      channel: "linkedin" as ShareChannel,
-      label: "LinkedIn",
-      Icon: Linkedin,
-    },
-    {
-      channel: "email" as ShareChannel,
-      label: "Email",
-      Icon: Mail,
-    },
   ];
 
   return (
@@ -134,7 +118,7 @@ export function ShareActions({ title, articleUrl, className }: ShareActionsProps
         })}
       >
         <Copy className="h-4 w-4" aria-hidden />
-        <span>{copied ? "Disalin!" : "Salin Judul & Tautan"}</span>
+        <span>{copied ? "Disalin!" : "Salin"}</span>
       </button>
     </div>
   );
