@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { CommentStatus, Prisma } from "@prisma/client";
 import { auth } from "@/auth";
+import { VisitTrendChart } from "@/components/analytics/visit-trend-chart";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,50 +15,10 @@ import { Badge } from "@/components/ui/badge";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { prisma } from "@/lib/prisma";
 import type { RoleKey } from "@/lib/auth/permissions";
-
-type VisitTrendPoint = {
-  label: string;
-  fullLabel: string;
-  value: number;
-};
+import type { VisitTrendPoint } from "@/types/analytics";
 
 function formatDayKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function buildLinePoints(values: number[], width = 120, height = 60) {
-  if (values.length === 0) {
-    return { line: "", area: "", coordinates: [] as Array<{ x: number; y: number }> };
-  }
-
-  const paddingX = 6;
-  const paddingTop = 8;
-  const paddingBottom = 10;
-  const chartWidth = width - paddingX * 2;
-  const chartHeight = height - paddingTop - paddingBottom;
-  const maxValue = Math.max(...values, 1);
-  const baseline = height - paddingBottom;
-
-  const coordinates = values.map((value, index) => {
-    const ratio = values.length > 1 ? index / (values.length - 1) : 0.5;
-    const x = paddingX + chartWidth * ratio;
-    const normalized = maxValue === 0 ? 0 : value / maxValue;
-    const y = baseline - chartHeight * normalized;
-    return { x: Number(x.toFixed(2)), y: Number(y.toFixed(2)) };
-  });
-
-  const line = coordinates.map((point) => `${point.x},${point.y}`).join(" ");
-  const areaPoints = [
-    `${coordinates[0]?.x ?? paddingX},${baseline}`,
-    ...coordinates.map((point) => `${point.x},${point.y}`),
-    `${coordinates[coordinates.length - 1]?.x ?? paddingX},${baseline}`,
-  ];
-
-  return {
-    line,
-    area: areaPoints.join(" "),
-    coordinates,
-  };
 }
 
 const quickActions: Array<{
@@ -254,7 +215,6 @@ export default async function DashboardHomePage() {
   }
 
   const visitTrendValues = visitTrend.map((point) => point.value);
-  const visitTrendLine = buildLinePoints(visitTrendValues);
   const visitTrendTotal = visitTrendValues.reduce((sum, value) => sum + value, 0);
   const visitTrendPeak = Math.max(...visitTrendValues, 0);
   const visitTrendHasEntries = visitTrendValues.some((value) => value > 0);
@@ -449,61 +409,28 @@ export default async function DashboardHomePage() {
             <CardTitle>Tren Kunjungan 7 Hari Terakhir</CardTitle>
             <CardDescription>Data agregat dari tabel visit log.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="h-40 w-full text-primary">
-              {visitTrendLine.line ? (
-                <svg
-                  viewBox="0 0 120 60"
-                  className="h-full w-full"
-                  role="img"
-                  aria-label="Grafik garis kunjungan mingguan"
-                >
-                  <line
-                    x1="6"
-                    y1="50"
-                    x2="114"
-                    y2="50"
-                    stroke="currentColor"
-                    strokeOpacity="0.15"
-                    strokeWidth="0.6"
-                  />
-                  <polyline
-                    points={visitTrendLine.area}
-                    fill="currentColor"
-                    fillOpacity="0.12"
-                    stroke="none"
-                  />
-                  <polyline
-                    points={visitTrendLine.line}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                  {visitTrendLine.coordinates.map((point, index) => (
-                    <circle key={index} cx={point.x} cy={point.y} r="1.8" fill="currentColor" />
-                  ))}
-                </svg>
-              ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Data kunjungan belum tersedia.
-                </div>
-              )}
-            </div>
-            <div className="flex items-start justify-between gap-2 px-[5%] text-center text-xs text-muted-foreground">
-              {visitTrend.map((point) => (
-                <div
-                  key={point.fullLabel}
-                  className="flex w-full max-w-[64px] flex-col items-center gap-1 rounded-md border border-border/60 bg-muted/10 p-2"
-                  title={point.fullLabel}
-                >
-                  <p className="font-medium uppercase tracking-wide text-[11px]">
-                    {point.label}
-                  </p>
-                  <p className="text-sm font-semibold text-foreground">{point.value}</p>
-                </div>
-              ))}
+          <CardContent className="space-y-5">
+            <VisitTrendChart data={visitTrend} />
+            <div className="grid grid-cols-2 gap-2 px-1 text-center text-xs text-muted-foreground sm:grid-cols-4 lg:grid-cols-7">
+              {visitTrend.map((point) => {
+                const isPeak = visitTrendPeak > 0 && point.value === visitTrendPeak;
+                return (
+                  <div
+                    key={point.fullLabel}
+                    className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 transition-colors ${
+                      isPeak
+                        ? "border-primary/70 bg-primary/10 text-foreground"
+                        : "border-border/60 bg-muted/10"
+                    }`}
+                    title={point.fullLabel}
+                  >
+                    <p className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+                      {point.label}
+                    </p>
+                    <p className="text-sm font-semibold text-foreground">{point.value}</p>
+                  </div>
+                );
+              })}
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>
