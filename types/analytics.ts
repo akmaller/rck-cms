@@ -4,3 +4,9 @@ export type VisitTrendPoint = {
   value: number;
 };
 
+export type PopularArticle = {
+  slug: string;
+  title: string;
+  visits: number;
+};
+

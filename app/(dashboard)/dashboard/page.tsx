@@ -15,10 +15,22 @@ import { Badge } from "@/components/ui/badge";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { prisma } from "@/lib/prisma";
 import type { RoleKey } from "@/lib/auth/permissions";
-import type { VisitTrendPoint } from "@/types/analytics";
+import type { PopularArticle, VisitTrendPoint } from "@/types/analytics";
 
 function formatDayKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function extractArticleSlug(path: string | null | undefined) {
+  if (!path) {
+    return null;
+  }
+  const normalized = path.replace(/\/+$/, "");
+  if (!normalized.startsWith("/articles/")) {
+    return null;
+  }
+  const slug = normalized.slice("/articles/".length);
+  return slug.length > 0 ? slug : null;
 }
 
 const quickActions: Array<{
@@ -219,6 +231,76 @@ export default async function DashboardHomePage() {
   const visitTrendPeak = Math.max(...visitTrendValues, 0);
   const visitTrendHasEntries = visitTrendValues.some((value) => value > 0);
 
+  const popularArticles: PopularArticle[] = await (async () => {
+    if (role === "AUTHOR" && articlePaths.length === 0) {
+      return [];
+    }
+
+    try {
+      const visitWhere: Prisma.VisitLogWhereInput = { createdAt: { gte: sevenDayStart } };
+      if (role === "AUTHOR") {
+        visitWhere.path = { in: articlePaths };
+      }
+
+      const groupedVisits = await prisma.visitLog.groupBy({
+        by: ["path"],
+        where: visitWhere,
+        _count: { _all: true },
+        orderBy: { _count: { _all: "desc" } },
+        take: 25,
+      });
+
+      if (groupedVisits.length === 0) {
+        return [];
+      }
+
+      const slugCandidates = groupedVisits
+        .map((entry) => extractArticleSlug(entry.path))
+        .filter((slug): slug is string => Boolean(slug));
+
+      if (slugCandidates.length === 0) {
+        return [];
+      }
+
+      const uniqueSlugs = Array.from(new Set(slugCandidates)).slice(0, 25);
+      const articleWhere: Prisma.ArticleWhereInput =
+        role === "AUTHOR" && session?.user?.id
+          ? { slug: { in: uniqueSlugs }, authorId: session.user.id }
+          : { slug: { in: uniqueSlugs } };
+
+      const articleRecords = await prisma.article.findMany({
+        where: articleWhere,
+        select: { slug: true, title: true },
+      });
+
+      const articleMap = new Map(articleRecords.map((article) => [article.slug, article]));
+
+      const ranked: PopularArticle[] = [];
+      for (const entry of groupedVisits) {
+        const slug = extractArticleSlug(entry.path);
+        if (!slug) {
+          continue;
+        }
+        const article = articleMap.get(slug);
+        if (!article) {
+          continue;
+        }
+        ranked.push({
+          slug,
+          title: article.title,
+          visits: entry._count._all,
+        });
+        if (ranked.length >= 10) {
+          break;
+        }
+      }
+
+      return ranked;
+    } catch {
+      return [];
+    }
+  })();
+
   type RecentLog = Prisma.AuditLogGetPayload<{
     include: {
       user: { select: { name: true; role: true } };
@@ -404,55 +486,100 @@ export default async function DashboardHomePage() {
         </div>
       ) : null}
       <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <Card className="border-border/80 bg-card/60">
-          <CardHeader>
-            <CardTitle>Tren Kunjungan 7 Hari Terakhir</CardTitle>
-            <CardDescription>Data agregat dari tabel visit log.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            <VisitTrendChart data={visitTrend} />
-            <div className="grid grid-cols-2 gap-2 px-1 text-center text-xs text-muted-foreground sm:grid-cols-4 lg:grid-cols-7">
-              {visitTrend.map((point) => {
-                const isPeak = visitTrendPeak > 0 && point.value === visitTrendPeak;
-                return (
-                  <div
-                    key={point.fullLabel}
-                    className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 transition-colors ${
-                      isPeak
-                        ? "border-primary/70 bg-primary/10 text-foreground"
-                        : "border-border/60 bg-muted/10"
-                    }`}
-                    title={point.fullLabel}
-                  >
-                    <p className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
-                      {point.label}
-                    </p>
-                    <p className="text-sm font-semibold text-foreground">{point.value}</p>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-              <span>
-                Total mingguan:
-                <strong className="ml-1 text-foreground">
-                  {visitTrendTotal.toLocaleString("id-ID")}
-                </strong>
-              </span>
-              <span>
-                Puncak harian:
-                <strong className="ml-1 text-foreground">
-                  {visitTrendPeak.toLocaleString("id-ID")}
-                </strong>
-              </span>
-            </div>
-            {!visitTrendHasEntries ? (
-              <p className="text-xs text-muted-foreground">
-                Belum ada kunjungan tercatat dalam tujuh hari terakhir.
-              </p>
-            ) : null}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          <Card className="border-border/80 bg-card/60">
+            <CardHeader>
+              <CardTitle>Tren Kunjungan 7 Hari Terakhir</CardTitle>
+              <CardDescription>Data agregat dari tabel visit log.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <VisitTrendChart data={visitTrend} />
+              <div className="grid grid-cols-2 gap-2 px-1 text-center text-xs text-muted-foreground sm:grid-cols-4 lg:grid-cols-7">
+                {visitTrend.map((point) => {
+                  const isPeak = visitTrendPeak > 0 && point.value === visitTrendPeak;
+                  return (
+                    <div
+                      key={point.fullLabel}
+                      className={`flex flex-col items-center gap-1 rounded-lg border px-2 py-2 transition-colors ${
+                        isPeak
+                          ? "border-primary/70 bg-primary/10 text-foreground"
+                          : "border-border/60 bg-muted/10"
+                      }`}
+                      title={point.fullLabel}
+                    >
+                      <p className="font-semibold uppercase tracking-wide text-[10px] text-muted-foreground">
+                        {point.label}
+                      </p>
+                      <p className="text-sm font-semibold text-foreground">{point.value}</p>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>
+                  Total mingguan:
+                  <strong className="ml-1 text-foreground">
+                    {visitTrendTotal.toLocaleString("id-ID")}
+                  </strong>
+                </span>
+                <span>
+                  Puncak harian:
+                  <strong className="ml-1 text-foreground">
+                    {visitTrendPeak.toLocaleString("id-ID")}
+                  </strong>
+                </span>
+              </div>
+              {!visitTrendHasEntries ? (
+                <p className="text-xs text-muted-foreground">
+                  Belum ada kunjungan tercatat dalam tujuh hari terakhir.
+                </p>
+              ) : null}
+            </CardContent>
+          </Card>
+          <Card className="border-border/80 bg-card/60">
+            <CardHeader>
+              <CardTitle>Artikel Terpopuler Minggu Ini</CardTitle>
+              <CardDescription>
+                Berdasarkan jumlah kunjungan dalam tujuh hari terakhir.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {popularArticles.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border/60 bg-muted/10 p-6 text-center text-sm text-muted-foreground">
+                  {visitTrendHasEntries
+                    ? "Belum ada artikel yang menonjol dalam tujuh hari terakhir."
+                    : "Data kunjungan belum tersedia untuk menghitung artikel populer."}
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  {popularArticles.map((article, index) => (
+                    <li
+                      key={article.slug}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/10 px-3 py-2"
+                    >
+                      <div className="flex flex-1 items-start gap-3">
+                        <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                          #{index + 1}
+                        </span>
+                        <div className="flex flex-1 flex-col">
+                          <Link
+                            href={`/articles/${article.slug}`}
+                            className="line-clamp-2 text-sm font-medium text-foreground hover:text-primary"
+                          >
+                            {article.title}
+                          </Link>
+                          <p className="text-xs text-muted-foreground">
+                            {article.visits.toLocaleString("id-ID")} kunjungan
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
         <Card className="border-border/80 bg-card/60">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">
