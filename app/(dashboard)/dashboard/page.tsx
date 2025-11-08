@@ -246,7 +246,7 @@ export default async function DashboardHomePage() {
         by: ["path"],
         where: visitWhere,
         _count: { _all: true },
-        orderBy: { _count: { _all: "desc" } },
+        orderBy: [{ _count: { id: "desc" } }],
         take: 25,
       });
 
