@@ -3,10 +3,12 @@ import type { ReactNode } from "react";
 
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { headers } from "next/headers";
 
 import { GoogleTagManager } from "@/components/analytics/google-tag-manager";
 import { createMetadata } from "@/lib/seo/metadata";
 import { getSiteConfig } from "@/lib/site-config/server";
+import { resolvePreferredSiteUrl, resolveRuntimeBaseUrl, toAbsoluteAssetUrl } from "@/lib/site-config/url";
 import { cn } from "@/lib/utils";
 
 const geistSans = Geist({
@@ -20,31 +22,46 @@ const geistMono = Geist_Mono({
 });
 
 export async function generateMetadata(): Promise<Metadata> {
+  const headerList = await headers();
+  const runtimeBaseUrl = resolveRuntimeBaseUrl(headerList);
   const config = await getSiteConfig();
+  const configuredBaseUrl = resolvePreferredSiteUrl(config.url);
+  const effectiveBaseUrl = runtimeBaseUrl ?? configuredBaseUrl;
+  const effectiveConfig = effectiveBaseUrl ? { ...config, url: effectiveBaseUrl.toString() } : config;
+
   const baseMetadata = await createMetadata({
-    config,
+    config: effectiveConfig,
     title: config.metadata.title ?? config.name,
     description: config.metadata.description ?? config.description,
     path: "/",
   });
 
+  const metadataBase = effectiveBaseUrl ?? configuredBaseUrl;
   const defaultTitle = typeof baseMetadata.title === "string" ? baseMetadata.title : config.name;
-  const iconUrl = config.iconUrl?.trim();
-  const defaultIconHref = iconUrl || "/default-favicon.ico";
+  const iconUrl = config.iconUrl?.trim() || null;
+  const iconHref =
+    toAbsoluteAssetUrl(iconUrl, metadataBase ?? undefined) ??
+    (metadataBase ? new URL("/default-favicon.ico", metadataBase).toString() : "/default-favicon.ico");
+
   const appleIconHref =
-    iconUrl && iconUrl.toLowerCase().endsWith(".png") ? iconUrl : "/apple-touch-icon.png";
+    iconUrl && iconUrl.toLowerCase().endsWith(".png")
+      ? toAbsoluteAssetUrl(iconUrl, metadataBase ?? undefined)
+      : metadataBase
+        ? new URL("/apple-touch-icon.png", metadataBase).toString()
+        : "/apple-touch-icon.png";
+  const appleIcons = appleIconHref ? [appleIconHref] : undefined;
 
   return {
     ...baseMetadata,
-    metadataBase: new URL(config.url),
+    metadataBase: metadataBase ?? undefined,
     title: {
       default: defaultTitle,
       template: `%s | ${config.name}`,
     },
     icons: {
-      icon: defaultIconHref,
-      shortcut: defaultIconHref,
-      apple: appleIconHref,
+      icon: iconHref,
+      shortcut: iconHref,
+      apple: appleIcons,
     },
   };
 }

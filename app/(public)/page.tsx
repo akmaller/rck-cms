@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
 import { deriveThumbnailUrl } from "@/lib/storage/media";
 import { getSiteConfig } from "@/lib/site-config/server";
+import { resolvePreferredSiteUrl, resolveRuntimeBaseUrl } from "@/lib/site-config/url";
 import { createMetadata } from "@/lib/seo/metadata";
 import { logPageView } from "@/lib/visits/log-page-view";
 import { formatRelativeTime } from "@/lib/datetime/relative";
@@ -30,25 +31,6 @@ const articleInclude = {
 type ArticleWithRelations = Prisma.ArticleGetPayload<{ include: typeof articleInclude }>;
 
 type StructuredDataNode = Record<string, unknown>;
-
-function resolvePreferredSiteUrl(preferred?: string | null) {
-  const candidates = [
-    preferred,
-    process.env.NEXT_PUBLIC_APP_URL,
-    process.env.APP_URL,
-    process.env.SITE_URL,
-  ];
-
-  for (const candidate of candidates) {
-    if (!candidate) continue;
-    try {
-      return new URL(candidate);
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
 
 function toAbsoluteUrl(value: string | null | undefined, base: URL | null) {
   if (!value) return null;
@@ -142,23 +124,32 @@ function buildStructuredData({
 }
 
 export async function generateMetadata(): Promise<Metadata> {
+  const headerList = await headers();
+  const runtimeBaseUrl = resolveRuntimeBaseUrl(headerList);
   const config = await getSiteConfig();
   const baseTitle = config.metadata.title ?? config.name;
   const tagline = config.tagline?.trim();
   const pageTitle = tagline && tagline.length > 0 ? `${baseTitle} - ${tagline}` : baseTitle;
+  const configuredSiteUrl = resolvePreferredSiteUrl(config.url);
+  const effectiveSiteUrl = runtimeBaseUrl ?? configuredSiteUrl;
+  const logoAbsoluteUrl = config.logoUrl
+    ? toAbsoluteUrl(config.logoUrl, effectiveSiteUrl ?? configuredSiteUrl)
+    : null;
+  const ogFallbackUrl = config.ogImage ? toAbsoluteUrl(config.ogImage, effectiveSiteUrl ?? configuredSiteUrl) : null;
+
   const metadata = await createMetadata({
-    config,
+    config: effectiveSiteUrl ? { ...config, url: effectiveSiteUrl.toString() } : config,
     title: pageTitle,
     description: config.metadata.description ?? config.description,
     path: "/",
-    image: config.logoUrl
+    image: logoAbsoluteUrl
       ? {
-          url: config.logoUrl,
+          url: logoAbsoluteUrl,
           alt: `${config.name} logo`,
         }
-      : config.ogImage
+      : ogFallbackUrl
         ? {
-            url: config.ogImage,
+            url: ogFallbackUrl,
             alt: config.name,
           }
         : null,

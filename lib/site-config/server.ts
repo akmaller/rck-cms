@@ -33,7 +33,10 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
   const resolvedIconUrl = trimOrNull(values?.iconUrl) ?? defaultSiteConfig.iconUrl;
   const resolvedSiteUrl = trimOrNull(values?.siteUrl) ?? defaultSiteConfig.url;
   const resolvedContactEmail = trimOrNull(values?.contactEmail) ?? defaultSiteConfig.contactEmail;
-  const resolvedOgImage = trimOrNull(defaultSiteConfig.ogImage) ?? defaultSiteConfig.ogImage;
+  const resolvedOgImage =
+    resolvedLogoUrl ??
+    trimOrNull(defaultSiteConfig.ogImage) ??
+    defaultSiteConfig.ogImage;
   const resolvedGoogleTagManagerId =
     trimOrNull(analyticsSetting.googleTagManagerId) ??
     trimOrNull(analyticsDefaults.googleTagManagerId) ??
