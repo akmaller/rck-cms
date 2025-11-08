@@ -12,6 +12,7 @@ import { createMetadata } from "@/lib/seo/metadata";
 import { ArticleLoadMoreList } from "@/app/(public)/(components)/article-load-more-list";
 import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
 import { formatRelativeTime } from "@/lib/datetime/relative";
+import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const sidebarArticleInclude = {
   categories: {
@@ -84,6 +85,7 @@ type AuthorPageProps = {
 
 export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const { authorId } = await params;
+  await publishDueScheduledArticles();
   const author = await getAuthor(authorId);
   if (!author) {
     notFound();

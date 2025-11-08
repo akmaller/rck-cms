@@ -17,11 +17,12 @@ import { Label } from "@/components/ui/label";
 import { buttonVariants } from "@/lib/button-variants";
 import { cn } from "@/lib/utils";
 import { ArticleBulkList } from "@/app/(dashboard)/dashboard/articles/_components/article-bulk-list";
+import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
 type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
-const FILTERABLE_STATUSES = [ArticleStatus.PUBLISHED, ArticleStatus.DRAFT] as const;
+const FILTERABLE_STATUSES = [ArticleStatus.PUBLISHED, ArticleStatus.SCHEDULED, ArticleStatus.DRAFT] as const;
 type FilterableStatus = (typeof FILTERABLE_STATUSES)[number];
 
 type DashboardArticlesSearchParams = {
@@ -136,6 +137,8 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
 
   const where = filters.length > 0 ? { AND: filters } : undefined;
 
+  await publishDueScheduledArticles();
+
   const [totalArticles, categories] = await Promise.all([
     prisma.article.count({ where }),
     prisma.category.findMany({
@@ -216,6 +219,7 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
   const paginationButtonClass = buttonVariants({ variant: "outline", size: "sm" });
   const statusLabelMap: Record<FilterableStatus, string> = {
     [ArticleStatus.PUBLISHED]: "Dipublikasikan",
+    [ArticleStatus.SCHEDULED]: "Terjadwal",
     [ArticleStatus.DRAFT]: "Draf",
   };
   const statusOptions: Array<{ value: FilterableStatus; label: string }> =

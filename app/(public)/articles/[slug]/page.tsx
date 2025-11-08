@@ -24,8 +24,10 @@ import { CommentList } from "./comment-list";
 import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 import { getArticleLikeSummary } from "@/lib/likes/service";
 import { ArticleLikeButton } from "./article-like-button";
+import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 async function getArticle(slug: string) {
+  await publishDueScheduledArticles();
   return prisma.article.findUnique({
     where: { slug },
     include: {
@@ -38,6 +40,7 @@ async function getArticle(slug: string) {
 }
 
 export async function generateStaticParams() {
+  await publishDueScheduledArticles();
   const articles = await prisma.article.findMany({
     where: { status: ArticleStatus.PUBLISHED },
     select: { slug: true },

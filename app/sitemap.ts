@@ -3,12 +3,14 @@ import { ArticleStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config/server";
+import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const config = await getSiteConfig();
   const BASE_URL = config.url.replace(/\/$/, "");
+  await publishDueScheduledArticles();
   const [articles, pages, categories, tags] = await Promise.all([
     prisma.article.findMany({
       where: { status: ArticleStatus.PUBLISHED },

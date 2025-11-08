@@ -3,6 +3,7 @@ import { ArticleStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config/server";
+import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 export const revalidate = 900;
 
@@ -13,6 +14,7 @@ function escapeCdata(value: string) {
 export async function GET() {
   const config = await getSiteConfig();
   const BASE_URL = config.url.replace(/\/$/, "");
+  await publishDueScheduledArticles();
   const articles = await prisma.article.findMany({
     where: { status: ArticleStatus.PUBLISHED },
     select: {

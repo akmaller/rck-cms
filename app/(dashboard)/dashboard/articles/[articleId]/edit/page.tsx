@@ -102,6 +102,7 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
           categories: initialCategories,
           status: article.status,
           authorId: article.authorId,
+          publishedAt: article.publishedAt ? article.publishedAt.toISOString() : null,
         }}
         draftLabel="Simpan Draft"
         publishLabel={article.status === "PUBLISHED" ? "Perbarui & Publikasikan" : "Publikasikan"}

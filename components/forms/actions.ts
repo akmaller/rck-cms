@@ -14,6 +14,7 @@ import { siteConfigSchema, type SiteConfigInput } from "@/lib/validators/config"
 import { writeAuditLog } from "@/lib/audit/log";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { findForbiddenPhraseInInputs } from "@/lib/moderation/forbidden-terms";
+import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const EMPTY_TIPTAP_DOC = { type: "doc", content: [] } as const;
 const bulkArticleStatusSchema = z.object({
@@ -180,6 +181,45 @@ async function ensureCategory(client: PrismaClientLike, name: string): Promise<{
   return { id: created.id };
 }
 
+type PublicationResolution =
+  | { ok: true; status: ArticleStatus; publishedAt: Date | null }
+  | { ok: false; error: string };
+
+function resolveArticlePublication(options: {
+  intent: "draft" | "publish";
+  publishMode: FormDataEntryValue | null;
+  scheduledAt: FormDataEntryValue | null;
+  fallbackPublishedAt?: Date | null;
+}): PublicationResolution {
+  if (options.intent !== "publish") {
+    return { ok: true, status: ArticleStatus.DRAFT, publishedAt: null };
+  }
+
+  const publishMode = typeof options.publishMode === "string" && options.publishMode === "schedule"
+    ? "schedule"
+    : "immediate";
+
+  if (publishMode === "schedule") {
+    if (typeof options.scheduledAt !== "string" || options.scheduledAt.trim().length === 0) {
+      return { ok: false, error: "Tanggal publikasi tidak valid." };
+    }
+    const parsed = new Date(options.scheduledAt);
+    if (Number.isNaN(parsed.getTime())) {
+      return { ok: false, error: "Tanggal publikasi tidak valid." };
+    }
+    if (parsed.getTime() <= Date.now()) {
+      return { ok: true, status: ArticleStatus.PUBLISHED, publishedAt: parsed };
+    }
+    return { ok: true, status: ArticleStatus.SCHEDULED, publishedAt: parsed };
+  }
+
+  const fallback =
+    options.fallbackPublishedAt && !Number.isNaN(options.fallbackPublishedAt.getTime())
+      ? options.fallbackPublishedAt
+      : new Date();
+  return { ok: true, status: ArticleStatus.PUBLISHED, publishedAt: fallback };
+}
+
 const articleFormSchema = z.object({
   title: z.string().min(5, "Judul minimal 5 karakter"),
   slug: z.string().optional(),
@@ -254,8 +294,17 @@ export async function createArticle(formData: FormData) {
 
     const intentRaw = formData.get("intent");
     const intent = typeof intentRaw === "string" && intentRaw === "publish" ? "publish" : "draft";
-    const targetStatus = intent === "publish" ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
-    const targetPublishedAt = targetStatus === ArticleStatus.PUBLISHED ? new Date() : null;
+    const publication = resolveArticlePublication({
+      intent,
+      publishMode: formData.get("publishMode"),
+      scheduledAt: formData.get("scheduledPublishAt"),
+      fallbackPublishedAt: new Date(),
+    });
+    if (!publication.ok) {
+      return { error: publication.error };
+    }
+    const targetStatus = publication.status;
+    const targetPublishedAt = publication.publishedAt;
 
     const tagNames = normalizeTagNames(formData.get("tags"));
     const categoryNames = normalizeCategoryNames(formData.get("categories"));
@@ -323,8 +372,19 @@ export async function createArticle(formData: FormData) {
       },
     });
 
+    const released = await publishDueScheduledArticles();
     revalidateTag("content");
     revalidatePath("/dashboard/articles");
+    const slugsToRevalidate = new Set<string>();
+    if (targetStatus === ArticleStatus.PUBLISHED && article.slug) {
+      slugsToRevalidate.add(`/articles/${article.slug}`);
+    }
+    for (const slug of released.slugs) {
+      slugsToRevalidate.add(`/articles/${slug}`);
+    }
+    for (const path of slugsToRevalidate) {
+      revalidatePath(path);
+    }
 
     return { success: true };
   } catch (error) {
@@ -1123,9 +1183,22 @@ export async function updateArticle(formData: FormData) {
 
     const intentRaw = formData.get("intent");
     const intent = typeof intentRaw === "string" && intentRaw === "publish" ? "publish" : "draft";
-    const targetStatus = intent === "publish" ? ArticleStatus.PUBLISHED : ArticleStatus.DRAFT;
-    const nextPublishedAt =
-      targetStatus === ArticleStatus.PUBLISHED ? article.publishedAt ?? new Date() : null;
+    const existingPublishedAt = article.publishedAt ?? null;
+    const fallbackPublishedAt =
+      existingPublishedAt && existingPublishedAt.getTime() <= Date.now()
+        ? existingPublishedAt
+        : new Date();
+    const publication = resolveArticlePublication({
+      intent,
+      publishMode: formData.get("publishMode"),
+      scheduledAt: formData.get("scheduledPublishAt"),
+      fallbackPublishedAt,
+    });
+    if (!publication.ok) {
+      return { error: publication.error };
+    }
+    const targetStatus = publication.status;
+    const nextPublishedAt = publication.publishedAt;
 
     const tagNames = normalizeTagNames(formData.get("tags"));
     const categoryNames = normalizeCategoryNames(formData.get("categories"));
@@ -1216,6 +1289,21 @@ export async function updateArticle(formData: FormData) {
         status: targetStatus,
       },
     });
+
+    const released = await publishDueScheduledArticles();
+    const slugsToRevalidate = new Set<string>();
+    if (uniqueSlug) {
+      slugsToRevalidate.add(`/articles/${uniqueSlug}`);
+    }
+    if (article.slug && article.slug !== uniqueSlug) {
+      slugsToRevalidate.add(`/articles/${article.slug}`);
+    }
+    for (const slug of released.slugs) {
+      slugsToRevalidate.add(`/articles/${slug}`);
+    }
+    for (const path of slugsToRevalidate) {
+      revalidatePath(path);
+    }
 
     revalidatePath(`/dashboard/articles/${parsed.data.articleId}/edit`);
     revalidatePath("/dashboard/articles");
@@ -1316,11 +1404,14 @@ export async function bulkUpdateArticleStatus(formData: FormData) {
       return { error: "Beberapa artikel tidak dapat diperbarui." };
     }
 
+    const now = new Date();
     await prisma.$transaction(async (tx) => {
       for (const article of articles) {
         const nextPublishedAt =
           targetStatus === ArticleStatus.PUBLISHED
-            ? article.publishedAt ?? new Date()
+            ? article.publishedAt && article.publishedAt.getTime() <= now.getTime()
+              ? article.publishedAt
+              : now
             : null;
         await tx.article.update({
           where: { id: article.id },
@@ -1347,12 +1438,20 @@ export async function bulkUpdateArticleStatus(formData: FormData) {
       )
     );
 
+    const released = await publishDueScheduledArticles();
     revalidateTag("content");
     revalidatePath("/dashboard/articles");
+    const slugsToRevalidate = new Set<string>();
     for (const article of articles) {
       if (article.slug) {
-        revalidatePath(`/articles/${article.slug}`);
+        slugsToRevalidate.add(`/articles/${article.slug}`);
       }
+    }
+    for (const slug of released.slugs) {
+      slugsToRevalidate.add(`/articles/${slug}`);
+    }
+    for (const path of slugsToRevalidate) {
+      revalidatePath(path);
     }
 
     return { success: true, updated: articles.length, status: targetStatus };

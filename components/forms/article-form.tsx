@@ -20,6 +20,29 @@ import { notifyError, notifySuccess } from "@/lib/notifications/client";
 import { useUnsavedChangesPrompt } from "@/components/forms/use-unsaved-changes";
 
 const emptyContent = { type: "doc", content: [] } as const;
+type PublishMode = "immediate" | "schedule";
+
+const padNumber = (value: number) => value.toString().padStart(2, "0");
+
+function toDate(input: string | Date | null | undefined): Date | null {
+  if (!input) {
+    return null;
+  }
+  if (input instanceof Date) {
+    return Number.isNaN(input.getTime()) ? null : input;
+  }
+  const parsed = new Date(input);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatDateTimeLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = padNumber(date.getMonth() + 1);
+  const day = padNumber(date.getDate());
+  const hours = padNumber(date.getHours());
+  const minutes = padNumber(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
 
 type ArticleFormProps = {
   mediaItems: MediaItem[];
@@ -33,6 +56,7 @@ type ArticleFormProps = {
     categories?: string[];
     status?: ArticleStatus;
     authorId?: string;
+    publishedAt?: string | Date | null;
   };
   submitLabel?: string;
   draftLabel?: string;
@@ -250,11 +274,17 @@ export function ArticleForm({
   const authorCanPublish = !isAuthor || canPublishContent;
   const isAuthorRestricted = isAuthor && !authorCanPublish;
   const canPublish = currentRole === "ADMIN" || currentRole === "EDITOR" || authorCanPublish;
+  const initialPublishedAtDate = toDate(initialValues?.publishedAt);
+  const initialScheduledAtValue = initialPublishedAtDate ? formatDateTimeLocal(initialPublishedAtDate) : "";
+  const initialPublishMode: PublishMode =
+    initialValues?.status === ArticleStatus.SCHEDULED ? "schedule" : "immediate";
+  const [publishMode, setPublishMode] = useState<PublishMode>(initialPublishMode);
+  const [scheduledAt, setScheduledAt] = useState<string>(initialScheduledAtValue);
 
   type SubmitIntent = "draft" | "publish";
   const defaultIntent: SubmitIntent = isAuthorRestricted
     ? "draft"
-    : initialValues?.status === ArticleStatus.PUBLISHED
+    : initialValues?.status === ArticleStatus.PUBLISHED || initialValues?.status === ArticleStatus.SCHEDULED
       ? "publish"
       : "draft";
   const [submitIntent, setSubmitIntent] = useState<SubmitIntent>(defaultIntent);
@@ -281,6 +311,8 @@ export function ArticleForm({
       featuredMediaId: string | null;
       categories: string[];
       tags: string[];
+      publishMode: PublishMode;
+      scheduledAt: string | null;
     }) =>
       JSON.stringify({
         title: params.title.trim(),
@@ -288,6 +320,9 @@ export function ArticleForm({
         featuredMediaId: params.featuredMediaId,
         categories: params.categories,
         tags: params.tags,
+        publishMode: params.publishMode,
+        scheduledAt:
+          params.publishMode === "schedule" ? (params.scheduledAt ?? "") : "",
       }),
     []
   );
@@ -299,6 +334,8 @@ export function ArticleForm({
       featuredMediaId: initialValues?.featuredMediaId ?? null,
       categories: initialValues?.categories ?? [],
       tags: initialValues?.tags ?? [],
+      publishMode: initialPublishMode,
+      scheduledAt: initialPublishMode === "schedule" ? initialScheduledAtValue : "",
     })
   );
 
@@ -310,8 +347,19 @@ export function ArticleForm({
         featuredMediaId: featuredMedia?.id ?? null,
         categories: selectedCategories,
         tags: selectedTags,
+        publishMode,
+        scheduledAt: publishMode === "schedule" ? scheduledAt : "",
       }),
-    [content, featuredMedia?.id, selectedCategories, selectedTags, serializeArticleState, title]
+    [
+      content,
+      featuredMedia?.id,
+      publishMode,
+      scheduledAt,
+      selectedCategories,
+      selectedTags,
+      serializeArticleState,
+      title,
+    ]
   );
 
   const [isDirty, setIsDirty] = useState(false);
@@ -393,6 +441,12 @@ export function ArticleForm({
             formData.set("tags", selectedTags.join(","));
             formData.set("categories", selectedCategories.join(","));
             formData.set("intent", submitIntentRef.current);
+            formData.set("publishMode", publishMode);
+            if (publishMode === "schedule" && scheduledAt) {
+              formData.set("scheduledPublishAt", scheduledAt);
+            } else {
+              formData.delete("scheduledPublishAt");
+            }
 
             const titleValue = formData.get("title");
             const excerptValue = formData.get("excerpt");
@@ -410,6 +464,27 @@ export function ArticleForm({
               saveAndExitResolverRef.current = null;
               pendingRedirectRef.current = redirectTo;
               return;
+            }
+            if (submitIntentRef.current === "publish" && publishMode === "schedule") {
+              if (!scheduledAt) {
+                const message = "Tentukan tanggal dan waktu publikasi sebelum menjadwalkan.";
+                setState({ error: message });
+                notifyError(message);
+                saveAndExitResolverRef.current?.(false);
+                saveAndExitResolverRef.current = null;
+                pendingRedirectRef.current = redirectTo;
+                return;
+              }
+              const scheduledDate = new Date(scheduledAt);
+              if (Number.isNaN(scheduledDate.getTime())) {
+                const message = "Format jadwal publikasi tidak valid.";
+                setState({ error: message });
+                notifyError(message);
+                saveAndExitResolverRef.current?.(false);
+                saveAndExitResolverRef.current = null;
+                pendingRedirectRef.current = redirectTo;
+                return;
+              }
             }
 
             startTransition(async () => {
@@ -436,6 +511,8 @@ export function ArticleForm({
                 featuredMediaId: featuredMedia?.id ?? null,
                 categories: selectedCategories,
                 tags: selectedTags,
+                publishMode,
+                scheduledAt: publishMode === "schedule" ? scheduledAt : "",
               });
 
               setState({ error: undefined });
@@ -449,12 +526,16 @@ export function ArticleForm({
                 setSelectedCategories([]);
                 setCategoryInput("");
                 setIntent("draft");
+                setPublishMode("immediate");
+                setScheduledAt("");
                 initialSnapshotRef.current = serializeArticleState({
                   title: "",
                   content: emptyContent,
                   featuredMediaId: null,
                   categories: [],
                   tags: [],
+                  publishMode: "immediate",
+                  scheduledAt: "",
                 });
                 notifySuccess("Artikel baru berhasil disimpan.");
               } else {
@@ -659,6 +740,49 @@ export function ArticleForm({
             </p>
           </div>
           </div>
+          {canPublish ? (
+            <div className="space-y-2">
+              <Label>Pengaturan Publikasi</Label>
+              <div className="space-y-3 rounded-md border border-border/60 bg-background p-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="publish-mode"
+                    value="immediate"
+                    checked={publishMode === "immediate"}
+                    onChange={() => setPublishMode("immediate")}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  <span>Publikasikan segera setelah disimpan</span>
+                </label>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name="publish-mode"
+                    value="schedule"
+                    checked={publishMode === "schedule"}
+                    onChange={() => setPublishMode("schedule")}
+                    className="mt-1 h-4 w-4 accent-primary"
+                  />
+                  <div className="flex-1 space-y-2">
+                    <span>Jadwalkan tanggal & jam publikasi</span>
+                    {publishMode === "schedule" ? (
+                      <div className="space-y-2">
+                        <Input
+                          type="datetime-local"
+                          value={scheduledAt}
+                          onChange={(event) => setScheduledAt(event.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Waktu publikasi mengikuti zona waktu lokal perangkat Anda.
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+                </label>
+              </div>
+            </div>
+          ) : null}
         </CardContent>
         <CardFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">

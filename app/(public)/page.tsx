@@ -13,6 +13,7 @@ import { logPageView } from "@/lib/visits/log-page-view";
 import { formatRelativeTime } from "@/lib/datetime/relative";
 import type { HeroSliderArticle } from "./(components)/hero-slider";
 import { HeroSlider } from "./(components)/hero-slider";
+import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 const POPULAR_LOOKBACK_DAYS = 7;
 
 const articleInclude = {
@@ -189,6 +190,8 @@ export default async function HomePage() {
   const now = new Date();
   const popularWindowStart = new Date(now);
   popularWindowStart.setDate(popularWindowStart.getDate() - POPULAR_LOOKBACK_DAYS);
+
+  await publishDueScheduledArticles();
 
   const [latestArticles, randomizableCategories, popularArticlePaths, siteConfig] = await Promise.all([
     prisma.article.findMany({
