@@ -13,6 +13,31 @@ const trimOrNull = (value: unknown) => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+const ensureProtocol = (value: string) => {
+  const hasProtocol = /^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(value);
+  return hasProtocol ? value : `https://${value}`;
+};
+
+const normalizeSiteUrl = (value: unknown): string | null => {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  try {
+    const candidate = new URL(ensureProtocol(trimmed));
+    candidate.hash = "";
+    candidate.search = "";
+    candidate.pathname = candidate.pathname.replace(/\/+$/, "");
+    const normalized = candidate.toString();
+    return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+  } catch {
+    return null;
+  }
+};
+
 const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
   const metadata = values?.metadata ?? {};
   const social = values?.social ?? {};
@@ -31,7 +56,8 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
 
   const resolvedLogoUrl = trimOrNull(values?.logoUrl) ?? defaultSiteConfig.logoUrl;
   const resolvedIconUrl = trimOrNull(values?.iconUrl) ?? defaultSiteConfig.iconUrl;
-  const resolvedSiteUrl = trimOrNull(values?.siteUrl) ?? defaultSiteConfig.url;
+  const defaultSiteUrl = normalizeSiteUrl(defaultSiteConfig.url) ?? defaultSiteConfig.url;
+  const resolvedSiteUrl = normalizeSiteUrl(values?.siteUrl) ?? defaultSiteUrl;
   const resolvedContactEmail = trimOrNull(values?.contactEmail) ?? defaultSiteConfig.contactEmail;
   const resolvedOgImage =
     resolvedLogoUrl ??
