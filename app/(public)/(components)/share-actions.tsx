@@ -100,10 +100,36 @@ export function ShareActions({ title, articleUrl, slug, className }: ShareAction
         throw new Error(`Gagal menyiapkan gambar Instagram: ${response.statusText}`);
       }
       const blob = await response.blob();
+      const fileName = `${slug}-instagram-feed.png`;
+
+      if (typeof navigator !== "undefined" && "share" in navigator && "canShare" in navigator) {
+        const navigatorWithShare = navigator as Navigator & {
+          canShare?: (data?: ShareData) => boolean;
+        };
+        try {
+          const shareFile = new File([blob], fileName, { type: "image/png" });
+          if (navigatorWithShare.canShare?.({ files: [shareFile] })) {
+            await navigatorWithShare.share({
+              files: [shareFile],
+              title,
+              text: shareMessage,
+            });
+            setInstagramDownloadState("success");
+            scheduleReset();
+            return;
+          }
+        } catch (shareError) {
+          if (shareError instanceof DOMException && shareError.name === "AbortError") {
+            setInstagramDownloadState("idle");
+            return;
+          }
+          console.error("Gagal membagikan melalui sistem:", shareError);
+        }
+      }
       const objectUrl = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = objectUrl;
-      link.download = `${slug}-instagram-feed.png`;
+      link.download = fileName;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -115,7 +141,7 @@ export function ShareActions({ title, articleUrl, slug, className }: ShareAction
       setInstagramDownloadState("error");
       scheduleReset();
     }
-  }, [normalizedArticleUrl, slug]);
+  }, [normalizedArticleUrl, shareMessage, slug, title]);
 
   const shareButtons: Array<{ channel: ShareChannel; label: string; Icon: ComponentType<{ className?: string }> }> = [
     {
@@ -161,7 +187,7 @@ export function ShareActions({ title, articleUrl, slug, className }: ShareAction
       <span className="text-sm font-semibold text-muted-foreground sm:text-foreground flex-none">
         Bagikan:
       </span>
-      <div className="flex flex-1 items-center gap-2 overflow-x-auto sm:flex-none">
+      <div className="flex flex-1 flex-wrap items-center gap-2 sm:flex-nowrap sm:flex-none">
         {shareButtons.map(({ channel, label, Icon }) => (
           <Link
             key={channel}
