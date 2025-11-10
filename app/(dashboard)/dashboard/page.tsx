@@ -439,7 +439,7 @@ export default async function DashboardHomePage() {
           );
         })()
       ) : null}
-      <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
         {statsCards.map((stat) => (
           <Card key={stat.title} className="border-border/80 bg-card/60">
             <CardHeader className="pb-2">

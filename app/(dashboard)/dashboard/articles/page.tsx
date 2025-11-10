@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { buttonVariants } from "@/lib/button-variants";
 import { cn } from "@/lib/utils";
 import { ArticleBulkList } from "@/app/(dashboard)/dashboard/articles/_components/article-bulk-list";
+import { FilterDisclosure } from "@/app/(dashboard)/dashboard/articles/_components/filter-disclosure";
 import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const PAGE_SIZE_DEFAULT = 20;
@@ -269,7 +270,7 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
               </button>
             </div>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <FilterDisclosure defaultOpen={hasFilters}>
             <div className="grid gap-1">
               <Label htmlFor="status">Status</Label>
               <select
@@ -335,7 +336,7 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
                 defaultValue={createdToDate ? createdToInput : ""}
               />
             </div>
-          </div>
+          </FilterDisclosure>
         </form>
         <Link className={primaryBtn} href="/dashboard/articles/new">
           + Artikel Baru
