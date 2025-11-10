@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { Play } from "lucide-react";
+import Cropper, { type Area } from "react-easy-crop";
 import { createPortal } from "react-dom";
 import {
   useCallback,
@@ -16,10 +17,20 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { getCroppedImage } from "@/lib/media/crop-image";
 
 import type { MediaItem } from "./media-grid";
 
 const ITEMS_PER_PAGE = 10;
+const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
 
 function formatMediaDuration(seconds: number | null | undefined) {
   if (!seconds || !Number.isFinite(seconds)) {
@@ -75,6 +86,10 @@ export type SelectedMedia = {
   duration?: number | null;
 };
 
+type CropContext =
+  | { type: "upload"; originalFile: File }
+  | { type: "existing"; media: SelectedMedia };
+
 type FeaturedImagePickerProps = {
   initialItems?: MediaItem[];
   selected?: SelectedMedia | null;
@@ -118,6 +133,16 @@ export function FeaturedImagePicker({
   const [previewError, setPreviewError] = useState(false);
   const [previewErrorInfo, setPreviewErrorInfo] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewObjectUrlRef = useRef<string | null>(null);
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [croppingFile, setCroppingFile] = useState<File | null>(null);
+  const [croppingPreview, setCroppingPreview] = useState<string | null>(null);
+  const [cropAreaPixels, setCropAreaPixels] = useState<Area | null>(null);
+  const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 });
+  const [cropZoom, setCropZoom] = useState(1);
+  const [processingCrop, setProcessingCrop] = useState(false);
+  const [cropContext, setCropContext] = useState<CropContext | null>(null);
+  const [cropPortalReady, setCropPortalReady] = useState(false);
 
   useEffect(() => {
     setSelectedMedia(selected ?? null);
@@ -125,6 +150,35 @@ export function FeaturedImagePicker({
     setPreviewError(false);
     setPreviewErrorInfo(null);
   }, [selected]);
+
+  useEffect(() => {
+    setCropPortalReady(true);
+    return () => {
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = null;
+      }
+    };
+  }, []);
+
+  const resetCropperState = useCallback(() => {
+    if (previewObjectUrlRef.current) {
+      URL.revokeObjectURL(previewObjectUrlRef.current);
+      previewObjectUrlRef.current = null;
+    }
+    setCropperOpen(false);
+    setCroppingFile(null);
+    setCroppingPreview(null);
+    setCropAreaPixels(null);
+    setCropPosition({ x: 0, y: 0 });
+    setCropZoom(1);
+    setProcessingCrop(false);
+    setCropContext(null);
+  }, []);
+
+  const handleCropComplete = useCallback((_: Area, croppedPixels: Area) => {
+    setCropAreaPixels(croppedPixels);
+  }, []);
 
   const fetchPage = useCallback(
     async (targetPage: number) => {
@@ -164,6 +218,110 @@ export function FeaturedImagePicker({
     void fetchPage(1);
   }, [isOpen, fetchPage]);
 
+  const uploadMediaFile = useCallback(
+    (file: File) =>
+      new Promise<void>((resolve, reject) => {
+        setUploadError(null);
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+        if (!isImage && !isVideo) {
+          const message = "Hanya format gambar atau video yang dapat diunggah sebagai media unggulan.";
+          setUploadError(message);
+          reject(new Error(message));
+          return;
+        }
+
+        const limit = isVideo ? MAX_VIDEO_FILE_SIZE_BYTES : MAX_IMAGE_FILE_SIZE_BYTES;
+        if (file.size > limit) {
+          const message = isVideo ? "Ukuran video maksimal 50MB." : "Ukuran gambar maksimal 5MB.";
+          setUploadError(message);
+          reject(new Error(message));
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("file", file);
+        const inferredTitle = file.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").trim();
+        if (inferredTitle) {
+          formData.append("title", inferredTitle);
+        }
+
+        setUploading(true);
+        setUploadProgress(0);
+
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/api/dashboard/media");
+        xhr.responseType = "json";
+        xhr.withCredentials = true;
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            setUploadProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        };
+
+        const handleFailure = (message: string) => {
+          setUploadError(message);
+          setUploading(false);
+          setUploadProgress(null);
+          reject(new Error(message));
+        };
+
+        xhr.onerror = () => {
+          handleFailure("Gagal mengunggah media.");
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            const response = xhr.response as
+              | { data?: Record<string, unknown>; error?: string }
+              | undefined;
+            const data = response?.data as
+              | (SelectedMedia & {
+                  createdAt?: string;
+                  thumbnailUrl?: string | null;
+                  description?: string | null;
+                  duration?: number | null;
+                })
+              | undefined;
+            if (data) {
+              const normalized: SelectedMedia = {
+                id: data.id,
+                title: data.title,
+                description: data.description ?? null,
+                url: data.url,
+                mimeType: data.mimeType,
+                createdAt: data.createdAt ?? new Date().toISOString(),
+                thumbnailUrl: data.thumbnailUrl ?? data.url,
+                duration: data.duration ?? null,
+              };
+              setSelectedMedia(normalized);
+              setDescriptionDraft(normalized.description ?? "");
+              setSaveSuccess(false);
+              setPreviewError(false);
+              setPreviewErrorInfo(null);
+            }
+            setUploadError(null);
+            void fetchPage(1);
+            setUploading(false);
+            setUploadProgress(null);
+            setTimeout(() => {
+              if (fileInputRef.current) {
+                fileInputRef.current.value = "";
+              }
+            }, 0);
+            resolve();
+          } else {
+            const response = xhr.response as { error?: string } | undefined;
+            handleFailure(response?.error ?? "Gagal mengunggah media.");
+          }
+        };
+
+        xhr.send(formData);
+      }),
+    [fetchPage]
+  );
+
   const handleOpen = () => {
     setIsOpen(true);
     setUploadError(null);
@@ -177,6 +335,7 @@ export function FeaturedImagePicker({
     setUploadError(null);
     setUploadProgress(null);
     setSaveSuccess(false);
+    resetCropperState();
   };
 
   const handleUseSelected = () => {
@@ -199,6 +358,37 @@ export function FeaturedImagePicker({
     if (!selectedMedia) return null;
     return selectedMedia;
   }, [selectedMedia]);
+
+  const startCropForUpload = useCallback(
+    (file: File) => {
+      setUploadError(null);
+      if (file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+        setUploadError("Ukuran gambar maksimal 5MB.");
+        return;
+      }
+      if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+        setUploadError("Format gambar tidak didukung.");
+        return;
+      }
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = null;
+      }
+      const objectUrl = URL.createObjectURL(file);
+      previewObjectUrlRef.current = objectUrl;
+      setCroppingFile(file);
+      setCroppingPreview(objectUrl);
+      setCropAreaPixels(null);
+      setCropPosition({ x: 0, y: 0 });
+      setCropZoom(1);
+      setCropContext({ type: "upload", originalFile: file });
+      setUploading(false);
+      setUploadProgress(null);
+      setProcessingCrop(false);
+      setCropperOpen(true);
+    },
+    []
+  );
 
   const handleSelectionChange = (item: MediaItem) => {
     const selectedItem: SelectedMedia = {
@@ -230,98 +420,207 @@ export function FeaturedImagePicker({
       }
 
       const file = candidates[0];
-      const isImage = file.type.startsWith("image/");
-      const isVideo = file.type.startsWith("video/");
-      if (!isImage && !isVideo) {
-        setUploadError("Hanya format gambar atau video yang dapat diunggah sebagai media unggulan.");
+      if (file.type.startsWith("image/")) {
+        startCropForUpload(file);
+        return;
+      }
+      if (file.type.startsWith("video/")) {
+        void uploadMediaFile(file).catch((error) => {
+          console.error(error);
+        });
         return;
       }
 
-      const limit = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
-      if (file.size > limit) {
-        setUploadError(isVideo ? "Ukuran video maksimal 50MB." : "Ukuran gambar maksimal 5MB.");
-        return;
-      }
+      setUploadError("Hanya format gambar atau video yang dapat diunggah sebagai media unggulan.");
+    },
+    [startCropForUpload, uploadMediaFile]
+  );
 
+  const replaceMediaFile = useCallback(
+    async (mediaId: string, file: File) => {
       const formData = new FormData();
       formData.append("file", file);
-      const inferredTitle = file.name.replace(/\.[^.]+$/, "").replace(/[_-]/g, " ").trim();
-      if (inferredTitle) {
-        formData.append("title", inferredTitle);
+      const response = await fetch(`/api/dashboard/media/${mediaId}`, {
+        method: "PATCH",
+        body: formData,
+        credentials: "include",
+      });
+      const json = await response.json().catch(() => null);
+      if (!response.ok || !json?.data) {
+        throw new Error(json?.error ?? "Gagal mengganti gambar.");
+      }
+      const data = json.data as {
+        id: string;
+        title: string;
+        description?: string | null;
+        url: string;
+        mimeType: string;
+        createdAt: string | Date;
+        thumbnailUrl?: string | null;
+        duration?: number | null;
+        size?: number | null;
+        width?: number | null;
+        height?: number | null;
+      };
+      const normalized: SelectedMedia = {
+        id: data.id,
+        title: data.title,
+        description: data.description ?? null,
+        url: data.url,
+        mimeType: data.mimeType,
+        createdAt:
+          typeof data.createdAt === "string"
+            ? data.createdAt
+            : new Date(data.createdAt).toISOString(),
+        thumbnailUrl: data.thumbnailUrl ?? data.url,
+        duration: data.duration ?? null,
+      };
+      setSelectedMedia(normalized);
+      setDescriptionDraft(normalized.description ?? "");
+      setSaveSuccess(false);
+      setPreviewError(false);
+      setPreviewErrorInfo(null);
+      setUploadError(null);
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === normalized.id
+            ? {
+                ...item,
+                title: normalized.title,
+                description: normalized.description,
+                url: normalized.url,
+                thumbnailUrl: normalized.thumbnailUrl ?? normalized.url,
+                mimeType: normalized.mimeType,
+                size: data.size ?? item.size,
+                width: data.width ?? item.width,
+                height: data.height ?? item.height,
+                duration: data.duration ?? item.duration,
+                createdAt: normalized.createdAt,
+              }
+            : item
+        )
+      );
+      await fetchPage(page);
+    },
+    [fetchPage, page]
+  );
+
+  const handleCloseCropper = useCallback(() => {
+    if (processingCrop) {
+      return;
+    }
+    resetCropperState();
+  }, [processingCrop, resetCropperState]);
+
+  const handleSkipCrop = useCallback(() => {
+    if (cropContext?.type === "upload") {
+      const originalFile = cropContext.originalFile;
+      setUploadError(null);
+      resetCropperState();
+      void uploadMediaFile(originalFile).catch((error) => {
+        console.error(error);
+      });
+    } else {
+      resetCropperState();
+    }
+  }, [cropContext, resetCropperState, uploadMediaFile]);
+
+  const handleConfirmCrop = useCallback(async () => {
+    if (!croppingFile || !croppingPreview || !cropAreaPixels) {
+      setUploadError("Tidak ada file gambar untuk diproses.");
+      return;
+    }
+    setUploadError(null);
+    setProcessingCrop(true);
+    try {
+      const croppedFile = await getCroppedImage({
+        imageSrc: croppingPreview,
+        cropArea: cropAreaPixels,
+        fileName: croppingFile.name,
+        mimeType: croppingFile.type,
+      });
+
+      if (cropContext?.type === "existing") {
+        await replaceMediaFile(cropContext.media.id, croppedFile);
+      } else if (cropContext?.type === "upload") {
+        await uploadMediaFile(croppedFile);
+      } else {
+        throw new Error("Konteks crop tidak dikenal.");
       }
 
-      setUploading(true);
-      setUploadProgress(0);
+      resetCropperState();
+    } catch (error) {
+      console.error(error);
+      const message =
+        error instanceof Error ? error.message : "Gagal memproses hasil crop. Coba ulangi.";
+      setUploadError(message);
+    } finally {
+      setProcessingCrop(false);
+    }
+  }, [
+    cropAreaPixels,
+    cropContext,
+    croppingFile,
+    croppingPreview,
+    replaceMediaFile,
+    resetCropperState,
+    uploadMediaFile,
+  ]);
 
-      const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/dashboard/media");
-      xhr.responseType = "json";
-      xhr.withCredentials = true;
-
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          setUploadProgress(Math.round((event.loaded / event.total) * 100));
+  const handleStartCropExisting = useCallback(async () => {
+    if (!selectedMedia || !selectedMedia.mimeType.startsWith("image/")) {
+      setUploadError("Media ini tidak mendukung crop.");
+      return;
+    }
+    setUploadError(null);
+    setProcessingCrop(true);
+    try {
+      let blob: Blob | null = null;
+      const response = await fetch(selectedMedia.url, { credentials: "include" }).catch(() => null);
+      if (response?.ok) {
+        blob = await response.blob();
+      }
+      if (!blob && selectedMedia.thumbnailUrl) {
+        const thumbResponse = await fetch(selectedMedia.thumbnailUrl).catch(() => null);
+        if (thumbResponse?.ok) {
+          blob = await thumbResponse.blob();
         }
-      };
-
-      const handleFailure = (message: string) => {
-        setUploadError(message);
-        setUploading(false);
-        setUploadProgress(null);
-      };
-
-      xhr.onerror = () => {
-        handleFailure("Gagal mengunggah media.");
-      };
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          const response = xhr.response as
-            | { data?: Record<string, unknown>; error?: string }
-            | undefined;
-          const data = response?.data as
-            | (SelectedMedia & {
-                createdAt?: string;
-                thumbnailUrl?: string | null;
-                description?: string | null;
-                duration?: number | null;
-              })
-            | undefined;
-          if (data) {
-            const normalized: SelectedMedia = {
-              id: data.id,
-              title: data.title,
-              description: data.description ?? null,
-              url: data.url,
-              mimeType: data.mimeType,
-              createdAt: data.createdAt ?? new Date().toISOString(),
-              thumbnailUrl: data.thumbnailUrl ?? data.url,
-              duration: data.duration ?? null,
-            };
-            setSelectedMedia(normalized);
-            setDescriptionDraft(normalized.description ?? "");
-            setSaveSuccess(false);
-          }
-          setUploadError(null);
-          void fetchPage(1);
-        } else {
-          const response = xhr.response as { error?: string } | undefined;
-          handleFailure(response?.error ?? "Gagal mengunggah media.");
-          return;
-        }
-        setUploading(false);
-        setUploadProgress(null);
-        setTimeout(() => {
-          if (fileInputRef.current) {
-            fileInputRef.current.value = "";
-          }
-        }, 0);
-      };
-
-      xhr.send(formData);
-    },
-    [fetchPage]
-  );
+      }
+      if (!blob) {
+        throw new Error("Gagal mengambil gambar.");
+      }
+      if (!blob.type.startsWith("image/")) {
+        throw new Error("File bukan gambar.");
+      }
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = null;
+      }
+      const baseFromSlug =
+        selectedMedia.title.trim().length > 0
+          ? selectedMedia.title.trim().toLowerCase().replace(/\s+/g, "-")
+          : "media";
+      const extension = blob.type.split("/")[1] ?? "png";
+      const fileName = `${baseFromSlug}.${extension}`;
+      const file = new File([blob], fileName, { type: blob.type || "image/png" });
+      const objectUrl = URL.createObjectURL(blob);
+      previewObjectUrlRef.current = objectUrl;
+      setCroppingFile(file);
+      setCroppingPreview(objectUrl);
+      setPreviewError(false);
+      setPreviewErrorInfo(null);
+      setCropAreaPixels(null);
+      setCropPosition({ x: 0, y: 0 });
+      setCropZoom(1);
+      setCropContext({ type: "existing", media: selectedMedia });
+      setCropperOpen(true);
+    } catch (error) {
+      console.error(error);
+      setUploadError(error instanceof Error ? error.message : "Gagal memuat gambar untuk crop.");
+    } finally {
+      setProcessingCrop(false);
+    }
+  }, [selectedMedia]);
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -386,6 +685,70 @@ export function FeaturedImagePicker({
   };
 
   return (
+    <>
+      {cropPortalReady && cropperOpen && croppingPreview
+        ? createPortal(
+            <div className="fixed inset-0 z-[60] flex items-start justify-center bg-black/60 px-4 py-6 sm:items-center">
+              <div className="absolute inset-0" onClick={handleCloseCropper} aria-hidden />
+              <div className="relative z-10 w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+                <div className="border-b border-border bg-muted/40 px-4 py-3">
+                  <h3 className="text-lg font-semibold text-foreground">Crop Gambar</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Sesuaikan area 16:9 sebelum menyimpan.
+                  </p>
+                </div>
+                <div className="space-y-4 px-4 pb-4 pt-4">
+                  <div className="relative h-80 w-full overflow-hidden rounded-lg bg-black/80">
+                    <Cropper
+                      image={croppingPreview}
+                      crop={cropPosition}
+                      zoom={cropZoom}
+                      onCropChange={setCropPosition}
+                      onZoomChange={setCropZoom}
+                      onCropComplete={handleCropComplete}
+                      aspect={16 / 9}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="flex w-full flex-col gap-1 text-xs font-medium text-muted-foreground sm:w-auto sm:flex-1">
+                      Zoom
+                      <input
+                        type="range"
+                        min={1}
+                        max={3}
+                        step={0.1}
+                        value={cropZoom}
+                        onChange={(event) => setCropZoom(Number(event.target.value))}
+                        className="h-2 w-full cursor-pointer appearance-none overflow-hidden rounded-full bg-muted"
+                        aria-label="Zoom crop"
+                      />
+                    </label>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button type="button" variant="ghost" size="sm" onClick={handleCloseCropper} disabled={processingCrop}>
+                        Batal
+                      </Button>
+                      {cropContext?.type === "upload" ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={handleSkipCrop}
+                          disabled={processingCrop}
+                        >
+                          Unggah tanpa Crop
+                        </Button>
+                      ) : null}
+                      <Button type="button" size="sm" onClick={handleConfirmCrop} disabled={processingCrop}>
+                        {processingCrop ? "Memproses..." : "Simpan Crop"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     <div className="space-y-3">
       <div className="flex items-center gap-3">
         <Button type="button" variant="outline" onClick={handleOpen}>
@@ -599,13 +962,26 @@ export function FeaturedImagePicker({
                   </div>
                 </div>
               </div>
-              <div className="flex w-full min-h-0 flex-col justify-between border-t border-border bg-muted/10 md:max-w-sm md:border-t-0 md:border-l">
-                <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4">
-                  {selectedMedia ? (
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm font-semibold text-foreground">Pratinjau</h3>
-                        {selectedMedia.mimeType.startsWith("video/") ? (
+                <div className="flex w-full min-h-0 flex-col justify-between border-t border-border bg-muted/10 md:max-w-sm md:border-t-0 md:border-l">
+                  <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4">
+                    {selectedMedia ? (
+                      <div className="space-y-4">
+                        {selectedMedia.mimeType.startsWith("image/") ? (
+                          <div className="flex justify-end">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={handleStartCropExisting}
+                              disabled={processingCrop}
+                            >
+                              {processingCrop ? "Memuat..." : "Crop"}
+                            </Button>
+                          </div>
+                        ) : null}
+                        <div>
+                          <h3 className="text-sm font-semibold text-foreground">Pratinjau</h3>
+                          {selectedMedia.mimeType.startsWith("video/") ? (
                           <div className="mt-3 overflow-hidden rounded-md border border-border/60 bg-black">
                             <video
                               key={selectedMedia.id}
@@ -725,6 +1101,7 @@ export function FeaturedImagePicker({
         </Modal>
       ) : null}
     </div>
+    </>
   );
 }
 

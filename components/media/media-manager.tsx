@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { createPortal } from "react-dom";
+import Cropper, { type Area } from "react-easy-crop";
 import {
   useCallback,
   useEffect,
@@ -19,6 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { notifyError, notifyInfo, notifySuccess } from "@/lib/notifications/client";
+import { getCroppedImage } from "@/lib/media/crop-image";
 import { Play } from "lucide-react";
 
 type MediaUploader = {
@@ -126,6 +128,10 @@ type MediaListResponse = {
     };
   };
 };
+
+type CropContext =
+  | { type: "upload" }
+  | { type: "existing"; item: MediaManagerItem };
 
 function formatSize(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return "0 B";
@@ -252,8 +258,61 @@ export function MediaManager({
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [croppingFile, setCroppingFile] = useState<File | null>(null);
+  const [croppingPreview, setCroppingPreview] = useState<string | null>(null);
+  const [cropAreaPixels, setCropAreaPixels] = useState<Area | null>(null);
+  const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 });
+  const [cropZoom, setCropZoom] = useState(1);
+  const [processingCrop, setProcessingCrop] = useState(false);
+  const [cropContext, setCropContext] = useState<CropContext | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const previewObjectUrlRef = useRef<string | null>(null);
   const firstLoadRef = useRef(true);
+
+  const resetCropperState = useCallback(() => {
+    if (previewObjectUrlRef.current) {
+      URL.revokeObjectURL(previewObjectUrlRef.current);
+      previewObjectUrlRef.current = null;
+    }
+    setCropperOpen(false);
+    setCroppingFile(null);
+    setCroppingPreview(null);
+    setCropAreaPixels(null);
+    setCropPosition({ x: 0, y: 0 });
+    setCropZoom(1);
+    setProcessingCrop(false);
+    setCropContext(null);
+  }, []);
+
+  const handleCropComplete = useCallback((_: Area, croppedPixels: Area) => {
+    setCropAreaPixels(croppedPixels);
+  }, []);
+
+  type FileKind = "image" | "video";
+
+  const validateFile = useCallback((file: File): { valid: boolean; type: FileKind | null; message?: string } => {
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    if (!isImage && !isVideo) {
+      return { valid: false, type: null, message: "Hanya file gambar atau video yang didukung." };
+    }
+    const limit = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > limit) {
+      return {
+        valid: false,
+        type: isImage ? "image" : "video",
+        message: isVideo ? "Ukuran video maksimal 50MB." : "Ukuran gambar maksimal 5MB.",
+      };
+    }
+    return { valid: true, type: isImage ? "image" : "video" };
+  }, []);
+
+  const reportUploadError = useCallback((message: string) => {
+    setUploadMessage(message);
+    setUploadProgress(null);
+    notifyError(message);
+  }, []);
 
   const uploaderChoices = useMemo(() => {
     const dedup = new Set<string>();
@@ -467,29 +526,13 @@ export function MediaManager({
     }
   }, [selectedItem]);
 
-  const processFiles = useCallback(
-    (files: FileList | File[]) => {
-      const fileArray = Array.from(files);
-      if (fileArray.length === 0) {
-        return;
-      }
-      const file = fileArray[0];
-      const isImage = file.type.startsWith("image/");
-      const isVideo = file.type.startsWith("video/");
-      if (!isImage && !isVideo) {
-        const message = "Hanya file gambar atau video yang didukung.";
-        setUploadMessage(message);
-        setUploadProgress(null);
-        notifyError(message);
-        return;
-      }
-
-      const limit = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
-      if (file.size > limit) {
-        const message = isVideo ? "Ukuran video maksimal 50MB." : "Ukuran gambar maksimal 5MB.";
-        setUploadMessage(message);
-        setUploadProgress(null);
-        notifyError(message);
+  const uploadFile = useCallback(
+    (file: File) => {
+      const validation = validateFile(file);
+      if (!validation.valid) {
+        if (validation.message) {
+          reportUploadError(validation.message);
+        }
         return;
       }
 
@@ -512,9 +555,7 @@ export function MediaManager({
       };
 
       xhr.onerror = () => {
-        setUploadMessage("Gagal mengunggah media.");
-        setUploadProgress(null);
-        notifyError("Gagal mengunggah media.");
+        reportUploadError("Gagal mengunggah media.");
       };
 
       xhr.onload = () => {
@@ -538,8 +579,7 @@ export function MediaManager({
           setUploadMessage("Unggahan selesai.");
         } else {
           const message = xhr.response?.error ?? "Gagal mengunggah media.";
-          setUploadMessage(message);
-          notifyError(message);
+          reportUploadError(message);
         }
         setUploadProgress(null);
       };
@@ -547,8 +587,206 @@ export function MediaManager({
       xhr.send(formData);
       notifyInfo("Mengunggah media...", "Proses unggah dimulai");
     },
-    [openModal]
+    [openModal, reportUploadError, validateFile]
   );
+
+  const replaceMediaFile = useCallback(
+    async (mediaId: string, file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch(`/api/dashboard/media/${mediaId}`, {
+        method: "PATCH",
+        body: formData,
+        credentials: "include",
+      });
+
+      let json: { data?: MediaApiResponseItem; error?: string } | null = null;
+      try {
+        json = await response.json();
+      } catch {
+        json = null;
+      }
+
+      if (!response.ok || !json?.data) {
+        const message = json?.error ?? "Gagal mengganti gambar media.";
+        throw new Error(message);
+      }
+
+      const updated = mapResponseItem(json.data);
+      refreshItem(updated);
+      setSelectedItem((prev) => (prev?.id === updated.id ? updated : prev));
+      setModalError(null);
+      setUploadMessage(null);
+      setUploadProgress(null);
+      notifySuccess("Gambar media berhasil diperbarui.");
+    },
+    [refreshItem]
+  );
+
+  const processFiles = useCallback(
+    (files: FileList | File[]) => {
+      const fileArray = Array.from(files);
+      if (fileArray.length === 0) {
+        return;
+      }
+      const file = fileArray[0];
+      const validation = validateFile(file);
+      if (!validation.valid) {
+        if (validation.message) {
+          reportUploadError(validation.message);
+        }
+        return;
+      }
+
+      if (validation.type === "image") {
+        const reader = new FileReader();
+        reader.onload = () => {
+          if (previewObjectUrlRef.current) {
+            URL.revokeObjectURL(previewObjectUrlRef.current);
+            previewObjectUrlRef.current = null;
+          }
+          setCroppingFile(file);
+          setCroppingPreview(reader.result as string);
+          setCropAreaPixels(null);
+          setCropPosition({ x: 0, y: 0 });
+          setCropZoom(1);
+          setProcessingCrop(false);
+          setCropContext({ type: "upload" });
+          setUploadMessage("Sesuaikan area crop sebelum mengunggah.");
+          setUploadProgress(null);
+          setCropperOpen(true);
+        };
+        reader.onerror = () => {
+          reportUploadError("Gagal membaca file gambar untuk crop.");
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      uploadFile(file);
+    },
+    [reportUploadError, uploadFile, validateFile]
+  );
+
+  const handleCloseCropper = useCallback(() => {
+    if (processingCrop) {
+      return;
+    }
+    resetCropperState();
+  }, [processingCrop, resetCropperState]);
+
+  const handleConfirmCrop = useCallback(async () => {
+    if (!croppingFile || !croppingPreview) {
+      reportUploadError("Tidak ada file gambar yang dipilih.");
+      return;
+    }
+    if (!cropAreaPixels) {
+      reportUploadError("Pilih area crop terlebih dahulu.");
+      return;
+    }
+    setProcessingCrop(true);
+    try {
+      const croppedFile = await getCroppedImage({
+        imageSrc: croppingPreview,
+        cropArea: cropAreaPixels,
+        fileName: croppingFile.name,
+        mimeType: croppingFile.type,
+      });
+
+      if (cropContext?.type === "existing") {
+        await replaceMediaFile(cropContext.item.id, croppedFile);
+        resetCropperState();
+      } else {
+        resetCropperState();
+        uploadFile(croppedFile);
+      }
+    } catch (error) {
+      console.error(error);
+      const message =
+        error instanceof Error ? error.message : "Gagal memproses hasil crop. Coba ulangi.";
+      reportUploadError(message);
+      setProcessingCrop(false);
+    }
+  }, [
+    cropAreaPixels,
+    cropContext,
+    croppingFile,
+    croppingPreview,
+    replaceMediaFile,
+    reportUploadError,
+    resetCropperState,
+    uploadFile,
+  ]);
+
+  const handleSkipCrop = useCallback(() => {
+    if (!croppingFile) {
+      resetCropperState();
+      return;
+    }
+    const context = cropContext;
+    const originalFile = croppingFile;
+    resetCropperState();
+    if (context?.type === "upload") {
+      uploadFile(originalFile);
+    }
+  }, [croppingFile, cropContext, resetCropperState, uploadFile]);
+
+  const handleStartExistingCrop = useCallback(async () => {
+    if (!selectedItem || !selectedItem.mimeType.startsWith("image/")) {
+      notifyError("Media ini tidak mendukung crop.");
+      return;
+    }
+    try {
+      setProcessingCrop(true);
+      let blob: Blob | null = null;
+      const response = await fetch(selectedItem.url, { credentials: "include" }).catch(() => null);
+      if (response?.ok) {
+        blob = await response.blob();
+      }
+      if (!blob && selectedItem.thumbnailUrl) {
+        const thumbResponse = await fetch(selectedItem.thumbnailUrl).catch(() => null);
+        if (thumbResponse?.ok) {
+          blob = await thumbResponse.blob();
+        }
+      }
+      if (!blob) {
+        throw new Error("Gagal mengambil gambar.");
+      }
+      if (!blob.type.startsWith("image/")) {
+        throw new Error("File bukan gambar.");
+      }
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = null;
+      }
+      const baseFromSlug =
+        selectedItem.title.trim().length > 0
+          ? selectedItem.title.trim().toLowerCase().replace(/\s+/g, "-")
+          : "media";
+      const extension = blob.type.split("/")[1] ?? "png";
+      const fileName = selectedItem.fileName
+        ? (selectedItem.fileName.split("/").pop() ?? `${baseFromSlug}.${extension}`)
+        : `${baseFromSlug}.${extension}`;
+      const file = new File([blob], fileName, { type: blob.type || "image/png" });
+      const objectUrl = URL.createObjectURL(blob);
+      previewObjectUrlRef.current = objectUrl;
+      setCroppingFile(file);
+      setCroppingPreview(objectUrl);
+      setCropAreaPixels(null);
+      setCropPosition({ x: 0, y: 0 });
+      setCropZoom(1);
+      setCropContext({ type: "existing", item: selectedItem });
+      setUploadMessage(null);
+      setUploadProgress(null);
+      setProcessingCrop(false);
+      setCropperOpen(true);
+    } catch (error) {
+      console.error(error);
+      reportUploadError("Gagal memuat gambar untuk crop.");
+      setProcessingCrop(false);
+    }
+  }, [reportUploadError, selectedItem]);
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -627,6 +865,65 @@ export function MediaManager({
 
   return (
     <div className="space-y-6">
+      <Modal open={cropperOpen} onClose={handleCloseCropper}>
+        {cropperOpen && croppingPreview ? (
+          <div className="w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-background shadow-xl">
+            <div className="border-b border-border bg-muted/40 px-4 py-3">
+              <h3 className="text-lg font-semibold text-foreground">Crop Gambar</h3>
+              <p className="text-xs text-muted-foreground">
+                Sesuaikan area yang ingin diunggah, lalu simpan perubahan.
+              </p>
+            </div>
+            <div className="space-y-4 px-4 pb-4 pt-4">
+              <div className="relative h-80 w-full overflow-hidden rounded-lg bg-black/80">
+                <Cropper
+                  image={croppingPreview}
+                  crop={cropPosition}
+                  zoom={cropZoom}
+                  onCropChange={setCropPosition}
+                  onZoomChange={setCropZoom}
+                  onCropComplete={handleCropComplete}
+                  aspect={16 / 9}
+                />
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <label className="flex w-full flex-col gap-1 text-xs font-medium text-muted-foreground sm:w-auto sm:flex-1">
+                  Zoom
+                  <input
+                    type="range"
+                    min={1}
+                    max={3}
+                    step={0.1}
+                    value={cropZoom}
+                    onChange={(event) => setCropZoom(Number(event.target.value))}
+                    className="h-2 w-full cursor-pointer appearance-none overflow-hidden rounded-full bg-muted"
+                    aria-label="Zoom crop"
+                  />
+                </label>
+                <div className="flex items-center justify-end gap-2">
+                  <Button type="button" variant="ghost" size="sm" onClick={handleCloseCropper} disabled={processingCrop}>
+                    Batal
+                  </Button>
+                  {cropContext?.type === "upload" ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleSkipCrop}
+                      disabled={processingCrop}
+                    >
+                      Unggah tanpa Crop
+                    </Button>
+                  ) : null}
+                  <Button type="button" size="sm" onClick={handleConfirmCrop} disabled={processingCrop}>
+                    {processingCrop ? "Memproses..." : "Simpan Crop"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
       <div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -839,6 +1136,18 @@ export function MediaManager({
           <div>
             <div className="flex flex-col gap-4 border-b border-border bg-muted/30 p-4 sm:flex-row">
               <div className="relative h-48 w-full overflow-hidden rounded-md bg-muted sm:w-1/2">
+                {selectedItem.mimeType.startsWith("image/") ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="absolute right-3 top-3 z-10 shadow-md"
+                    onClick={handleStartExistingCrop}
+                    disabled={processingCrop}
+                  >
+                    {processingCrop ? "Memuat..." : "Crop"}
+                  </Button>
+                ) : null}
                 {selectedItem.mimeType.startsWith("image/") ? (
                   <Image
                     src={selectedItem.thumbnailUrl ?? selectedItem.url}
