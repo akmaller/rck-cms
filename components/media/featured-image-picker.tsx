@@ -138,6 +138,7 @@ export function FeaturedImagePicker({
   const [croppingFile, setCroppingFile] = useState<File | null>(null);
   const [croppingPreview, setCroppingPreview] = useState<string | null>(null);
   const [cropAreaPixels, setCropAreaPixels] = useState<Area | null>(null);
+  const [cropAreaPercent, setCropAreaPercent] = useState<Area | null>(null);
   const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 });
   const [cropZoom, setCropZoom] = useState(1);
   const [processingCrop, setProcessingCrop] = useState(false);
@@ -170,13 +171,15 @@ export function FeaturedImagePicker({
     setCroppingFile(null);
     setCroppingPreview(null);
     setCropAreaPixels(null);
+    setCropAreaPercent(null);
     setCropPosition({ x: 0, y: 0 });
     setCropZoom(1);
     setProcessingCrop(false);
     setCropContext(null);
   }, []);
 
-  const handleCropComplete = useCallback((_: Area, croppedPixels: Area) => {
+  const handleCropComplete = useCallback((croppedArea: Area, croppedPixels: Area) => {
+    setCropAreaPercent(croppedArea);
     setCropAreaPixels(croppedPixels);
   }, []);
 
@@ -379,6 +382,7 @@ export function FeaturedImagePicker({
       setCroppingFile(file);
       setCroppingPreview(objectUrl);
       setCropAreaPixels(null);
+      setCropAreaPercent(null);
       setCropPosition({ x: 0, y: 0 });
       setCropZoom(1);
       setCropContext({ type: "upload", originalFile: file });
@@ -536,6 +540,7 @@ export function FeaturedImagePicker({
       const croppedFile = await getCroppedImage({
         imageSrc: croppingPreview,
         cropArea: cropAreaPixels,
+        cropPercent: cropAreaPercent ?? undefined,
         fileName: croppingFile.name,
         mimeType: croppingFile.type,
       });
@@ -557,15 +562,7 @@ export function FeaturedImagePicker({
     } finally {
       setProcessingCrop(false);
     }
-  }, [
-    cropAreaPixels,
-    cropContext,
-    croppingFile,
-    croppingPreview,
-    replaceMediaFile,
-    resetCropperState,
-    uploadMediaFile,
-  ]);
+  }, [cropAreaPercent, cropAreaPixels, cropContext, croppingFile, croppingPreview, replaceMediaFile, resetCropperState, uploadMediaFile]);
 
   const handleStartCropExisting = useCallback(async () => {
     if (!selectedMedia || !selectedMedia.mimeType.startsWith("image/")) {
@@ -576,12 +573,12 @@ export function FeaturedImagePicker({
     setProcessingCrop(true);
     try {
       let blob: Blob | null = null;
-      const response = await fetch(selectedMedia.url, { credentials: "include" }).catch(() => null);
+      const response = await fetch(selectedMedia.url, { credentials: "omit" }).catch(() => null);
       if (response?.ok) {
         blob = await response.blob();
       }
       if (!blob && selectedMedia.thumbnailUrl) {
-        const thumbResponse = await fetch(selectedMedia.thumbnailUrl).catch(() => null);
+        const thumbResponse = await fetch(selectedMedia.thumbnailUrl, { credentials: "omit" }).catch(() => null);
         if (thumbResponse?.ok) {
           blob = await thumbResponse.blob();
         }
@@ -610,6 +607,7 @@ export function FeaturedImagePicker({
       setPreviewError(false);
       setPreviewErrorInfo(null);
       setCropAreaPixels(null);
+      setCropAreaPercent(null);
       setCropPosition({ x: 0, y: 0 });
       setCropZoom(1);
       setCropContext({ type: "existing", media: selectedMedia });

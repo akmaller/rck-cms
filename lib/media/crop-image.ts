@@ -13,6 +13,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 type CropImageOptions = {
   imageSrc: string;
   cropArea: Area;
+  cropPercent?: Area;
   fileName: string;
   mimeType: string;
 };
@@ -20,14 +21,47 @@ type CropImageOptions = {
 export async function getCroppedImage({
   imageSrc,
   cropArea,
+  cropPercent,
   fileName,
   mimeType,
 }: CropImageOptions): Promise<File> {
   const image = await loadImage(imageSrc);
 
+  const naturalWidth = image.naturalWidth;
+  const naturalHeight = image.naturalHeight;
+
+  const resolvedCrop = (() => {
+    if (!cropPercent) {
+      return {
+        x: cropArea.x,
+        y: cropArea.y,
+        width: cropArea.width,
+        height: cropArea.height,
+      };
+    }
+    return {
+      x: (cropPercent.x / 100) * naturalWidth,
+      y: (cropPercent.y / 100) * naturalHeight,
+      width: (cropPercent.width / 100) * naturalWidth,
+      height: (cropPercent.height / 100) * naturalHeight,
+    };
+  })();
+
+  const boundedCrop = {
+    x: Math.max(0, Math.min(resolvedCrop.x, naturalWidth)),
+    y: Math.max(0, Math.min(resolvedCrop.y, naturalHeight)),
+    width: Math.max(1, Math.min(resolvedCrop.width, naturalWidth)),
+    height: Math.max(1, Math.min(resolvedCrop.height, naturalHeight)),
+  };
+
+  const targetWidth = Math.min(naturalWidth, 1920);
+  const scale = targetWidth / boundedCrop.width;
+  const outputWidth = Math.max(1, Math.round(boundedCrop.width * scale));
+  const outputHeight = Math.max(1, Math.round(boundedCrop.height * scale));
+
   const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(cropArea.width));
-  canvas.height = Math.max(1, Math.round(cropArea.height));
+  canvas.width = outputWidth;
+  canvas.height = outputHeight;
   const context = canvas.getContext("2d");
 
   if (!context) {
@@ -36,14 +70,14 @@ export async function getCroppedImage({
 
   context.drawImage(
     image,
-    cropArea.x,
-    cropArea.y,
-    cropArea.width,
-    cropArea.height,
+    boundedCrop.x,
+    boundedCrop.y,
+    boundedCrop.width,
+    boundedCrop.height,
     0,
     0,
-    cropArea.width,
-    cropArea.height,
+    outputWidth,
+    outputHeight,
   );
 
   const supportedTypes = ["image/png", "image/jpeg", "image/webp"];

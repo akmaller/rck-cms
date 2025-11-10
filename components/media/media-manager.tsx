@@ -262,6 +262,7 @@ export function MediaManager({
   const [croppingFile, setCroppingFile] = useState<File | null>(null);
   const [croppingPreview, setCroppingPreview] = useState<string | null>(null);
   const [cropAreaPixels, setCropAreaPixels] = useState<Area | null>(null);
+  const [cropAreaPercent, setCropAreaPercent] = useState<Area | null>(null);
   const [cropPosition, setCropPosition] = useState({ x: 0, y: 0 });
   const [cropZoom, setCropZoom] = useState(1);
   const [processingCrop, setProcessingCrop] = useState(false);
@@ -279,13 +280,16 @@ export function MediaManager({
     setCroppingFile(null);
     setCroppingPreview(null);
     setCropAreaPixels(null);
+    setCropAreaPercent(null);
+    setCropAreaPercent(null);
     setCropPosition({ x: 0, y: 0 });
     setCropZoom(1);
     setProcessingCrop(false);
     setCropContext(null);
   }, []);
 
-  const handleCropComplete = useCallback((_: Area, croppedPixels: Area) => {
+  const handleCropComplete = useCallback((croppedArea: Area, croppedPixels: Area) => {
+    setCropAreaPercent(croppedArea);
     setCropAreaPixels(croppedPixels);
   }, []);
 
@@ -646,14 +650,15 @@ export function MediaManager({
             URL.revokeObjectURL(previewObjectUrlRef.current);
             previewObjectUrlRef.current = null;
           }
-          setCroppingFile(file);
-          setCroppingPreview(reader.result as string);
-          setCropAreaPixels(null);
-          setCropPosition({ x: 0, y: 0 });
-          setCropZoom(1);
-          setProcessingCrop(false);
-          setCropContext({ type: "upload" });
-          setUploadMessage("Sesuaikan area crop sebelum mengunggah.");
+        setCroppingFile(file);
+        setCroppingPreview(reader.result as string);
+        setCropAreaPixels(null);
+        setCropAreaPercent(null);
+        setCropPosition({ x: 0, y: 0 });
+        setCropZoom(1);
+        setProcessingCrop(false);
+        setCropContext({ type: "upload" });
+        setUploadMessage("Sesuaikan area crop sebelum mengunggah.");
           setUploadProgress(null);
           setCropperOpen(true);
         };
@@ -690,6 +695,7 @@ export function MediaManager({
       const croppedFile = await getCroppedImage({
         imageSrc: croppingPreview,
         cropArea: cropAreaPixels,
+        cropPercent: cropAreaPercent ?? undefined,
         fileName: croppingFile.name,
         mimeType: croppingFile.type,
       });
@@ -709,6 +715,7 @@ export function MediaManager({
       setProcessingCrop(false);
     }
   }, [
+    cropAreaPercent,
     cropAreaPixels,
     cropContext,
     croppingFile,
@@ -740,12 +747,12 @@ export function MediaManager({
     try {
       setProcessingCrop(true);
       let blob: Blob | null = null;
-      const response = await fetch(selectedItem.url, { credentials: "include" }).catch(() => null);
+      const response = await fetch(selectedItem.url, { credentials: "omit" }).catch(() => null);
       if (response?.ok) {
         blob = await response.blob();
       }
       if (!blob && selectedItem.thumbnailUrl) {
-        const thumbResponse = await fetch(selectedItem.thumbnailUrl).catch(() => null);
+        const thumbResponse = await fetch(selectedItem.thumbnailUrl, { credentials: "omit" }).catch(() => null);
         if (thumbResponse?.ok) {
           blob = await thumbResponse.blob();
         }
@@ -774,6 +781,7 @@ export function MediaManager({
       setCroppingFile(file);
       setCroppingPreview(objectUrl);
       setCropAreaPixels(null);
+      setCropAreaPercent(null);
       setCropPosition({ x: 0, y: 0 });
       setCropZoom(1);
       setCropContext({ type: "existing", item: selectedItem });
