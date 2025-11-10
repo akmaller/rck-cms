@@ -174,7 +174,9 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
     return label || "-";
   };
 
-  const formatJoinDate = formatDate(author.createdAt);
+  const formatJoinDate = author.createdAt
+    ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(author.createdAt)
+    : "-";
 
   const getPrimaryCategory = (entry: { categories: { category: { name: string } }[] }) =>
     entry.categories[0]?.category.name ?? "Umum";
@@ -263,34 +265,36 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-8">
           <div className="flex flex-col gap-5 rounded-2xl border border-border/60 bg-card p-4 shadow-sm sm:gap-6 sm:p-6 lg:p-8">
-            <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-              <div className="relative h-24 w-24 overflow-hidden rounded-full border border-border/60 shadow-sm sm:h-28 sm:w-28 lg:h-32 lg:w-32">
-                {author.avatarUrl ? (
-                  <Image
-                    src={author.avatarUrl}
-                    alt={author.name}
-                    fill
-                    className="object-cover"
-                    sizes="(min-width: 640px) 128px, 112px"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-primary/10 text-3xl font-semibold text-primary">
-                    {author.name.charAt(0).toUpperCase()}
-                  </div>
-                )}
+            <div className="flex flex-col gap-4 sm:gap-6">
+              <div className="flex items-center gap-4 sm:gap-6">
+                <div className="relative h-24 w-24 overflow-hidden rounded-full border border-border/60 shadow-sm sm:h-28 sm:w-28 lg:h-32 lg:w-32">
+                  {author.avatarUrl ? (
+                    <Image
+                      src={author.avatarUrl}
+                      alt={author.name}
+                      fill
+                      className="object-cover"
+                      sizes="(min-width: 640px) 128px, 112px"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-primary/10 text-3xl font-semibold text-primary">
+                      {author.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{author.name}</h1>
+                  <p className="text-sm text-muted-foreground">Bergabung sejak {formatJoinDate}</p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{author.name}</h1>
-                <p className="text-sm text-muted-foreground">Bergabung sejak {formatJoinDate}</p>
-                {author.bio ? (
-                  <p className="max-w-2xl text-sm text-muted-foreground">{author.bio}</p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Penulis ini belum menambahkan bio.</p>
-                )}
-              </div>
+              {author.bio ? (
+                <p className="max-w-2xl text-sm text-muted-foreground">{author.bio}</p>
+              ) : (
+                <p className="text-sm text-muted-foreground">Penulis ini belum menambahkan bio.</p>
+              )}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <div className="rounded-xl border border-border/60 bg-card/80 px-3 py-3 sm:px-4 sm:py-4">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">Artikel Ditulis</p>
                 <p className="text-2xl font-semibold text-foreground">{articleCount.toLocaleString("id-ID")}</p>

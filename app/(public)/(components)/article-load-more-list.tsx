@@ -91,7 +91,12 @@ export function ArticleLoadMoreList({
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {hasMore ? (
-        <Button onClick={handleLoadMore} disabled={isPending} variant="outline">
+        <Button
+          onClick={handleLoadMore}
+          disabled={isPending}
+          variant="default"
+          className="w-full justify-center px-6 py-5 text-base font-semibold shadow-md sm:w-auto sm:self-center sm:px-8 sm:py-4"
+        >
           {isPending ? "Memuat..." : "Load More"}
         </Button>
       ) : null}

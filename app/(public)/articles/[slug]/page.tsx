@@ -19,7 +19,6 @@ import { getSiteConfig } from "@/lib/site-config/server";
 import { ArticleSidebar } from "@/app/(public)/(components)/article-sidebar";
 import { getArticleSidebarData } from "@/lib/articles/sidebar";
 import { ShareActions } from "@/app/(public)/(components)/share-actions";
-import { formatRelativeTime } from "@/lib/datetime/relative";
 import { CommentForm } from "./comment-form";
 import { CommentList } from "./comment-list";
 import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
@@ -180,8 +179,10 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
   });
   const viewCountLabel = new Intl.NumberFormat("id-ID").format(uniqueViews.length);
 
-  const publishedAtLabel =
-    formatRelativeTime(article.publishedAt ?? article.createdAt) || "-";
+  const publishedAtDate = article.publishedAt ?? article.createdAt ?? null;
+  const publishedAtLabel = publishedAtDate
+    ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium" }).format(publishedAtDate)
+    : "-";
   const isVideoFeatured = article.featuredMedia?.mimeType?.startsWith("video/") ?? false;
   const featuredPoster =
     article.featuredMedia?.thumbnailUrl ??
@@ -196,25 +197,38 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
   const authorInitial = authorNameDisplay?.charAt(0).toUpperCase() ?? "A";
 
   return (
-    <div className="mx-auto w-full max-w-6xl">
+    <div className="mx-auto w-full max-w-6xl -mt-6 sm:mt-0">
       <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_320px]">
         <article className="flex flex-col gap-10">
           <header className="space-y-4">
             <div className="space-y-2">
-              <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">{article.title}</h1>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-5xl">{article.title}</h1>
               <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 {categories.length ? (
                   <>
-                    <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.15em]">
-                      {categories.map((category) => (
-                        <Link
-                          key={category.id}
-                          href={`/categories/${category.slug}`}
-                          className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                        >
-                          {category.name}
-                        </Link>
-                      ))}
+                    <div className="flex items-center gap-2 text-xs uppercase tracking-[0.15em]">
+                      <div className="flex items-center gap-2 sm:hidden">
+                        {categories.slice(0, 1).map((category) => (
+                          <Link
+                            key={`mobile-${category.id}`}
+                            href={`/categories/${category.slug}`}
+                            className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          >
+                            {category.name}
+                          </Link>
+                        ))}
+                      </div>
+                      <div className="hidden flex-wrap items-center gap-2 sm:flex">
+                        {categories.slice(0, 3).map((category) => (
+                          <Link
+                            key={category.id}
+                            href={`/categories/${category.slug}`}
+                            className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-semibold text-primary transition hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                          >
+                            {category.name}
+                          </Link>
+                        ))}
+                      </div>
                     </div>
                     <span aria-hidden>•</span>
                   </>
@@ -233,7 +247,6 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
                   <>
                     <span aria-hidden>•</span>
                     <span className="flex items-center gap-2">
-                      <span>oleh</span>
                       <Link
                         href={`/authors/${article.author.id}`}
                         className="flex items-center gap-2 font-medium text-primary hover:underline"
