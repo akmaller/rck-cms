@@ -337,7 +337,8 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
               <CardContent className="py-4">
                 <ShareActions
                   title={article.title}
-                  articleUrl={`${process.env.NEXT_PUBLIC_APP_URL}/articles/${article.slug}`}
+                  articleUrl={url ?? `${process.env.NEXT_PUBLIC_APP_URL}/articles/${article.slug}`}
+                  slug={article.slug}
                 />
               </CardContent>
             </Card>

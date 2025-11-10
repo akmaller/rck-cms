@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  Copy,
-  Facebook,
-  MessageCircle,
-  Send,
-  Share2,
-  type LucideIcon,
-} from "lucide-react";
+import { Copy, Facebook, Instagram, MessageCircle, Send } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type ComponentType } from "react";
 
 import { buttonVariants } from "@/lib/button-variants";
 import { cn, ensureTrailingSlash } from "@/lib/utils";
@@ -19,8 +12,33 @@ type ShareChannel = "twitter" | "facebook" | "whatsapp" | "telegram";
 type ShareActionsProps = {
   title: string;
   articleUrl: string;
+  slug: string;
   className?: string;
 };
+
+type InstagramDownloadState = "idle" | "loading" | "success" | "error";
+
+const XLetterIcon: ComponentType<{ className?: string }> = ({ className }) => (
+  <svg
+    viewBox="0 0 24 24"
+    className={className}
+    role="img"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <text
+      x="12"
+      y="18"
+      textAnchor="middle"
+      fontFamily="'Inter', 'Helvetica Neue', Arial, sans-serif"
+      fontSize="18"
+      fontWeight="800"
+      fill="currentColor"
+    >
+      X
+    </text>
+  </svg>
+);
 
 function buildShareUrl(channel: ShareChannel, title: string, url: string) {
   const normalizedUrl = ensureTrailingSlash(url);
@@ -41,8 +59,10 @@ function buildShareUrl(channel: ShareChannel, title: string, url: string) {
   }
 }
 
-export function ShareActions({ title, articleUrl, className }: ShareActionsProps) {
+export function ShareActions({ title, articleUrl, slug, className }: ShareActionsProps) {
   const [copied, setCopied] = useState(false);
+  const [instagramDownloadState, setInstagramDownloadState] =
+    useState<InstagramDownloadState>("idle");
   const normalizedArticleUrl = ensureTrailingSlash(articleUrl);
   const shareMessage = useMemo(
     () => `${title} — ${normalizedArticleUrl}`,
@@ -59,67 +79,139 @@ export function ShareActions({ title, articleUrl, className }: ShareActionsProps
     }
   }, [shareMessage]);
 
-  const shareButtons: Array<{ channel: ShareChannel; label: string; Icon: LucideIcon }> = [
+  const handleInstagramDownload = useCallback(async () => {
+    if (!slug) {
+      return;
+    }
+    setInstagramDownloadState("loading");
+    const scheduleReset = () => {
+      setTimeout(() => {
+        setInstagramDownloadState("idle");
+      }, 2500);
+    };
+
+    try {
+      const response = await fetch(
+        `/api/public/articles/${encodeURIComponent(slug)}/share-instagram?articleUrl=${encodeURIComponent(
+          normalizedArticleUrl
+        )}`
+      );
+      if (!response.ok) {
+        throw new Error(`Gagal menyiapkan gambar Instagram: ${response.statusText}`);
+      }
+      const blob = await response.blob();
+      const objectUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `${slug}-instagram-feed.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+      setInstagramDownloadState("success");
+      scheduleReset();
+    } catch (error) {
+      console.error(error);
+      setInstagramDownloadState("error");
+      scheduleReset();
+    }
+  }, [normalizedArticleUrl, slug]);
+
+  const shareButtons: Array<{ channel: ShareChannel; label: string; Icon: ComponentType<{ className?: string }> }> = [
     {
       channel: "twitter" as ShareChannel,
-      label: "Twitter / X",
-      Icon: Share2,
+      label: "Bagikan ke Twitter / X",
+      Icon: XLetterIcon,
     },
     {
       channel: "facebook" as ShareChannel,
-      label: "Facebook",
+      label: "Bagikan ke Facebook",
       Icon: Facebook,
     },
     {
       channel: "whatsapp" as ShareChannel,
-      label: "WhatsApp",
+      label: "Bagikan ke WhatsApp",
       Icon: MessageCircle,
     },
     {
       channel: "telegram" as ShareChannel,
-      label: "Telegram",
+      label: "Bagikan ke Telegram",
       Icon: Send,
     },
   ];
 
+  const instagramButtonLabel =
+    instagramDownloadState === "loading"
+      ? "Sedang menyiapkan gambar Instagram"
+      : instagramDownloadState === "success"
+        ? "Gambar Instagram siap diunggah"
+        : instagramDownloadState === "error"
+          ? "Gagal menyiapkan gambar Instagram, coba lagi"
+          : "Unduh template Instagram";
+
+  const copyButtonLabel = copied ? "Tautan artikel berhasil disalin" : "Salin tautan artikel";
+
   return (
     <div
       className={cn(
-        "grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-2 md:flex-nowrap",
+        "flex items-center gap-3",
         className
       )}
     >
-      <span className="col-span-2 text-sm font-semibold text-muted-foreground sm:w-auto sm:text-foreground sm:flex-none">
+      <span className="text-sm font-semibold text-muted-foreground sm:text-foreground flex-none">
         Bagikan:
       </span>
-      {shareButtons.map(({ channel, label, Icon }) => (
-        <Link
-          key={channel}
-          href={buildShareUrl(channel, title, normalizedArticleUrl)}
-          target="_blank"
-          rel="noopener noreferrer"
+      <div className="flex flex-1 items-center gap-2 overflow-x-auto sm:flex-none">
+        {shareButtons.map(({ channel, label, Icon }) => (
+          <Link
+            key={channel}
+            href={buildShareUrl(channel, title, normalizedArticleUrl)}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={label}
+            title={label}
+            className={buttonVariants({
+              variant: "outline",
+              size: "icon",
+            })}
+          >
+            <Icon className="h-4 w-4" aria-hidden />
+            <span className="sr-only">{label}</span>
+          </Link>
+        ))}
+        <button
+          type="button"
+          onClick={handleInstagramDownload}
+          disabled={instagramDownloadState === "loading"}
+          aria-label={instagramButtonLabel}
+          title={instagramButtonLabel}
           className={buttonVariants({
-            variant: "outline",
-            size: "sm",
-            className: "flex w-full items-center justify-center gap-2 text-sm font-medium sm:w-auto sm:flex-none",
+            variant:
+              instagramDownloadState === "success"
+                ? "secondary"
+                : instagramDownloadState === "error"
+                  ? "destructive"
+                  : "default",
+            size: "icon",
           })}
         >
-          <Icon className="h-4 w-4" aria-hidden />
-          <span>{label}</span>
-        </Link>
-      ))}
-      <button
-        type="button"
-        onClick={handleCopy}
-        className={buttonVariants({
-          variant: "secondary",
-          size: "sm",
-          className: "flex w-full items-center justify-center gap-2 text-sm font-medium sm:w-auto sm:flex-none",
-        })}
-      >
-        <Copy className="h-4 w-4" aria-hidden />
-        <span>{copied ? "Disalin!" : "Salin"}</span>
-      </button>
+          <Instagram className="h-4 w-4" aria-hidden />
+          <span className="sr-only">Instagram Feed</span>
+        </button>
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={copyButtonLabel}
+          title={copyButtonLabel}
+          className={buttonVariants({
+            variant: copied ? "secondary" : "outline",
+            size: "icon",
+          })}
+        >
+          <Copy className="h-4 w-4" aria-hidden />
+          <span className="sr-only">{copied ? "Tautan berhasil disalin" : "Salin tautan"}</span>
+        </button>
+      </div>
     </div>
   );
 }
