@@ -228,13 +228,14 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
       value,
       label: statusLabelMap[value],
     }));
-  const hasFilters =
+  const hasFilters = Boolean(
     query ||
-    selectedStatus ||
-    selectedCategory ||
-    createdFromInput ||
-    createdToInput ||
-    pageSize !== PAGE_SIZE_DEFAULT;
+      selectedStatus ||
+      selectedCategory ||
+      createdFromInput ||
+      createdToInput ||
+      pageSize !== PAGE_SIZE_DEFAULT,
+  );
 
   return (
     <div className="space-y-8">
