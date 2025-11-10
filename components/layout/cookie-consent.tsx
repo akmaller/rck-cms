@@ -22,7 +22,11 @@ function setConsentCookie() {
   document.cookie = `${CONSENT_COOKIE_NAME}=accepted; Max-Age=${CONSENT_MAX_AGE}; Path=/; SameSite=Lax`;
 }
 
-export function CookieConsentBanner() {
+type CookieConsentBannerProps = {
+  privacyPolicySlug: string | null;
+};
+
+export function CookieConsentBanner({ privacyPolicySlug }: CookieConsentBannerProps) {
   const [visible, setVisible] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
@@ -37,6 +41,7 @@ export function CookieConsentBanner() {
   if (!hydrated || !visible) {
     return null;
   }
+  const policyUrl = privacyPolicySlug ? `/pages/${privacyPolicySlug}` : null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 flex justify-center px-3 pb-3 sm:px-4">
@@ -45,9 +50,13 @@ export function CookieConsentBanner() {
           <p className="text-sm text-muted-foreground">
             Kami menggunakan cookie untuk meningkatkan pengalaman Anda, menganalisis trafik, dan menyesuaikan konten.
             Anda dapat membaca detailnya di {" "}
-            <Link href="/pages/privacy-policy" className="font-medium text-primary hover:underline">
-              Kebijakan Privasi
-            </Link>
+            {policyUrl ? (
+              <Link href={policyUrl} className="font-medium text-primary hover:underline">
+                Kebijakan Privasi
+              </Link>
+            ) : (
+              <span className="font-medium">Kebijakan Privasi</span>
+            )}
             .
           </p>
           <div className="flex flex-shrink-0 gap-2">

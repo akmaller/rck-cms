@@ -3,8 +3,12 @@ import type { ReactNode } from "react";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteHeader } from "@/components/layout/site-header";
 import { CookieConsentBanner } from "@/components/layout/cookie-consent";
+import { getSiteConfig } from "@/lib/site-config/server";
 
-export default function PublicLayout({ children }: { children: ReactNode }) {
+export default async function PublicLayout({ children }: { children: ReactNode }) {
+  const config = await getSiteConfig();
+  const privacyPolicySlug = config.registration?.privacyPolicyPageSlug ?? null;
+
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <SiteHeader />
@@ -12,7 +16,7 @@ export default function PublicLayout({ children }: { children: ReactNode }) {
         <div className="container px-2 sm:px-4 lg:px-6 py-6 sm:py-8 lg:py-10">{children}</div>
       </main>
       <SiteFooter />
-      <CookieConsentBanner />
+      <CookieConsentBanner privacyPolicySlug={privacyPolicySlug} />
     </div>
   );
 }
