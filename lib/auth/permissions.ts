@@ -64,6 +64,7 @@ export async function assertMediaOwnership(mediaId: string) {
       fileName: true,
       title: true,
       description: true,
+      thumbnailFileName: true,
     },
   });
 

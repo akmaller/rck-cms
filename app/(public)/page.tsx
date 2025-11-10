@@ -23,7 +23,17 @@ const articleInclude = {
     orderBy: { assignedAt: "asc" as const },
   },
   featuredMedia: {
-    select: { url: true, title: true, width: true, height: true },
+    select: {
+      url: true,
+      title: true,
+      description: true,
+      width: true,
+      height: true,
+      thumbnailUrl: true,
+      thumbnailWidth: true,
+      thumbnailHeight: true,
+      mimeType: true,
+    },
   },
   author: { select: { id: true, name: true, avatarUrl: true } },
 } satisfies Prisma.ArticleInclude;
@@ -223,14 +233,28 @@ export default async function HomePage() {
     title: article.title,
     publishDateLabel: formatRelativeLabel(article.publishedAt ?? article.createdAt),
     categories: article.categories.map((entry) => entry.category.name),
-    featuredImage: article.featuredMedia
-      ? {
-          url: article.featuredMedia.url,
-          title: article.featuredMedia.title ?? article.title,
-          width: article.featuredMedia.width ?? 1280,
-          height: article.featuredMedia.height ?? 720,
-        }
-      : null,
+    featuredImage: (() => {
+      const media = article.featuredMedia;
+      if (!media) {
+        return null;
+      }
+      const candidateUrl =
+        media.thumbnailUrl ??
+        (media.mimeType?.startsWith("image/")
+          ? media.url
+          : media.url
+            ? deriveThumbnailUrl(media.url) ?? null
+            : null);
+      if (!candidateUrl) {
+        return null;
+      }
+      return {
+        url: candidateUrl,
+        title: media.title ?? article.title,
+        width: media.thumbnailWidth ?? media.width ?? 1280,
+        height: media.thumbnailHeight ?? media.height ?? 720,
+      };
+    })(),
   }));
   const remainingAfterHero = latestArticles.slice(heroArticles.length);
   const heroRightArticles = remainingAfterHero.slice(0, 8);
@@ -308,6 +332,10 @@ export default async function HomePage() {
   });
 
   const getThumbnailUrl = (entry: ArticleWithRelations) => {
+    const direct = entry.featuredMedia?.thumbnailUrl ?? null;
+    if (direct) {
+      return direct;
+    }
     const source = entry.featuredMedia?.url;
     if (!source) return null;
     return deriveThumbnailUrl(source) ?? source;

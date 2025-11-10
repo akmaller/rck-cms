@@ -1,7 +1,5 @@
-import type { NextConfig } from "next";
-
 type RemotePattern = NonNullable<
-  NonNullable<NextConfig["images"]>["remotePatterns"]
+  NonNullable<import("next").NextConfig["images"]>["remotePatterns"]
 >[number];
 
 const imagesRemotePatterns = (() => {
@@ -97,7 +95,12 @@ const disableImageOptimization =
   process.env.NEXT_DISABLE_IMAGE_OPTIMIZATION === "1" ||
   process.env.NEXT_DISABLE_IMAGE_OPTIMIZATION === "true";
 
-const nextConfig: NextConfig = {
+const rawUploadLimit = process.env.NEXT_MAX_MEDIA_UPLOAD_MB;
+const parsedUploadLimit = rawUploadLimit ? Number.parseInt(rawUploadLimit, 10) : NaN;
+const safeUploadLimit =
+  Number.isFinite(parsedUploadLimit) && parsedUploadLimit > 10 ? parsedUploadLimit : 60;
+
+const nextConfig = {
   images: {
     unoptimized: disableImageOptimization,
     remotePatterns: imagesRemotePatterns.length > 0 ? imagesRemotePatterns : undefined,
@@ -169,6 +172,21 @@ const nextConfig: NextConfig = {
 
     return redirectRules;
   },
-};
+  experimental: {
+    middlewareClientMaxBodySize: safeUploadLimit * 1024 * 1024,
+  },
+  webpack(config, { isServer }) {
+    if (isServer) {
+      const externals = Array.isArray(config.externals)
+        ? config.externals
+        : config.externals
+          ? [config.externals]
+          : [];
+      externals.push("fluent-ffmpeg", "ffmpeg-static", "ffprobe-static");
+      config.externals = externals;
+    }
+    return config;
+  },
+} satisfies import("next").NextConfig;
 
 export default nextConfig;

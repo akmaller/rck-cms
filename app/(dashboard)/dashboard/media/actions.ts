@@ -8,13 +8,21 @@ import { prisma } from "@/lib/prisma";
 import { deleteMediaFile, deriveThumbnailUrl, saveMediaFile } from "@/lib/storage/media";
 import { writeAuditLog } from "@/lib/audit/log";
 
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
   "image/avif",
+]);
+const ALLOWED_VIDEO_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/ogg",
+  "video/ogv",
+  "video/quicktime",
 ]);
 
 const uploadSchema = z.object({
@@ -29,12 +37,27 @@ export async function uploadMedia(formData: FormData) {
     return { error: "File wajib dipilih" };
   }
 
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    return { error: "Ukuran file maksimal 5MB" };
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+
+  if (!isImage && !isVideo) {
+    return { error: "Hanya gambar atau video yang dapat diunggah" };
   }
 
-  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
-    return { error: "Hanya format gambar yang didukung" };
+  if (isImage && file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+    return { error: "Ukuran gambar maksimal 5MB" };
+  }
+
+  if (isVideo && file.size > MAX_VIDEO_FILE_SIZE_BYTES) {
+    return { error: "Ukuran video maksimal 50MB" };
+  }
+
+  if (isImage && !ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    return { error: "Format gambar tidak didukung" };
+  }
+
+  if (isVideo && !ALLOWED_VIDEO_MIME_TYPES.has(file.type)) {
+    return { error: "Format video tidak didukung" };
   }
 
   const titleEntry = formData.get("title");
@@ -50,17 +73,22 @@ export async function uploadMedia(formData: FormData) {
     saved = await saveMediaFile(file);
   } catch (error) {
     console.error("Gagal memproses file yang diunggah", error);
-    return { error: "File gambar tidak valid" };
+    return { error: "File media tidak valid" };
   }
   const media = await prisma.media.create({
     data: {
       title: parsed.data.title ?? file.name ?? "Media",
       fileName: saved.fileName,
       url: saved.url,
-      mimeType: "image/webp",
+      mimeType: isImage ? "image/webp" : file.type,
       size: saved.size,
       width: saved.width,
       height: saved.height,
+      duration: saved.duration,
+      thumbnailFileName: saved.thumbnailFileName,
+      thumbnailUrl: saved.thumbnailUrl,
+      thumbnailWidth: saved.thumbnailWidth,
+      thumbnailHeight: saved.thumbnailHeight,
       storageType: saved.storageType,
       createdById: session.user.id,
     },
@@ -79,7 +107,9 @@ export async function uploadMedia(formData: FormData) {
     data: {
       id: media.id,
       url: media.url,
-      thumbnailUrl: deriveThumbnailUrl(media.url) ?? undefined,
+      thumbnailUrl: media.thumbnailUrl ?? deriveThumbnailUrl(media.url) ?? undefined,
+      mimeType: media.mimeType,
+      duration: media.duration ?? undefined,
     },
   };
 }
@@ -93,7 +123,7 @@ export async function deleteMedia(id: string) {
   }
 
   await prisma.media.delete({ where: { id } });
-  await deleteMediaFile(media.storageType, media.fileName);
+  await deleteMediaFile(media.storageType, media.fileName, media.thumbnailFileName);
 
   await writeAuditLog({
     action: "MEDIA_DELETE",

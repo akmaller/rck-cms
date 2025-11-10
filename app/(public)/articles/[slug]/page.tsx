@@ -8,6 +8,7 @@ import Image from "next/image";
 import { Eye } from "lucide-react";
 import { auth } from "@/auth";
 import { ArticleViewer } from "@/components/article/article-viewer";
+import { ArticleVideoPlayer } from "@/components/article/article-video-player";
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent } from "@/components/ui/card";
 import { getArticleComments } from "@/lib/comments/service";
@@ -25,6 +26,7 @@ import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 import { getArticleLikeSummary } from "@/lib/likes/service";
 import { ArticleLikeButton } from "./article-like-button";
 import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
+import { deriveThumbnailUrl } from "@/lib/storage/media";
 
 async function getArticle(slug: string) {
   await publishDueScheduledArticles();
@@ -34,7 +36,20 @@ async function getArticle(slug: string) {
       author: { select: { id: true, name: true, avatarUrl: true } },
       categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
       tags: { include: { tag: true } },
-      featuredMedia: { select: { url: true, title: true, description: true, width: true, height: true } },
+      featuredMedia: {
+        select: {
+          url: true,
+          title: true,
+          description: true,
+          width: true,
+          height: true,
+          mimeType: true,
+          thumbnailUrl: true,
+          thumbnailWidth: true,
+          thumbnailHeight: true,
+          duration: true,
+        },
+      },
     },
   });
 }
@@ -69,6 +84,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     rawDescription.length > 1000
       ? `${rawDescription.slice(0, 997).trimEnd()}...`
       : rawDescription || undefined;
+  const isVideoFeatured = article.featuredMedia?.mimeType?.startsWith("video/") ?? false;
+  const featuredPoster =
+    article.featuredMedia && article.featuredMedia.url
+      ? article.featuredMedia.thumbnailUrl ??
+        deriveThumbnailUrl(article.featuredMedia.url) ??
+        null
+      : null;
 
   return createMetadata({
     title: article.title,
@@ -78,10 +100,14 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     type: "article",
     image: article.featuredMedia
       ? {
-          url: article.featuredMedia.url,
+          url: isVideoFeatured ? featuredPoster ?? article.featuredMedia.url : article.featuredMedia.url,
           alt: article.featuredMedia.description ?? article.featuredMedia.title ?? article.title,
-          width: article.featuredMedia.width ?? undefined,
-          height: article.featuredMedia.height ?? undefined,
+          width: isVideoFeatured
+            ? article.featuredMedia.thumbnailWidth ?? article.featuredMedia.width ?? undefined
+            : article.featuredMedia.width ?? undefined,
+          height: isVideoFeatured
+            ? article.featuredMedia.thumbnailHeight ?? article.featuredMedia.height ?? undefined
+            : article.featuredMedia.height ?? undefined,
         }
       : null,
     tags: [...new Set([...categories, ...tags])],
@@ -156,6 +182,10 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
 
   const publishedAtLabel =
     formatRelativeTime(article.publishedAt ?? article.createdAt) || "-";
+  const isVideoFeatured = article.featuredMedia?.mimeType?.startsWith("video/") ?? false;
+  const featuredPoster =
+    article.featuredMedia?.thumbnailUrl ??
+    (article.featuredMedia?.url ? deriveThumbnailUrl(article.featuredMedia.url) ?? null : null);
 
   const sessionUserName =
     session?.user?.name?.trim() ||
@@ -233,22 +263,41 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
 
           <div className="space-y-6">
             {article.featuredMedia?.url ? (
-              <div className="relative overflow-hidden rounded-xl border border-border/60">
-                <Image
-                  src={article.featuredMedia.url}
-                  alt={article.featuredMedia.description ?? article.featuredMedia.title ?? article.title}
-                  width={article.featuredMedia.width ?? 1280}
-                  height={article.featuredMedia.height ?? 720}
-                  className="h-auto w-full object-cover"
-                  style={{ width: "100%", height: "auto" }}
-                  priority
-                />
-                {article.featuredMedia?.description ? (
-                  <div className="absolute inset-x-0 bottom-0 bg-black/60 px-4 py-3 text-xs font-medium leading-snug text-white sm:px-6 sm:text-sm">
-                    {article.featuredMedia.description}
+              isVideoFeatured ? (
+                <div className="space-y-3">
+                  <div className="overflow-hidden rounded-xl border border-border/60 bg-black shadow">
+                    <ArticleVideoPlayer
+                      src={article.featuredMedia.url}
+                      mimeType={article.featuredMedia.mimeType ?? undefined}
+                      poster={featuredPoster ?? undefined}
+                      title={article.featuredMedia.title ?? article.title}
+                      className="rounded-none border-0"
+                    />
                   </div>
-                ) : null}
-              </div>
+                  {article.featuredMedia?.description ? (
+                    <div className="rounded-xl border border-border/60 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                      {article.featuredMedia.description}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="relative overflow-hidden rounded-xl border border-border/60">
+                  <Image
+                    src={article.featuredMedia.url}
+                    alt={article.featuredMedia.description ?? article.featuredMedia.title ?? article.title}
+                    width={article.featuredMedia.width ?? 1280}
+                    height={article.featuredMedia.height ?? 720}
+                    className="h-auto w-full object-cover"
+                    style={{ width: "100%", height: "auto" }}
+                    priority
+                  />
+                  {article.featuredMedia?.description ? (
+                    <div className="absolute inset-x-0 bottom-0 bg-black/60 px-4 py-3 text-xs font-medium leading-snug text-white sm:px-6 sm:text-sm">
+                      {article.featuredMedia.description}
+                    </div>
+                  ) : null}
+                </div>
+              )
             ) : null}
             <ArticleViewer
               content={article.content}

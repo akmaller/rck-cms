@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { Play } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,8 +9,12 @@ export type MediaItem = {
   title: string;
   description?: string | null;
   url: string;
+  thumbnailUrl?: string | null;
   mimeType: string;
   size: number;
+  width?: number | null;
+  height?: number | null;
+  duration?: number | null;
   createdAt: string | Date;
 };
 
@@ -24,6 +29,16 @@ function formatSize(bytes: number) {
   const units = ["B", "KB", "MB", "GB"] as const;
   const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
   return `${(bytes / Math.pow(1024, index)).toFixed(1)} ${units[index]}`;
+}
+
+function formatDuration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "0:00";
+  }
+  const totalSeconds = Math.round(seconds);
+  const minutes = Math.floor(totalSeconds / 60);
+  const remaining = totalSeconds % 60;
+  return `${minutes}:${remaining.toString().padStart(2, "0")}`;
 }
 
 export function MediaGrid({ items, onDelete, filter = "all" }: MediaGridProps) {
@@ -59,7 +74,33 @@ export function MediaGrid({ items, onDelete, filter = "all" }: MediaGridProps) {
           </CardHeader>
           <CardContent className="flex items-center justify-center bg-muted/40">
             {item.mimeType.startsWith("image/") ? (
-              <Image src={item.url} alt={item.title} width={300} height={200} className="h-auto max-h-48 w-full rounded-md object-cover" />
+              <Image
+                src={item.thumbnailUrl ?? item.url}
+                alt={item.title}
+                width={300}
+                height={200}
+                className="h-auto max-h-48 w-full rounded-md object-cover"
+              />
+            ) : item.mimeType.startsWith("video/") ? (
+              <div className="relative flex h-40 w-full items-center justify-center overflow-hidden rounded-md border border-border/50 bg-black/75">
+                {item.thumbnailUrl ? (
+                  <Image
+                    src={item.thumbnailUrl}
+                    alt={item.title}
+                    fill
+                    className="object-cover opacity-80"
+                  />
+                ) : null}
+                <div className="relative z-10 flex flex-col items-center justify-center gap-2 rounded-full bg-black/60 px-3 py-2 text-xs font-medium text-white">
+                  <Play className="h-6 w-6" />
+                  <span>{item.mimeType}</span>
+                  {item.duration ? (
+                    <span className="text-[10px] uppercase tracking-wide text-white/80">
+                      {formatDuration(item.duration)}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
             ) : (
               <div className="flex h-40 w-full items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
                 {item.mimeType}

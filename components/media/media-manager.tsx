@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { notifyError, notifyInfo, notifySuccess } from "@/lib/notifications/client";
+import { Play } from "lucide-react";
 
 type MediaUploader = {
   id: string;
@@ -36,6 +37,9 @@ export type MediaManagerItem = {
   size: number;
   width?: number | null;
   height?: number | null;
+  duration?: number | null;
+  thumbnailWidth?: number | null;
+  thumbnailHeight?: number | null;
   createdAt: string;
   fileName: string;
   createdBy: MediaUploader | null;
@@ -94,6 +98,9 @@ type MediaApiResponseItem = {
   size?: number | null;
   width?: number | null;
   height?: number | null;
+  duration?: number | null;
+  thumbnailWidth?: number | null;
+  thumbnailHeight?: number | null;
   createdAt: string | Date;
   fileName?: string | null;
   createdBy?:
@@ -136,6 +143,20 @@ function formatDate(value: string) {
   });
 }
 
+function formatDuration(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds <= 0) {
+    return "0:00";
+  }
+  const totalSeconds = Math.round(seconds);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remaining = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, "0")}:${remaining.toString().padStart(2, "0")}`;
+  }
+  return `${minutes}:${remaining.toString().padStart(2, "0")}`;
+}
+
 function mapResponseItem(data: MediaApiResponseItem): MediaManagerItem {
   return {
     id: data.id,
@@ -147,6 +168,9 @@ function mapResponseItem(data: MediaApiResponseItem): MediaManagerItem {
     size: data.size ?? 0,
     width: data.width ?? null,
     height: data.height ?? null,
+    duration: data.duration ?? null,
+    thumbnailWidth: data.thumbnailWidth ?? null,
+    thumbnailHeight: data.thumbnailHeight ?? null,
     createdAt: new Date(data.createdAt).toISOString(),
     fileName: data.fileName ?? data.title ?? "media",
     createdBy: data.createdBy
@@ -174,10 +198,12 @@ function Modal({ open, onClose, children }: ModalProps) {
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 py-6 sm:items-center">
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
       <div className="relative z-10 w-full max-w-2xl overflow-hidden rounded-lg border border-border bg-card shadow-xl">
-        {children}
+        <div className="max-h-[90vh] overflow-y-auto">
+          {children}
+        </div>
       </div>
     </div>,
     document.body
@@ -354,8 +380,19 @@ export function MediaManager({
 
   const refreshItem = useCallback((updated: MediaManagerItem) => {
     setItems((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
-    setSelectedItem(updated);
   }, []);
+  const handleCopyUrl = useCallback(
+    async (url: string) => {
+      try {
+        await navigator.clipboard.writeText(url);
+        notifySuccess("Link media berhasil disalin.");
+      } catch (error) {
+        console.error("Failed to copy media url", error);
+        notifyError("Gagal menyalin link media.");
+      }
+    },
+    []
+  );
 
   const handleSave = useCallback(async () => {
     if (!selectedItem) return;
@@ -384,6 +421,7 @@ export function MediaManager({
       const updated = mapResponseItem(json.data);
       refreshItem(updated);
       notifySuccess("Perubahan media tersimpan.");
+      setSelectedItem(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Gagal menyimpan perubahan";
       setModalError(message);
@@ -431,14 +469,30 @@ export function MediaManager({
 
   const processFiles = useCallback(
     (files: FileList | File[]) => {
-      const fileArray = Array.from(files).filter((file) => file.type.startsWith("image/"));
+      const fileArray = Array.from(files);
       if (fileArray.length === 0) {
-        setUploadMessage("Hanya file gambar yang didukung.");
-        setUploadProgress(null);
-        notifyError("Format file tidak didukung.");
         return;
       }
       const file = fileArray[0];
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+      if (!isImage && !isVideo) {
+        const message = "Hanya file gambar atau video yang didukung.";
+        setUploadMessage(message);
+        setUploadProgress(null);
+        notifyError(message);
+        return;
+      }
+
+      const limit = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (file.size > limit) {
+        const message = isVideo ? "Ukuran video maksimal 50MB." : "Ukuran gambar maksimal 5MB.";
+        setUploadMessage(message);
+        setUploadProgress(null);
+        notifyError(message);
+        return;
+      }
+
       setUploadMessage(null);
       setUploadProgress(0);
 
@@ -584,13 +638,13 @@ export function MediaManager({
         <input
           ref={fileInputRef}
           type="file"
-          accept="image/*"
+          accept="image/*,video/*"
           className="hidden"
           onChange={handleFileInputChange}
         />
-        <h3 className="text-lg font-semibold text-foreground">Tarik & lepaskan gambar</h3>
+        <h3 className="text-lg font-semibold text-foreground">Tarik & lepaskan media (gambar atau video)</h3>
         <p className="mt-1 max-w-md text-sm text-muted-foreground">
-          atau
+          Gambar maksimal 5MB · Video maksimal 50MB, atau
           <Button variant="link" className="px-1 text-sm" onClick={triggerFileDialog}>
             pilih dari komputer
           </Button>
@@ -712,6 +766,26 @@ export function MediaManager({
                     className="object-cover transition group-hover:scale-105"
                     sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 100vw"
                   />
+                ) : item.mimeType.startsWith("video/") ? (
+                  <div className="relative h-full w-full bg-black/80">
+                    {item.thumbnailUrl ? (
+                      <Image
+                        src={item.thumbnailUrl}
+                        alt={item.title}
+                        fill
+                        className="object-cover opacity-80 transition group-hover:scale-105"
+                        sizes="(min-width: 1280px) 20vw, (min-width: 1024px) 25vw, (min-width: 640px) 33vw, 100vw"
+                      />
+                    ) : null}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-xs text-white">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-black/70">
+                        <Play className="h-5 w-5" />
+                      </div>
+                      <span className="px-2 text-[11px] font-semibold uppercase tracking-wide">
+                        Video
+                      </span>
+                    </div>
+                  </div>
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                     {item.mimeType}
@@ -722,6 +796,9 @@ export function MediaManager({
                 <p className="line-clamp-1 text-sm font-medium text-foreground">{item.title}</p>
                 <p className="text-xs text-muted-foreground">
                   {formatSize(item.size)} • {formatDate(item.createdAt)}
+                  {item.mimeType.startsWith("video/") && item.duration
+                    ? ` • ${formatDuration(item.duration)}`
+                    : ""}
                 </p>
               </div>
             </button>
@@ -764,11 +841,19 @@ export function MediaManager({
               <div className="relative h-48 w-full overflow-hidden rounded-md bg-muted sm:w-1/2">
                 {selectedItem.mimeType.startsWith("image/") ? (
                   <Image
-                    src={selectedItem.url}
+                    src={selectedItem.thumbnailUrl ?? selectedItem.url}
                     alt={selectedItem.title}
                     fill
                     className="object-cover"
                     sizes="(min-width: 640px) 50vw, 100vw"
+                  />
+                ) : selectedItem.mimeType.startsWith("video/") ? (
+                  <video
+                    key={selectedItem.id}
+                    controls
+                    poster={selectedItem.thumbnailUrl ?? undefined}
+                    src={selectedItem.url}
+                    className="h-full w-full bg-black object-contain"
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -810,6 +895,29 @@ export function MediaManager({
               <p>
                 <span className="font-medium text-foreground">Diunggah pada:</span> {formatDate(selectedItem.createdAt)}
               </p>
+              {selectedItem.mimeType.startsWith("video/") && selectedItem.duration ? (
+                <p>
+                  <span className="font-medium text-foreground">Durasi:</span> {formatDuration(selectedItem.duration)}
+                </p>
+              ) : null}
+              <div className="space-y-2">
+                <span className="font-medium text-foreground">Link media:</span>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Input
+                    readOnly
+                    value={selectedItem.url}
+                    className="w-full font-mono text-xs text-foreground/80"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCopyUrl(selectedItem.url)}
+                  >
+                    Salin
+                  </Button>
+                </div>
+              </div>
               {selectedItem.createdBy ? (
                 <p>
                   <span className="font-medium text-foreground">Diunggah oleh:</span>{" "}

@@ -602,7 +602,7 @@ export function ArticleForm({
             />
           </div>
           <div className="space-y-2">
-            <Label>Gambar Unggulan</Label>
+            <Label>Media Unggulan</Label>
             <FeaturedImagePicker
               initialItems={mediaItems}
               selected={featuredMedia}

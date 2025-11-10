@@ -490,6 +490,11 @@ export async function importWordpressPost(params: {
             size: savedMedia.size,
             width: savedMedia.width,
             height: savedMedia.height,
+            duration: null,
+            thumbnailFileName: savedMedia.thumbnailFileName,
+            thumbnailUrl: savedMedia.thumbnailUrl,
+            thumbnailWidth: savedMedia.thumbnailWidth,
+            thumbnailHeight: savedMedia.thumbnailHeight,
             storageType: savedMedia.storageType,
             createdById: authorId,
           },
@@ -560,7 +565,11 @@ export async function importWordpressPost(params: {
     return result;
   } catch (error) {
     if (savedMedia) {
-      await deleteMediaFile(savedMedia.storageType, savedMedia.fileName).catch(() => {});
+      await deleteMediaFile(
+        savedMedia.storageType,
+        savedMedia.fileName,
+        savedMedia.thumbnailFileName
+      ).catch(() => {});
     }
     throw error;
   }

@@ -45,9 +45,13 @@ export async function GET(
       storageType: media.storageType,
       width: media.width,
       height: media.height,
+      duration: media.duration,
       createdAt: media.createdAt,
       createdBy: media.createdBy,
-      thumbnailUrl: deriveThumbnailUrl(media.url) ?? undefined,
+      thumbnailUrl: media.thumbnailUrl ?? deriveThumbnailUrl(media.url) ?? undefined,
+      thumbnailFileName: media.thumbnailFileName ?? undefined,
+      thumbnailWidth: media.thumbnailWidth ?? undefined,
+      thumbnailHeight: media.thumbnailHeight ?? undefined,
     },
   });
 }
@@ -120,9 +124,13 @@ export async function PATCH(
       storageType: updated.storageType,
       width: updated.width,
       height: updated.height,
+      duration: updated.duration,
       createdAt: updated.createdAt,
       createdBy: updated.createdBy,
-      thumbnailUrl: deriveThumbnailUrl(updated.url) ?? undefined,
+      thumbnailUrl: updated.thumbnailUrl ?? deriveThumbnailUrl(updated.url) ?? undefined,
+      thumbnailFileName: updated.thumbnailFileName ?? undefined,
+      thumbnailWidth: updated.thumbnailWidth ?? undefined,
+      thumbnailHeight: updated.thumbnailHeight ?? undefined,
     },
   });
 }
@@ -154,7 +162,7 @@ export async function DELETE(
     }),
   ]);
 
-  await deleteMediaFile(media.storageType, media.fileName);
+  await deleteMediaFile(media.storageType, media.fileName, media.thumbnailFileName);
 
   await writeAuditLog({
     action: "MEDIA_DELETE",

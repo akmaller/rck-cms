@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ArticleEditorShell } from "@/app/(dashboard)/dashboard/articles/_components/editor-shell";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
+import { deriveThumbnailUrl } from "@/lib/storage/media";
 
 export default async function NewArticlePage() {
   const session = await auth();
@@ -40,8 +41,12 @@ export default async function NewArticlePage() {
     title: item.title,
     description: item.description,
     url: item.url,
+    thumbnailUrl: item.thumbnailUrl ?? deriveThumbnailUrl(item.url) ?? null,
     mimeType: item.mimeType,
     size: item.size,
+    width: item.width,
+    height: item.height,
+    duration: item.duration,
     createdAt: item.createdAt.toISOString(),
   }));
   const allTags = tags.map((tag) => tag.name);

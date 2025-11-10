@@ -6,7 +6,17 @@ export const articleListInclude = {
   author: { select: { id: true, name: true, avatarUrl: true } },
   categories: { include: { category: true }, orderBy: { assignedAt: "asc" as const } },
   featuredMedia: {
-    select: { url: true, title: true, description: true, width: true, height: true },
+    select: {
+      url: true,
+      title: true,
+      description: true,
+      width: true,
+      height: true,
+      thumbnailUrl: true,
+      mimeType: true,
+      thumbnailWidth: true,
+      thumbnailHeight: true,
+    },
   },
 } satisfies Prisma.ArticleInclude;
 
@@ -49,9 +59,10 @@ export function serializeArticleForList(
     image: (() => {
       const url = article.featuredMedia?.url ?? null;
       if (!url) return null;
-      const derived = deriveThumbnailUrl(url) ?? url;
+      const fallback = deriveThumbnailUrl(url) ?? url;
+      const displayUrl = article.featuredMedia?.thumbnailUrl ?? fallback;
       return {
-        url: derived,
+        url: displayUrl,
         alt: article.featuredMedia?.title ?? article.title,
       };
     })(),

@@ -1,0 +1,21 @@
+.cookie-enter {
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.cookie-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+
+.cookie-exit {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.cookie-exit-active {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}

@@ -179,7 +179,9 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const getPrimaryCategory = (entry: { categories: { category: { name: string } }[] }) =>
     entry.categories[0]?.category.name ?? "Umum";
 
-  const getThumbnailUrl = (entry: { featuredMedia?: { url: string | null } | null }) => {
+  const getThumbnailUrl = (entry: { featuredMedia?: { url: string | null; thumbnailUrl?: string | null } | null }) => {
+    const direct = entry.featuredMedia?.thumbnailUrl ?? null;
+    if (direct) return direct;
     const source = entry.featuredMedia?.url ?? null;
     if (!source) return null;
     return deriveThumbnailUrl(source) ?? source;

@@ -10,13 +10,21 @@ import { deriveThumbnailUrl, saveMediaFile } from "@/lib/storage/media";
 
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 20;
-const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_IMAGE_FILE_SIZE_BYTES = 5 * 1024 * 1024;
+const MAX_VIDEO_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
   "image/avif",
+]);
+const ALLOWED_VIDEO_MIME_TYPES = new Set([
+  "video/mp4",
+  "video/webm",
+  "video/ogg",
+  "video/ogv",
+  "video/quicktime",
 ]);
 
 const listQuerySchema = z.object({
@@ -123,10 +131,14 @@ export async function GET(request: NextRequest) {
       storageType: item.storageType,
       width: item.width,
       height: item.height,
+      duration: item.duration,
       description: item.description,
       createdAt: item.createdAt,
       createdBy: item.createdBy,
-      thumbnailUrl: deriveThumbnailUrl(item.url) ?? undefined,
+      thumbnailUrl: item.thumbnailUrl ?? deriveThumbnailUrl(item.url) ?? undefined,
+      thumbnailFileName: item.thumbnailFileName ?? undefined,
+      thumbnailWidth: item.thumbnailWidth ?? undefined,
+      thumbnailHeight: item.thumbnailHeight ?? undefined,
     })),
     meta: {
       page,
@@ -167,12 +179,27 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "File wajib diunggah" }, { status: 400 });
   }
 
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    return NextResponse.json({ error: "Ukuran file maksimal 5MB" }, { status: 400 });
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+
+  if (!isImage && !isVideo) {
+    return NextResponse.json({ error: "Hanya format gambar atau video yang didukung" }, { status: 400 });
   }
 
-  if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
-    return NextResponse.json({ error: "Hanya format gambar yang didukung" }, { status: 400 });
+  if (isImage && file.size > MAX_IMAGE_FILE_SIZE_BYTES) {
+    return NextResponse.json({ error: "Ukuran gambar maksimal 5MB" }, { status: 400 });
+  }
+
+  if (isVideo && file.size > MAX_VIDEO_FILE_SIZE_BYTES) {
+    return NextResponse.json({ error: "Ukuran video maksimal 50MB" }, { status: 400 });
+  }
+
+  if (isImage && !ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+    return NextResponse.json({ error: "Format gambar tidak didukung" }, { status: 400 });
+  }
+
+  if (isVideo && !ALLOWED_VIDEO_MIME_TYPES.has(file.type)) {
+    return NextResponse.json({ error: "Format video tidak didukung" }, { status: 400 });
   }
 
   const titleValue = formData.get("title");
@@ -186,7 +213,7 @@ export async function POST(request: NextRequest) {
     saved = await saveMediaFile(file);
   } catch (error) {
     console.error("Gagal memproses file yang diunggah", error);
-    return NextResponse.json({ error: "File gambar tidak valid" }, { status: 400 });
+    return NextResponse.json({ error: "File media tidak valid" }, { status: 400 });
   }
 
   const media = await prisma.media.create({
@@ -195,10 +222,15 @@ export async function POST(request: NextRequest) {
       description: null,
       fileName: saved.fileName,
       url: saved.url,
-      mimeType: "image/webp",
+      mimeType: isImage ? "image/webp" : file.type,
       size: saved.size,
       width: saved.width,
       height: saved.height,
+      duration: saved.duration,
+      thumbnailFileName: saved.thumbnailFileName,
+      thumbnailUrl: saved.thumbnailUrl,
+      thumbnailWidth: saved.thumbnailWidth,
+      thumbnailHeight: saved.thumbnailHeight,
       storageType: saved.storageType,
       createdById: session.user.id,
     },
@@ -219,9 +251,13 @@ export async function POST(request: NextRequest) {
         storageType: media.storageType,
         width: media.width,
         height: media.height,
+        duration: media.duration,
         createdAt: media.createdAt,
         createdBy: media.createdBy,
-        thumbnailUrl: deriveThumbnailUrl(media.url) ?? undefined,
+        thumbnailUrl: media.thumbnailUrl ?? deriveThumbnailUrl(media.url) ?? undefined,
+        thumbnailFileName: media.thumbnailFileName ?? undefined,
+        thumbnailWidth: media.thumbnailWidth ?? undefined,
+        thumbnailHeight: media.thumbnailHeight ?? undefined,
       },
     },
     { status: 201 }

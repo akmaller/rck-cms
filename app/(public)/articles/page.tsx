@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { prisma } from "@/lib/prisma";
+import { deriveThumbnailUrl } from "@/lib/storage/media";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { createMetadata } from "@/lib/seo/metadata";
 import { logPageView } from "@/lib/visits/log-page-view";
@@ -79,7 +80,19 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
       include: {
         author: { select: { id: true, name: true, avatarUrl: true } },
         categories: { include: { category: true }, orderBy: { assignedAt: "asc" } },
-        featuredMedia: { select: { url: true, title: true, width: true, height: true } },
+        featuredMedia: {
+          select: {
+            url: true,
+            title: true,
+            description: true,
+            width: true,
+            height: true,
+            thumbnailUrl: true,
+            thumbnailWidth: true,
+            thumbnailHeight: true,
+            mimeType: true,
+          },
+        },
       },
       orderBy: { publishedAt: "desc" },
       skip: (currentPage - 1) * PAGE_SIZE,
@@ -133,7 +146,17 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
                       }
                     : null
                 }
-                image={article.featuredMedia?.url ? { url: article.featuredMedia.url, alt: article.featuredMedia.title ?? article.title } : null}
+                image={
+                  article.featuredMedia?.url
+                    ? {
+                        url:
+                          article.featuredMedia.thumbnailUrl ??
+                          deriveThumbnailUrl(article.featuredMedia.url) ??
+                          article.featuredMedia.url,
+                        alt: article.featuredMedia.title ?? article.title,
+                      }
+                    : null
+                }
               />
             ))}
           </div>

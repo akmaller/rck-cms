@@ -323,6 +323,11 @@ export async function PATCH(
             size: saved.size,
             width: saved.width,
             height: saved.height,
+            duration: null,
+            thumbnailFileName: saved.thumbnailFileName,
+            thumbnailUrl: saved.thumbnailUrl,
+            thumbnailWidth: saved.thumbnailWidth,
+            thumbnailHeight: saved.thumbnailHeight,
             storageType: saved.storageType,
             createdById: session.user.id,
           },
@@ -349,7 +354,11 @@ export async function PATCH(
   if (removedMediaEntries.length > 0) {
     await Promise.all(
       removedMediaEntries.map((entry) =>
-        deleteMediaFile(entry.media.storageType, entry.media.fileName).catch(() => {})
+        deleteMediaFile(
+          entry.media.storageType,
+          entry.media.fileName,
+          (entry.media as { thumbnailFileName?: string | null }).thumbnailFileName
+        ).catch(() => {})
       )
     );
   }

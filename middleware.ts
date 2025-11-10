@@ -33,6 +33,7 @@ const buildCspHeader = () => {
   if (scriptSrcExtras.includes("https://challenges.cloudflare.com")) {
     frameSrcValues.push("https://challenges.cloudflare.com");
   }
+  const mediaSrcValues = ["'self'", "data:", "blob:", "https:"];
 
   return [
     "default-src 'self'",
@@ -41,6 +42,7 @@ const buildCspHeader = () => {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "font-src 'self' data:",
+    `media-src ${mediaSrcValues.join(" ")}`,
     "connect-src 'self' https: https://www.googletagmanager.com https://www.google-analytics.com https://static.cloudflareinsights.com",
     `frame-src ${frameSrcValues.join(" ")}`,
     "frame-ancestors 'none'",

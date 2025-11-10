@@ -77,10 +77,15 @@ model Media {
   size        Int
   width       Int?
   height      Int?
+  duration    Float?
   storageType String    @default("local")
   createdAt   DateTime  @default(now())
   createdById String?
   description String?
+  thumbnailFileName String?
+  thumbnailUrl      String?
+  thumbnailWidth    Int?
+  thumbnailHeight   Int?
   article     Article[]
   albumImages AlbumImage[]
   createdBy   User?     @relation(fields: [createdById], references: [id])

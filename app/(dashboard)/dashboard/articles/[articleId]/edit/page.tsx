@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { ArticleEditorShell } from "@/app/(dashboard)/dashboard/articles/_components/editor-shell";
 import { DashboardHeading } from "@/components/layout/dashboard/dashboard-heading";
 import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
+import { deriveThumbnailUrl } from "@/lib/storage/media";
 
 type EditArticlePageProps = {
   params: Promise<{ articleId: string }>;
@@ -43,8 +44,12 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
     title: item.title,
     description: item.description,
     url: item.url,
+    thumbnailUrl: item.thumbnailUrl ?? deriveThumbnailUrl(item.url) ?? null,
     mimeType: item.mimeType,
     size: item.size,
+    width: item.width,
+    height: item.height,
+    duration: item.duration,
     createdAt: item.createdAt.toISOString(),
   }));
 
@@ -54,8 +59,15 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
       title: article.featuredMedia.title,
       description: article.featuredMedia.description,
       url: article.featuredMedia.url,
+      thumbnailUrl:
+        article.featuredMedia.thumbnailUrl ??
+        deriveThumbnailUrl(article.featuredMedia.url) ??
+        null,
       mimeType: article.featuredMedia.mimeType,
       size: article.featuredMedia.size,
+      width: article.featuredMedia.width,
+      height: article.featuredMedia.height,
+      duration: article.featuredMedia.duration,
       createdAt: article.featuredMedia.createdAt.toISOString(),
     });
   }
@@ -85,7 +97,7 @@ export default async function EditArticlePage({ params }: EditArticlePageProps) 
     <>
       <DashboardHeading
         heading="Edit Artikel"
-        description="Perbarui konten artikel dan gambar unggulan."
+        description="Perbarui konten artikel dan media unggulan."
       />
       <ArticleEditorShell
         mediaItems={mediaItems}

@@ -30,7 +30,11 @@ function getPrimaryCategory(entry: { categories: { category: { name: string } }[
   return entry.categories[0]?.category.name ?? "Umum";
 }
 
-function getThumbnailUrl(entry: { featuredMedia?: { url: string | null } | null }) {
+function getThumbnailUrl(entry: { featuredMedia?: { url: string | null; thumbnailUrl?: string | null } | null }) {
+  const direct = entry.featuredMedia?.thumbnailUrl ?? null;
+  if (direct) {
+    return direct;
+  }
   const source = entry.featuredMedia?.url ?? null;
   if (!source) return null;
   return deriveThumbnailUrl(source) ?? source;
