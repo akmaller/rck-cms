@@ -48,3 +48,6 @@ next-env.d.ts
 package-lock.json
 yarn.lock
 .npmrc
+
+# acme challenge artifacts
+.well-known/acme-challenge/
