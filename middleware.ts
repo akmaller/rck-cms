@@ -226,5 +226,9 @@ const middleware = auth(async (req) => {
 export default middleware as unknown as import("next/server").NextMiddleware;
 
 export const config = {
-  matcher: ["/:path*"],
+  matcher: [
+    // Skip Next.js internals and file-like requests so auth/rate-limit logic
+    // doesn't run for static chunks (e.g. /_next/static/.../page-*.js).
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|.*\\..*).*)",
+  ],
 };

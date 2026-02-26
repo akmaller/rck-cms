@@ -33,6 +33,9 @@ function extractArticleSlug(path: string | null | undefined) {
   return slug.length > 0 ? slug : null;
 }
 
+type CountRow = { total: bigint };
+type TrendRow = { day: Date; total: bigint };
+
 const quickActions: Array<{
   title: string;
   description: string;
@@ -109,16 +112,27 @@ export default async function DashboardHomePage() {
   let commentsThisMonth = 0;
   if (role !== "AUTHOR" || articlePaths.length > 0) {
     try {
-      const visitWhere: Prisma.VisitLogWhereInput = { createdAt: { gte: startOfMonth } };
       if (role === "AUTHOR") {
-        visitWhere.path = { in: articlePaths };
+        const pathList = Prisma.join(articlePaths.map((path) => Prisma.sql`${path}`));
+        const rows = await prisma.$queryRaw<CountRow[]>(
+          Prisma.sql`
+            SELECT COUNT(DISTINCT ("path", "ip"))::bigint AS total
+            FROM "VisitLog"
+            WHERE "createdAt" >= ${startOfMonth}
+              AND "path" IN (${pathList})
+          `
+        );
+        visitsThisMonth = Number(rows[0]?.total ?? 0);
+      } else {
+        const rows = await prisma.$queryRaw<CountRow[]>(
+          Prisma.sql`
+            SELECT COUNT(DISTINCT ("path", "ip"))::bigint AS total
+            FROM "VisitLog"
+            WHERE "createdAt" >= ${startOfMonth}
+          `
+        );
+        visitsThisMonth = Number(rows[0]?.total ?? 0);
       }
-      const uniqueMonthlyVisits = await prisma.visitLog.findMany({
-        where: visitWhere,
-        select: { path: true, ip: true },
-        distinct: ["path", "ip"],
-      });
-      visitsThisMonth = uniqueMonthlyVisits.length;
     } catch {
       visitsThisMonth = 0;
     }
@@ -195,21 +209,36 @@ export default async function DashboardHomePage() {
 
   if (role !== "AUTHOR" || articlePaths.length > 0) {
     try {
-      const visitWhere: Prisma.VisitLogWhereInput = { createdAt: { gte: sevenDayStart } };
-      if (role === "AUTHOR") {
-        visitWhere.path = { in: articlePaths };
-      }
-      const visitLogs = await prisma.visitLog.findMany({
-        where: visitWhere,
-        select: { createdAt: true },
-      });
-
       const dailyCounts = new Map<string, number>();
-      for (const log of visitLogs) {
-        const entryDate = new Date(log.createdAt);
+
+      const rows = await (async () => {
+        if (role === "AUTHOR") {
+          const pathList = Prisma.join(articlePaths.map((path) => Prisma.sql`${path}`));
+          return prisma.$queryRaw<TrendRow[]>(
+            Prisma.sql`
+              SELECT DATE("createdAt") AS day, COUNT(*)::bigint AS total
+              FROM "VisitLog"
+              WHERE "createdAt" >= ${sevenDayStart}
+                AND "path" IN (${pathList})
+              GROUP BY DATE("createdAt")
+            `
+          );
+        }
+        return prisma.$queryRaw<TrendRow[]>(
+          Prisma.sql`
+            SELECT DATE("createdAt") AS day, COUNT(*)::bigint AS total
+            FROM "VisitLog"
+            WHERE "createdAt" >= ${sevenDayStart}
+            GROUP BY DATE("createdAt")
+          `
+        );
+      })();
+
+      for (const row of rows) {
+        const entryDate = new Date(row.day);
         entryDate.setHours(0, 0, 0, 0);
         const key = formatDayKey(entryDate);
-        dailyCounts.set(key, (dailyCounts.get(key) ?? 0) + 1);
+        dailyCounts.set(key, Number(row.total));
       }
 
       visitTrend = baseDates.map((date) => ({
