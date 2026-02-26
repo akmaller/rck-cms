@@ -43,3 +43,8 @@ next-env.d.ts
 
 # media uploads
 /public/uploads
+
+# lockfile / local npm config
+package-lock.json
+yarn.lock
+.npmrc
