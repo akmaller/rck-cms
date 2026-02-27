@@ -32,13 +32,15 @@ export async function refreshArticleVisitSummary(
   const from = startOfUtcDay(input.fromDate ?? addUtcDays(todayStart, -14));
   const to = startOfUtcDay(input.toDate ?? todayStart);
   const toExclusive = addUtcDays(to, 1);
+  const fromDay = from.toISOString().slice(0, 10);
+  const toExclusiveDay = toExclusive.toISOString().slice(0, 10);
 
   const rows = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw(
       Prisma.sql`
         DELETE FROM "ArticleVisitDailySummary"
-        WHERE "day" >= ${from}
-          AND "day" < ${toExclusive}
+        WHERE "day" >= CAST(${fromDay} AS date)
+          AND "day" < CAST(${toExclusiveDay} AS date)
       `
     );
 
@@ -56,6 +58,11 @@ export async function refreshArticleVisitSummary(
           AND "createdAt" < ${toExclusive}
           AND "path" LIKE ${`${ARTICLE_PATH_PREFIX}%`}
         GROUP BY DATE("createdAt"), "path"
+        ON CONFLICT ("day", "path")
+        DO UPDATE SET
+          "uniqueVisitors" = EXCLUDED."uniqueVisitors",
+          "views" = EXCLUDED."views",
+          "updatedAt" = NOW()
       `
     );
 
