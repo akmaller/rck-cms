@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { headers } from "next/headers";
 import { ArticleStatus, Prisma } from "@prisma/client";
 
 import { Card, CardContent } from "@/components/ui/card";
+import { getTopArticlePathsByUniqueVisitors } from "@/lib/analytics/article-visit-summary";
 import { prisma } from "@/lib/prisma";
 import { deriveThumbnailUrl } from "@/lib/storage/media";
 import { getSiteConfig } from "@/lib/site-config/server";
@@ -14,7 +16,9 @@ import { logPageView } from "@/lib/visits/log-page-view";
 import { formatRelativeTime } from "@/lib/datetime/relative";
 import type { HeroSliderArticle } from "./(components)/hero-slider";
 import { HeroSlider } from "./(components)/hero-slider";
+
 const POPULAR_LOOKBACK_DAYS = 7;
+const HOME_CACHE_TTL_SECONDS = 120;
 
 const articleInclude = {
   categories: {
@@ -38,7 +42,12 @@ const articleInclude = {
 } satisfies Prisma.ArticleInclude;
 
 type ArticleWithRelations = Prisma.ArticleGetPayload<{ include: typeof articleInclude }>;
-type VisitAggregateRow = { path: string; total: bigint };
+type HomeBaseData = {
+  latestArticles: ArticleWithRelations[];
+  randomizableCategories: Array<{ id: string; name: string; slug: string }>;
+  popularArticlePaths: string[];
+  siteConfig: Awaited<ReturnType<typeof getSiteConfig>>;
+};
 
 type StructuredDataNode = Record<string, unknown>;
 
@@ -187,46 +196,73 @@ function getPrimaryCategory(article: ArticleWithRelations) {
   return article.categories[0]?.category.name ?? "Umum";
 }
 
-export default async function HomePage() {
-  const now = new Date();
-  const popularWindowStart = new Date(now);
-  popularWindowStart.setDate(popularWindowStart.getDate() - POPULAR_LOOKBACK_DAYS);
-
-
-  const [latestArticles, randomizableCategories, popularArticlePaths, siteConfig] = await Promise.all([
-    prisma.article.findMany({
-      where: { status: ArticleStatus.PUBLISHED },
-      include: articleInclude,
-      orderBy: [{ publishedAt: "desc" }],
-      take: 24,
-    }),
-    prisma.category.findMany({
-      where: {
-        articles: {
-          some: {
-            article: {
-              status: ArticleStatus.PUBLISHED,
-              publishedAt: { not: null },
+const getHomeBaseData = unstable_cache(
+  async (): Promise<HomeBaseData> => {
+    const [latestArticles, randomizableCategories, popularArticlePaths, siteConfig] = await Promise.all([
+      prisma.article.findMany({
+        where: { status: ArticleStatus.PUBLISHED },
+        include: articleInclude,
+        orderBy: [{ publishedAt: "desc" }],
+        take: 24,
+      }),
+      prisma.category.findMany({
+        where: {
+          articles: {
+            some: {
+              article: {
+                status: ArticleStatus.PUBLISHED,
+                publishedAt: { not: null },
+              },
             },
           },
         },
+        select: { id: true, name: true, slug: true },
+      }),
+      getTopArticlePathsByUniqueVisitors(POPULAR_LOOKBACK_DAYS, 40),
+      getSiteConfig(),
+    ]);
+
+    return {
+      latestArticles,
+      randomizableCategories,
+      popularArticlePaths,
+      siteConfig,
+    };
+  },
+  ["home-base-data"],
+  {
+    tags: ["content", "site-config"],
+    revalidate: HOME_CACHE_TTL_SECONDS,
+  }
+);
+
+const getRandomCategoryArticles = unstable_cache(
+  async (categoryId: string): Promise<ArticleWithRelations[]> => {
+    if (!categoryId) {
+      return [];
+    }
+
+    return prisma.article.findMany({
+      where: {
+        status: ArticleStatus.PUBLISHED,
+        publishedAt: { not: null },
+        categories: { some: { categoryId } },
       },
-      select: { id: true, name: true, slug: true },
-    }),
-    prisma.$queryRaw<VisitAggregateRow[]>(
-      Prisma.sql`
-        SELECT "path", COUNT(DISTINCT "ip")::bigint AS total
-        FROM "VisitLog"
-        WHERE "createdAt" >= ${popularWindowStart}
-          AND "path" LIKE '/articles/%'
-          AND "ip" IS NOT NULL
-        GROUP BY "path"
-        ORDER BY COUNT(DISTINCT "ip") DESC
-        LIMIT 40
-      `
-    ),
-    getSiteConfig(),
-  ]);
+      include: articleInclude,
+      orderBy: [{ publishedAt: "desc" }],
+      take: 3,
+    });
+  },
+  ["home-random-category-data"],
+  {
+    tags: ["content"],
+    revalidate: HOME_CACHE_TTL_SECONDS,
+  }
+);
+
+export default async function HomePage() {
+  const now = new Date();
+  const { latestArticles, randomizableCategories, popularArticlePaths, siteConfig } = await getHomeBaseData();
   const heroArticles = latestArticles.slice(0, 5);
   const heroSliderArticles: HeroSliderArticle[] = heroArticles.map((article) => ({
     id: article.id,
@@ -281,20 +317,11 @@ export default async function HomePage() {
       : null;
 
   const randomCategoryArticles = randomCategory
-    ? await prisma.article.findMany({
-        where: {
-          status: ArticleStatus.PUBLISHED,
-          publishedAt: { not: null },
-          categories: { some: { categoryId: randomCategory.id } },
-        },
-        include: articleInclude,
-        orderBy: [{ publishedAt: "desc" }],
-        take: 3,
-      })
+    ? await getRandomCategoryArticles(randomCategory.id)
     : [];
 
   const popularSlugs = popularArticlePaths
-    .map((entry) => entry.path.replace(/^\/articles\//, "").split("/")[0])
+    .map((path) => path.replace(/^\/articles\//, "").split("/")[0])
     .filter((slug): slug is string => Boolean(slug));
   const uniquePopularSlugs = Array.from(new Set(popularSlugs));
 

@@ -3,9 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ArticleStatus, Prisma } from "@prisma/client";
+import { cache } from "react";
 import { Facebook, Instagram, Link2, Linkedin, Twitter, Youtube, type LucideIcon } from "lucide-react";
 
 import { AUTHOR_SOCIAL_FIELDS, AUTHOR_SOCIAL_KEYS, type AuthorSocialKey } from "@/lib/authors/social-links";
+import {
+  getArticleUniqueVisitorsByPaths,
+  getTopArticlePathsByUniqueVisitors,
+} from "@/lib/analytics/article-visit-summary";
 import { prisma } from "@/lib/prisma";
 import { deriveThumbnailUrl } from "@/lib/storage/media";
 import { createMetadata } from "@/lib/seo/metadata";
@@ -36,7 +41,7 @@ const SOCIAL_ICON_MAP: Record<AuthorSocialKey, LucideIcon> = {
   linkedin: Linkedin,
 };
 
-async function getAuthor(authorId: string) {
+const getAuthor = cache(async (authorId: string) => {
   return prisma.user.findUnique({
     where: { id: authorId },
     select: {
@@ -48,7 +53,7 @@ async function getAuthor(authorId: string) {
       socialLinks: true,
     },
   });
-}
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ authorId: string }> }): Promise<Metadata> {
   const { authorId } = await params;
@@ -90,9 +95,6 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   }
 
   const now = new Date();
-  const lookbackStart = new Date(now);
-  lookbackStart.setDate(lookbackStart.getDate() - POPULAR_LOOKBACK_DAYS);
-  type VisitAggregateRow = { path: string; total: bigint };
 
   const authoredWhere = { authorId, status: ArticleStatus.PUBLISHED } as const;
 
@@ -115,18 +117,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
       orderBy: { publishedAt: "desc" },
       take: 6,
     }),
-    prisma.$queryRaw<VisitAggregateRow[]>(
-      Prisma.sql`
-        SELECT "path", COUNT(DISTINCT "ip")::bigint AS total
-        FROM "VisitLog"
-        WHERE "createdAt" >= ${lookbackStart}
-          AND "path" LIKE '/articles/%'
-          AND "ip" IS NOT NULL
-        GROUP BY "path"
-        ORDER BY COUNT(DISTINCT "ip") DESC
-        LIMIT 40
-      `
-    ),
+    getTopArticlePathsByUniqueVisitors(POPULAR_LOOKBACK_DAYS, 40),
     prisma.tag.findMany({
       orderBy: { articles: { _count: "desc" } },
       take: 10,
@@ -141,16 +132,8 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const viewerCount = articlePaths.length
     ? await (async () => {
         try {
-          const pathList = Prisma.join(articlePaths.map((path) => Prisma.sql`${path}`));
-          const rows = await prisma.$queryRaw<Array<{ total: bigint }>>(
-            Prisma.sql`
-              SELECT COUNT(DISTINCT "ip")::bigint AS total
-              FROM "VisitLog"
-              WHERE "path" IN (${pathList})
-                AND "ip" IS NOT NULL
-            `
-          );
-          return Number(rows[0]?.total ?? 0);
+          const summaryMap = await getArticleUniqueVisitorsByPaths(articlePaths);
+          return Array.from(summaryMap.values()).reduce((sum, value) => sum + value, 0);
         } catch {
           return 0;
         }
@@ -158,7 +141,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
     : 0;
 
   const popularSlugs = popularVisitLogs
-    .map((entry) => entry.path.replace(/^\/articles\//, "").split("/")[0])
+    .map((path) => path.replace(/^\/articles\//, "").split("/")[0])
     .filter((slug): slug is string => Boolean(slug));
   const uniquePopularSlugs = Array.from(new Set(popularSlugs));
 

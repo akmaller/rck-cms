@@ -2,7 +2,8 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { ArticleStatus, Prisma } from "@prisma/client";
+import { ArticleStatus } from "@prisma/client";
+import { cache } from "react";
 
 import Image from "next/image";
 import { Eye } from "lucide-react";
@@ -15,6 +16,7 @@ import { getArticleComments } from "@/lib/comments/service";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo/metadata";
 import { logPageView } from "@/lib/visits/log-page-view";
+import { getArticleUniqueVisitors } from "@/lib/analytics/article-visit-summary";
 import { getSiteConfig } from "@/lib/site-config/server";
 import { ArticleSidebar } from "@/app/(public)/(components)/article-sidebar";
 import { getArticleSidebarData } from "@/lib/articles/sidebar";
@@ -26,7 +28,7 @@ import { getArticleLikeSummary } from "@/lib/likes/service";
 import { ArticleLikeButton } from "./article-like-button";
 import { deriveThumbnailUrl } from "@/lib/storage/media";
 
-async function getArticle(slug: string) {
+const getArticle = cache(async (slug: string) => {
   return prisma.article.findUnique({
     where: { slug },
     include: {
@@ -49,7 +51,7 @@ async function getArticle(slug: string) {
       },
     },
   });
-}
+});
 
 export async function generateStaticParams() {
   const articles = await prisma.article.findMany({
@@ -166,20 +168,7 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
     userAgent,
   });
 
-  let uniqueViewCount = 0;
-  try {
-    const rows = await prisma.$queryRaw<Array<{ total: bigint }>>(
-      Prisma.sql`
-        SELECT COUNT(DISTINCT "ip")::bigint AS total
-        FROM "VisitLog"
-        WHERE "path" = ${path}
-          AND "ip" IS NOT NULL
-      `
-    );
-    uniqueViewCount = Number(rows[0]?.total ?? 0);
-  } catch {
-    uniqueViewCount = 0;
-  }
+  const uniqueViewCount = await getArticleUniqueVisitors(path).catch(() => 0);
   const viewCountLabel = new Intl.NumberFormat("id-ID").format(uniqueViewCount);
 
   const publishedAtDate = article.publishedAt ?? article.createdAt ?? null;

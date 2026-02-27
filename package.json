@@ -13,6 +13,7 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
     "audit:purge": "tsx scripts/purge-audit-log.ts",
+    "visit:purge": "tsx scripts/purge-visit-log.ts",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "e2e": "playwright test"

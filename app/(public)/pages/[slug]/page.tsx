@@ -3,18 +3,19 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
 import type { CSSProperties } from "react";
+import { cache } from "react";
 
 import { ArticleViewer } from "@/components/article/article-viewer";
 import { prisma } from "@/lib/prisma";
 import { createMetadata } from "@/lib/seo/metadata";
 import { logPageView } from "@/lib/visits/log-page-view";
 
-async function getPage(slug: string) {
+const getPage = cache(async (slug: string) => {
   return prisma.page.findUnique({
     where: { slug },
     include: { featuredMedia: true },
   });
-}
+});
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;

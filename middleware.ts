@@ -175,7 +175,9 @@ const middleware = auth(async (req) => {
     !nextUrl.pathname.startsWith("/api/auth") &&
     !nextUrl.pathname.startsWith("/api/health") &&
     !nextUrl.pathname.startsWith("/api/public") &&
-    !nextUrl.pathname.startsWith("/api/internal/publish-scheduled");
+    !nextUrl.pathname.startsWith("/api/internal/publish-scheduled") &&
+    !nextUrl.pathname.startsWith("/api/internal/refresh-article-visit-summary") &&
+    !nextUrl.pathname.startsWith("/api/internal/purge-visit-log");
 
   if (isDashboardRoute || isApiDashboardRoute) {
     if (!request.auth?.user) {

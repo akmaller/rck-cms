@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { ArticleStatus } from "@prisma/client";
+import { cache } from "react";
 
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,12 +23,21 @@ type CategoryPageProps = {
   params: Promise<{ slug: string }>;
 };
 
+const getCategory = cache(async (slug: string) => {
+  return prisma.category.findUnique({
+    where: { slug },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      description: true,
+    },
+  });
+});
+
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const category = await prisma.category.findUnique({
-    where: { slug },
-    select: { name: true, description: true },
-  });
+  const category = await getCategory(slug);
 
   if (!category) {
     return createMetadata({
@@ -55,11 +65,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function CategoryPage({ params }: CategoryPageProps) {
   const { slug } = await params;
-
-
-  const category = await prisma.category.findUnique({
-    where: { slug },
-  });
+  const category = await getCategory(slug);
 
   if (!category) {
     notFound();

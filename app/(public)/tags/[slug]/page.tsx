@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { ArticleStatus } from "@prisma/client";
+import { cache } from "react";
 
 import { buttonVariants } from "@/lib/button-variants";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,12 +23,13 @@ type TagPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params;
-  const tag = await prisma.tag.findUnique({
+const getTag = cache(async (slug: string) => {
+  return prisma.tag.findUnique({
     where: { slug },
     select: {
+      id: true,
       name: true,
+      slug: true,
       _count: {
         select: {
           articles: {
@@ -41,6 +43,11 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       },
     },
   });
+});
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const tag = await getTag(slug);
 
   if (!tag) {
     return createMetadata({
@@ -69,11 +76,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
 export default async function TagPage({ params }: TagPageProps) {
   const { slug } = await params;
-
-
-  const tag = await prisma.tag.findUnique({
-    where: { slug },
-  });
+  const tag = await getTag(slug);
 
   if (!tag) {
     notFound();

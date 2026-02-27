@@ -4,6 +4,7 @@ import { ArticleStatus, Prisma } from "@prisma/client";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
+import { getArticleUniqueVisitorsByPaths } from "@/lib/analytics/article-visit-summary";
 import {
   Card,
   CardContent,
@@ -164,19 +165,8 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
   const viewsByPath = new Map<string, number>();
   if (articlePaths.length > 0) {
     try {
-      const pathList = Prisma.join(articlePaths.map((path) => Prisma.sql`${path}`));
-      const rows = await prisma.$queryRaw<Array<{ path: string; total: bigint }>>(
-        Prisma.sql`
-          SELECT "path", COUNT(DISTINCT "ip")::bigint AS total
-          FROM "VisitLog"
-          WHERE "path" IN (${pathList})
-            AND "ip" IS NOT NULL
-          GROUP BY "path"
-        `
-      );
-      for (const row of rows) {
-        viewsByPath.set(row.path, Number(row.total));
-      }
+      const summaryMap = await getArticleUniqueVisitorsByPaths(articlePaths);
+      summaryMap.forEach((total, path) => viewsByPath.set(path, total));
     } catch {
       // keep views at zero if logging table not available
     }

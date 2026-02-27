@@ -318,6 +318,19 @@ model VisitLog {
   @@index([createdAt])
 }
 
+model ArticleVisitDailySummary {
+  day            DateTime
+  path           String
+  uniqueVisitors Int      @default(0)
+  views          Int      @default(0)
+  updatedAt      DateTime @default(now())
+
+  @@id([day, path])
+  @@index([path])
+  @@index([day])
+  @@index([day, path])
+}
+
 model BlockedIp {
   id           String   @id @default(cuid())
   ip           String   @unique
