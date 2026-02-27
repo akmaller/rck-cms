@@ -2,7 +2,7 @@ import { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import { ArticleStatus } from "@prisma/client";
+import { ArticleStatus, Prisma } from "@prisma/client";
 
 import Image from "next/image";
 import { Eye } from "lucide-react";
@@ -24,11 +24,9 @@ import { CommentList } from "./comment-list";
 import { getForbiddenPhrases } from "@/lib/moderation/forbidden-terms";
 import { getArticleLikeSummary } from "@/lib/likes/service";
 import { ArticleLikeButton } from "./article-like-button";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 import { deriveThumbnailUrl } from "@/lib/storage/media";
 
 async function getArticle(slug: string) {
-  await publishDueScheduledArticles();
   return prisma.article.findUnique({
     where: { slug },
     include: {
@@ -54,7 +52,6 @@ async function getArticle(slug: string) {
 }
 
 export async function generateStaticParams() {
-  await publishDueScheduledArticles();
   const articles = await prisma.article.findMany({
     where: { status: ArticleStatus.PUBLISHED },
     select: { slug: true },
@@ -169,15 +166,21 @@ export default async function ArticleDetailPage({ params }: ArticlePageProps) {
     userAgent,
   });
 
-  const uniqueViews = await prisma.visitLog.findMany({
-    where: {
-      path,
-      ip: { not: null },
-    },
-    select: { ip: true },
-    distinct: ["ip"],
-  });
-  const viewCountLabel = new Intl.NumberFormat("id-ID").format(uniqueViews.length);
+  let uniqueViewCount = 0;
+  try {
+    const rows = await prisma.$queryRaw<Array<{ total: bigint }>>(
+      Prisma.sql`
+        SELECT COUNT(DISTINCT "ip")::bigint AS total
+        FROM "VisitLog"
+        WHERE "path" = ${path}
+          AND "ip" IS NOT NULL
+      `
+    );
+    uniqueViewCount = Number(rows[0]?.total ?? 0);
+  } catch {
+    uniqueViewCount = 0;
+  }
+  const viewCountLabel = new Intl.NumberFormat("id-ID").format(uniqueViewCount);
 
   const publishedAtDate = article.publishedAt ?? article.createdAt ?? null;
   const publishedAtLabel = publishedAtDate

@@ -33,7 +33,8 @@ export async function getArticleSidebarData(options?: { excludeSlug?: string; re
   const lookbackStart = new Date();
   lookbackStart.setDate(lookbackStart.getDate() - POPULAR_LOOKBACK_DAYS);
 
-  const [latestSidebarRaw, uniqueVisits, popularTags, relatedSidebarRaw] = await Promise.all([
+  type VisitAggregateRow = { path: string; total: bigint };
+  const [latestSidebarRaw, popularVisitRows, popularTags, relatedSidebarRaw] = await Promise.all([
     prisma.article.findMany({
       where: {
         status: ArticleStatus.PUBLISHED,
@@ -43,15 +44,18 @@ export async function getArticleSidebarData(options?: { excludeSlug?: string; re
       orderBy: { publishedAt: "desc" },
       take: 6,
     }),
-    prisma.visitLog.findMany({
-      where: {
-        createdAt: { gte: lookbackStart },
-        path: { startsWith: "/articles/" },
-        ip: { not: null },
-      },
-      select: { path: true, ip: true },
-      distinct: ["path", "ip"],
-    }),
+    prisma.$queryRaw<VisitAggregateRow[]>(
+      Prisma.sql`
+        SELECT "path", COUNT(DISTINCT "ip")::bigint AS total
+        FROM "VisitLog"
+        WHERE "createdAt" >= ${lookbackStart}
+          AND "path" LIKE '/articles/%'
+          AND "ip" IS NOT NULL
+        GROUP BY "path"
+        ORDER BY COUNT(DISTINCT "ip") DESC
+        LIMIT 40
+      `
+    ),
     prisma.tag.findMany({
       orderBy: { articles: { _count: "desc" } },
       take: 10,
@@ -82,12 +86,10 @@ export async function getArticleSidebarData(options?: { excludeSlug?: string; re
   const relatedSidebarArticles = relatedSidebarRaw.slice(0, 4);
 
   const visitCounts = new Map<string, number>();
-  for (const entry of uniqueVisits) {
-    const ip = entry.ip?.trim();
-    if (!ip) continue;
+  for (const entry of popularVisitRows) {
     const extractedSlug = entry.path.replace(/^\/articles\//, "").split("/")[0];
     if (!extractedSlug || extractedSlug === excludeSlug) continue;
-    visitCounts.set(extractedSlug, (visitCounts.get(extractedSlug) ?? 0) + 1);
+    visitCounts.set(extractedSlug, Number(entry.total));
   }
 
   const popularRanked = Array.from(visitCounts.entries())

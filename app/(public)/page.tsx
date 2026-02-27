@@ -14,7 +14,6 @@ import { logPageView } from "@/lib/visits/log-page-view";
 import { formatRelativeTime } from "@/lib/datetime/relative";
 import type { HeroSliderArticle } from "./(components)/hero-slider";
 import { HeroSlider } from "./(components)/hero-slider";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 const POPULAR_LOOKBACK_DAYS = 7;
 
 const articleInclude = {
@@ -39,6 +38,7 @@ const articleInclude = {
 } satisfies Prisma.ArticleInclude;
 
 type ArticleWithRelations = Prisma.ArticleGetPayload<{ include: typeof articleInclude }>;
+type VisitAggregateRow = { path: string; total: bigint };
 
 type StructuredDataNode = Record<string, unknown>;
 
@@ -192,7 +192,6 @@ export default async function HomePage() {
   const popularWindowStart = new Date(now);
   popularWindowStart.setDate(popularWindowStart.getDate() - POPULAR_LOOKBACK_DAYS);
 
-  await publishDueScheduledArticles();
 
   const [latestArticles, randomizableCategories, popularArticlePaths, siteConfig] = await Promise.all([
     prisma.article.findMany({
@@ -214,16 +213,18 @@ export default async function HomePage() {
       },
       select: { id: true, name: true, slug: true },
     }),
-    prisma.visitLog.groupBy({
-      by: ["path"],
-      where: {
-        createdAt: { gte: popularWindowStart },
-        path: { startsWith: "/articles/" },
-      },
-      _count: { path: true },
-      orderBy: { _count: { path: "desc" } },
-      take: 40,
-    }),
+    prisma.$queryRaw<VisitAggregateRow[]>(
+      Prisma.sql`
+        SELECT "path", COUNT(DISTINCT "ip")::bigint AS total
+        FROM "VisitLog"
+        WHERE "createdAt" >= ${popularWindowStart}
+          AND "path" LIKE '/articles/%'
+          AND "ip" IS NOT NULL
+        GROUP BY "path"
+        ORDER BY COUNT(DISTINCT "ip") DESC
+        LIMIT 40
+      `
+    ),
     getSiteConfig(),
   ]);
   const heroArticles = latestArticles.slice(0, 5);

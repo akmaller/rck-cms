@@ -14,7 +14,6 @@ import { logPageView } from "@/lib/visits/log-page-view";
 import { getArticleSidebarData } from "@/lib/articles/sidebar";
 import { ArticleLoadMoreList } from "@/app/(public)/(components)/article-load-more-list";
 import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const INITIAL_LIMIT = 20;
 const LOAD_MORE_LIMIT = 10;
@@ -27,7 +26,20 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const tag = await prisma.tag.findUnique({
     where: { slug },
-    select: { name: true },
+    select: {
+      name: true,
+      _count: {
+        select: {
+          articles: {
+            where: {
+              article: {
+                status: ArticleStatus.PUBLISHED,
+              },
+            },
+          },
+        },
+      },
+    },
   });
 
   if (!tag) {
@@ -48,13 +60,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     path: `/tags/${slug}`,
     keywords: [tag.name],
     tags: [tag.name],
+    robots: {
+      index: tag._count.articles > 1,
+      follow: true,
+    },
   });
 }
 
 export default async function TagPage({ params }: TagPageProps) {
   const { slug } = await params;
 
-  await publishDueScheduledArticles();
 
   const tag = await prisma.tag.findUnique({
     where: { slug },

@@ -16,7 +16,6 @@ import { logPageView } from "@/lib/visits/log-page-view";
 import { getArticleSidebarData } from "@/lib/articles/sidebar";
 import { ArticleLoadMoreList } from "@/app/(public)/(components)/article-load-more-list";
 import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const INITIAL_LIMIT = 20;
 const LOAD_MORE_LIMIT = 10;
@@ -40,6 +39,10 @@ export async function generateMetadata({
       title: "Pencarian Konten",
       description: `Cari artikel dan halaman dari ${config.name}.`,
       path: "/search",
+      robots: {
+        index: false,
+        follow: true,
+      },
     });
   }
 
@@ -49,6 +52,10 @@ export async function generateMetadata({
     description: `Hasil pencarian untuk “${query}” di ${config.name}.`,
     path: `/search?q=${encodeURIComponent(query)}`,
     keywords: [query],
+    robots: {
+      index: false,
+      follow: true,
+    },
   });
 }
 
@@ -56,7 +63,6 @@ export default async function SearchPage({ searchParams }: SearchPageProps) {
   const resolved = await searchParams;
   const query = (resolved.q ?? "").trim();
 
-  await publishDueScheduledArticles();
 
   const headerList = await headers();
   const ip = headerList.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;

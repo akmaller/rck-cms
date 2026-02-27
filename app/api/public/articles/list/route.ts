@@ -3,7 +3,6 @@ import { ArticleStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const MAX_LIMIT = 20;
 
@@ -22,7 +21,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Parameter mode diperlukan." }, { status: 400 });
   }
 
-  await publishDueScheduledArticles();
 
   const offset = Math.max(0, parseNumber(searchParams.get("offset"), 0));
   const limit = Math.max(1, Math.min(MAX_LIMIT, parseNumber(searchParams.get("limit"), 10)));

@@ -18,7 +18,6 @@ import { buttonVariants } from "@/lib/button-variants";
 import { cn } from "@/lib/utils";
 import { ArticleBulkList } from "@/app/(dashboard)/dashboard/articles/_components/article-bulk-list";
 import { FilterDisclosure } from "@/app/(dashboard)/dashboard/articles/_components/filter-disclosure";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const PAGE_SIZE_DEFAULT = 20;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const;
@@ -138,7 +137,6 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
 
   const where = filters.length > 0 ? { AND: filters } : undefined;
 
-  await publishDueScheduledArticles();
 
   const [totalArticles, categories] = await Promise.all([
     prisma.article.count({ where }),
@@ -166,14 +164,18 @@ export default async function DashboardArticlesPage({ searchParams }: DashboardA
   const viewsByPath = new Map<string, number>();
   if (articlePaths.length > 0) {
     try {
-      const uniqueArticleVisits = await prisma.visitLog.findMany({
-        where: { path: { in: articlePaths } },
-        select: { path: true, ip: true },
-        distinct: ["path", "ip"],
-      });
-      for (const entry of uniqueArticleVisits) {
-        const current = viewsByPath.get(entry.path) ?? 0;
-        viewsByPath.set(entry.path, current + 1);
+      const pathList = Prisma.join(articlePaths.map((path) => Prisma.sql`${path}`));
+      const rows = await prisma.$queryRaw<Array<{ path: string; total: bigint }>>(
+        Prisma.sql`
+          SELECT "path", COUNT(DISTINCT "ip")::bigint AS total
+          FROM "VisitLog"
+          WHERE "path" IN (${pathList})
+            AND "ip" IS NOT NULL
+          GROUP BY "path"
+        `
+      );
+      for (const row of rows) {
+        viewsByPath.set(row.path, Number(row.total));
       }
     } catch {
       // keep views at zero if logging table not available

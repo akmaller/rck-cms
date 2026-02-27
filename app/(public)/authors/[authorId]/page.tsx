@@ -12,7 +12,6 @@ import { createMetadata } from "@/lib/seo/metadata";
 import { ArticleLoadMoreList } from "@/app/(public)/(components)/article-load-more-list";
 import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
 import { formatRelativeTime } from "@/lib/datetime/relative";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const sidebarArticleInclude = {
   categories: {
@@ -85,7 +84,6 @@ type AuthorPageProps = {
 
 export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const { authorId } = await params;
-  await publishDueScheduledArticles();
   const author = await getAuthor(authorId);
   if (!author) {
     notFound();
@@ -94,6 +92,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const now = new Date();
   const lookbackStart = new Date(now);
   lookbackStart.setDate(lookbackStart.getDate() - POPULAR_LOOKBACK_DAYS);
+  type VisitAggregateRow = { path: string; total: bigint };
 
   const authoredWhere = { authorId, status: ArticleStatus.PUBLISHED } as const;
 
@@ -116,16 +115,18 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
       orderBy: { publishedAt: "desc" },
       take: 6,
     }),
-    prisma.visitLog.groupBy({
-      by: ["path"],
-      where: {
-        createdAt: { gte: lookbackStart },
-        path: { startsWith: "/articles/" },
-      },
-      _count: { path: true },
-      orderBy: { _count: { path: "desc" } },
-      take: 40,
-    }),
+    prisma.$queryRaw<VisitAggregateRow[]>(
+      Prisma.sql`
+        SELECT "path", COUNT(DISTINCT "ip")::bigint AS total
+        FROM "VisitLog"
+        WHERE "createdAt" >= ${lookbackStart}
+          AND "path" LIKE '/articles/%'
+          AND "ip" IS NOT NULL
+        GROUP BY "path"
+        ORDER BY COUNT(DISTINCT "ip") DESC
+        LIMIT 40
+      `
+    ),
     prisma.tag.findMany({
       orderBy: { articles: { _count: "desc" } },
       take: 10,
@@ -136,19 +137,25 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const articleSlugs = authorSlugs.map((article) => article.slug);
   const articlePaths = articleSlugs.map((slug) => `/articles/${slug}`);
 
-  const uniqueVisitors = articlePaths.length
-    ? await prisma.visitLog.findMany({
-        where: {
-          path: { in: articlePaths },
-          ip: { not: null },
-        },
-        select: { ip: true },
-        distinct: ["ip"],
-      })
-    : [];
-
   const articleCount = totalCount;
-  const viewerCount = uniqueVisitors.length;
+  const viewerCount = articlePaths.length
+    ? await (async () => {
+        try {
+          const pathList = Prisma.join(articlePaths.map((path) => Prisma.sql`${path}`));
+          const rows = await prisma.$queryRaw<Array<{ total: bigint }>>(
+            Prisma.sql`
+              SELECT COUNT(DISTINCT "ip")::bigint AS total
+              FROM "VisitLog"
+              WHERE "path" IN (${pathList})
+                AND "ip" IS NOT NULL
+            `
+          );
+          return Number(rows[0]?.total ?? 0);
+        } catch {
+          return 0;
+        }
+      })()
+    : 0;
 
   const popularSlugs = popularVisitLogs
     .map((entry) => entry.path.replace(/^\/articles\//, "").split("/")[0])

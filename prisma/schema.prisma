@@ -312,7 +312,9 @@ model VisitLog {
   deviceType String
   createdAt  DateTime @default(now())
 
+  @@index([path, ip])
   @@index([path, createdAt])
+  @@index([createdAt, path, ip])
   @@index([createdAt])
 }
 
@@ -370,6 +372,10 @@ model AuditLog {
   createdAt DateTime @default(now())
   user      User?    @relation(fields: [userId], references: [id])
 
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([entity, createdAt])
+  @@index([action, createdAt])
   @@index([entity, entityId])
   @@index([userId])
 }

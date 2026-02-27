@@ -14,7 +14,6 @@ import { logPageView } from "@/lib/visits/log-page-view";
 import { ArticleListCard } from "@/app/(public)/(components)/article-list-card";
 import { ArticleSidebar } from "@/app/(public)/(components)/article-sidebar";
 import { getArticleSidebarData } from "@/lib/articles/sidebar";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 const PAGE_SIZE = 9;
 
@@ -70,7 +69,6 @@ export default async function ArticlesPage({ searchParams }: ArticlesPageProps) 
   const resolved = await searchParams;
   const currentPage = Math.max(1, Number(resolved.page ?? 1));
 
-  await publishDueScheduledArticles();
 
   const where = { status: ArticleStatus.PUBLISHED } as const;
 

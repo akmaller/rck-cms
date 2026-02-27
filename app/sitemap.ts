@@ -2,17 +2,16 @@ import type { MetadataRoute } from "next";
 
 import { prisma } from "@/lib/prisma";
 import { getSiteConfig } from "@/lib/site-config/server";
-import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 
 export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const config = await getSiteConfig();
   const BASE_URL = config.url.replace(/\/$/, "");
-  await publishDueScheduledArticles();
   type ArticleEntry = { slug: string; updatedAt: Date | null; publishedAt: Date | null };
   type PageEntry = { slug: string; updatedAt: Date | null; publishedAt: Date | null };
   type TaxonomyEntry = { slug: string; updatedAt: Date | null };
+  type TagEntry = TaxonomyEntry & { _count: { articles: number } };
 
   const [articles, pages, categories, tags] = await Promise.all([
     prisma.article.findMany({
@@ -30,9 +29,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       orderBy: { updatedAt: "desc" },
     }) as Promise<TaxonomyEntry[]>,
     prisma.tag.findMany({
-      select: { slug: true, updatedAt: true },
+      select: {
+        slug: true,
+        updatedAt: true,
+        _count: {
+          select: {
+            articles: {
+              where: {
+                article: {
+                  status: "PUBLISHED",
+                },
+              },
+            },
+          },
+        },
+      },
       orderBy: { updatedAt: "desc" },
-    }) as Promise<TaxonomyEntry[]>,
+    }) as Promise<TagEntry[]>,
   ]);
 
   const staticRoutes: MetadataRoute.Sitemap = [
@@ -47,12 +60,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: articles[0]?.updatedAt ?? new Date(),
       changeFrequency: "daily",
       priority: 0.9,
-    },
-    {
-      url: `${BASE_URL}/search`,
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 0.4,
     },
   ];
 
@@ -79,12 +86,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.5,
   }));
 
-  const tagRoutes: MetadataRoute.Sitemap = tags.map((tag: TaxonomyEntry) => ({
-    url: `${BASE_URL}/tags/${tag.slug}`,
-    lastModified: coerceDate(tag.updatedAt),
-    changeFrequency: "weekly",
-    priority: 0.4,
-  }));
+  const tagRoutes: MetadataRoute.Sitemap = tags
+    .filter((tag) => tag._count.articles >= 2)
+    .map((tag: TagEntry) => ({
+      url: `${BASE_URL}/tags/${tag.slug}`,
+      lastModified: coerceDate(tag.updatedAt),
+      changeFrequency: "weekly",
+      priority: 0.4,
+    }));
 
   return [...staticRoutes, ...articleRoutes, ...pageRoutes, ...categoryRoutes, ...tagRoutes];
 }
