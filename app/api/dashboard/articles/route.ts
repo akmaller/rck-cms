@@ -10,6 +10,7 @@ import { isRateLimited } from "@/lib/rate-limit";
 import { slugify } from "@/lib/utils/slug";
 import { articleCreateSchema } from "@/lib/validators/article";
 import { validateArticleRelations } from "@/lib/articles/validate-relations";
+import { notifyFollowersAboutPublishedArticle } from "@/lib/follows/service";
 
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 20;
@@ -202,6 +203,13 @@ export async function POST(request: NextRequest) {
     entityId: article.id,
     metadata: { title: article.title },
   });
+
+  if (article.status === ArticleStatus.PUBLISHED) {
+    await notifyFollowersAboutPublishedArticle({
+      articleId: article.id,
+      authorId: article.authorId,
+    });
+  }
 
   revalidateTag("content");
 

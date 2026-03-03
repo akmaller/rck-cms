@@ -15,6 +15,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { findForbiddenPhraseInInputs } from "@/lib/moderation/forbidden-terms";
 import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
+import { notifyFollowersAboutPublishedArticle } from "@/lib/follows/service";
 
 const EMPTY_TIPTAP_DOC = { type: "doc", content: [] } as const;
 const bulkArticleStatusSchema = z.object({
@@ -360,6 +361,13 @@ export async function createArticle(formData: FormData) {
 
       return created;
     });
+
+    if (targetStatus === ArticleStatus.PUBLISHED) {
+      await notifyFollowersAboutPublishedArticle({
+        articleId: article.id,
+        authorId: session.user.id,
+      });
+    }
 
     await writeAuditLog({
       action: "ARTICLE_CREATE",
@@ -1170,7 +1178,7 @@ export async function updateArticle(formData: FormData) {
 
     const article = await prisma.article.findUnique({
       where: { id: parsed.data.articleId },
-      select: { id: true, authorId: true, slug: true, title: true, excerpt: true, publishedAt: true },
+      select: { id: true, authorId: true, slug: true, title: true, excerpt: true, publishedAt: true, status: true },
     });
 
     if (!article) {
@@ -1278,6 +1286,13 @@ export async function updateArticle(formData: FormData) {
       }
 
     });
+
+    if (article.status !== ArticleStatus.PUBLISHED && targetStatus === ArticleStatus.PUBLISHED) {
+      await notifyFollowersAboutPublishedArticle({
+        articleId: parsed.data.articleId,
+        authorId: article.authorId,
+      });
+    }
 
     await writeAuditLog({
       action: "ARTICLE_UPDATE",
@@ -1389,6 +1404,7 @@ export async function bulkUpdateArticleStatus(formData: FormData) {
       },
       select: {
         id: true,
+        authorId: true,
         slug: true,
         title: true,
         status: true,
@@ -1422,6 +1438,18 @@ export async function bulkUpdateArticleStatus(formData: FormData) {
         });
       }
     });
+
+    if (targetStatus === ArticleStatus.PUBLISHED) {
+      const newlyPublishedArticles = articles.filter((article) => article.status !== ArticleStatus.PUBLISHED);
+      await Promise.all(
+        newlyPublishedArticles.map((article) =>
+          notifyFollowersAboutPublishedArticle({
+            articleId: article.id,
+            authorId: article.authorId,
+          })
+        )
+      );
+    }
 
     await Promise.all(
       articles.map((article) =>

@@ -5,6 +5,7 @@ import type { Metadata } from "next";
 import { ArticleStatus, Prisma } from "@prisma/client";
 import { cache } from "react";
 import { Facebook, Instagram, Link2, Linkedin, Twitter, Youtube, type LucideIcon } from "lucide-react";
+import { auth } from "@/auth";
 
 import { AUTHOR_SOCIAL_FIELDS, AUTHOR_SOCIAL_KEYS, type AuthorSocialKey } from "@/lib/authors/social-links";
 import {
@@ -17,6 +18,9 @@ import { createMetadata } from "@/lib/seo/metadata";
 import { ArticleLoadMoreList } from "@/app/(public)/(components)/article-load-more-list";
 import { articleListInclude, serializeArticleForList } from "@/lib/articles/list";
 import { formatRelativeTime } from "@/lib/datetime/relative";
+import { getAuthorFollowSummary } from "@/lib/follows/service";
+
+import { FollowAuthorButton } from "./follow-author-button";
 
 const sidebarArticleInclude = {
   categories: {
@@ -89,12 +93,12 @@ type AuthorPageProps = {
 
 export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   const { authorId } = await params;
+  const session = await auth();
+  const viewerId = session?.user?.id ?? null;
   const author = await getAuthor(authorId);
   if (!author) {
     notFound();
   }
-
-  const now = new Date();
 
   const authoredWhere = { authorId, status: ArticleStatus.PUBLISHED } as const;
 
@@ -249,6 +253,7 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
   });
 
   const initialArticles = initialArticlesRaw.map((article) => serializeArticleForList(article));
+  const followSummary = await getAuthorFollowSummary(authorId, viewerId);
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -275,6 +280,13 @@ export default async function AuthorProfilePage({ params }: AuthorPageProps) {
                 <div className="space-y-1.5">
                   <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">{author.name}</h1>
                   <p className="text-sm text-muted-foreground">Bergabung sejak {formatJoinDate}</p>
+                  <FollowAuthorButton
+                    authorId={authorId}
+                    initialFollowing={followSummary.viewerFollows}
+                    initialFollowerCount={followSummary.followerCount}
+                    isAuthenticated={Boolean(viewerId)}
+                    isOwnProfile={viewerId === authorId}
+                  />
                 </div>
               </div>
               {author.bio ? (

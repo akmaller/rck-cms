@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Bell, Loader2, MessageCircle, Reply, ThumbsUp } from "lucide-react";
+import { Bell, BookOpenText, Loader2, MessageCircle, Reply, ThumbsUp, UserPlus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,9 @@ type NotificationType =
   | "ARTICLE_COMMENT"
   | "COMMENT_REPLY"
   | "ARTICLE_LIKE"
-  | "COMMENT_LIKE";
+  | "COMMENT_LIKE"
+  | "ARTICLE_PUBLISHED"
+  | "USER_FOLLOWED";
 
 type NotificationActor = {
   id: string;
@@ -69,6 +71,14 @@ function getActorDisplayName(actor: NotificationActor) {
   return actor.name?.trim() || "Seseorang";
 }
 
+function truncateToMax20Characters(text: string) {
+  const normalized = text.trim();
+  if (normalized.length <= 20) {
+    return normalized;
+  }
+  return `${normalized.slice(0, 17)}...`;
+}
+
 function buildNotificationPresentation(item: NotificationItem): NotificationPresentation {
   const actorName = getActorDisplayName(item.actor);
   const articleTitle = item.article?.title ?? item.comment?.article?.title ?? "Artikel";
@@ -84,6 +94,7 @@ function buildNotificationPresentation(item: NotificationItem): NotificationPres
       : commentText
     : null;
   const articlePreview = articleTitle.length > 37 ? `${articleTitle.slice(0, 37)}...` : articleTitle;
+  const articlePreview20 = truncateToMax20Characters(articleTitle || "Artikel");
 
   switch (item.type) {
     case "ARTICLE_COMMENT":
@@ -114,6 +125,32 @@ function buildNotificationPresentation(item: NotificationItem): NotificationPres
         articlePreview,
       };
     case "COMMENT_LIKE":
+      return {
+        title: `${actorName} menyukai komentar Anda`,
+        description: commentPreview ?? "Komentar Anda disukai",
+        href,
+        icon: <ThumbsUp className="h-4 w-4 text-primary" aria-hidden="true" />,
+        meta: articleTitle,
+        articlePreview,
+      };
+    case "ARTICLE_PUBLISHED":
+      return {
+        title: `${actorName} menerbitkan artikel baru`,
+        description: `Judul: ${articlePreview20}`,
+        href: baseHref,
+        icon: <BookOpenText className="h-4 w-4 text-primary" aria-hidden="true" />,
+        meta: null,
+        articlePreview: articlePreview20,
+      };
+    case "USER_FOLLOWED":
+      return {
+        title: `${actorName} mengikuti Anda`,
+        description: "Lihat profil pengikut",
+        href: `/authors/${item.actor.id}`,
+        icon: <UserPlus className="h-4 w-4 text-primary" aria-hidden="true" />,
+        meta: null,
+        articlePreview: null,
+      };
     default:
       return {
         title: `${actorName} menyukai komentar Anda`,

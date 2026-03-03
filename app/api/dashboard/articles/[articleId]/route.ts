@@ -8,6 +8,7 @@ import { slugify } from "@/lib/utils/slug";
 import { articleUpdateSchema } from "@/lib/validators/article";
 import { writeAuditLog } from "@/lib/audit/log";
 import { validateArticleRelations } from "@/lib/articles/validate-relations";
+import { notifyFollowersAboutPublishedArticle } from "@/lib/follows/service";
 
 
 const MUTATION_WINDOW_MS = 60_000;
@@ -235,6 +236,13 @@ export async function PATCH(
     entityId: transactionResult.id,
     metadata: { title: transactionResult.title, featuredMediaId: transactionResult.featuredMediaId },
   });
+
+  if (article.status !== ArticleStatus.PUBLISHED && transactionResult.status === ArticleStatus.PUBLISHED) {
+    await notifyFollowersAboutPublishedArticle({
+      articleId: transactionResult.id,
+      authorId: transactionResult.authorId,
+    });
+  }
 
   return NextResponse.json({
     data: {

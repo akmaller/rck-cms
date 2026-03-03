@@ -1,6 +1,7 @@
 import { ArticleStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { notifyFollowersAboutPublishedArticle } from "@/lib/follows/service";
 
 export type PublishSchedulerResult = {
   updated: number;
@@ -23,7 +24,7 @@ export async function publishDueScheduledArticles(): Promise<PublishSchedulerRes
           status: ArticleStatus.SCHEDULED,
           publishedAt: { lte: now },
         },
-        select: { id: true, slug: true },
+        select: { id: true, slug: true, authorId: true },
       });
 
       if (dueArticles.length === 0) {
@@ -35,6 +36,16 @@ export async function publishDueScheduledArticles(): Promise<PublishSchedulerRes
         where: { id: { in: articleIds } },
         data: { status: ArticleStatus.PUBLISHED },
       });
+
+      for (const article of dueArticles) {
+        await notifyFollowersAboutPublishedArticle(
+          {
+            articleId: article.id,
+            authorId: article.authorId,
+          },
+          tx
+        );
+      }
 
       return {
         updated: dueArticles.length,

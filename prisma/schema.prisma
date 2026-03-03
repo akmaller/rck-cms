@@ -45,6 +45,8 @@ model User {
   commentLikes           CommentLike[]
   notificationsReceived  Notification[]        @relation("UserNotifications")
   notificationsSent      Notification[]        @relation("UserNotificationActors")
+  following              UserFollow[]          @relation("UserFollowsFollower")
+  followers              UserFollow[]          @relation("UserFollowsFollowing")
 
   @@index([role])
 }
@@ -182,6 +184,20 @@ model Notification {
   @@index([articleId])
   @@index([commentId])
   @@index([readAt])
+}
+
+model UserFollow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowsFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowsFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId, createdAt])
+  @@index([followingId, createdAt])
 }
 
 model ArticleLike {
@@ -490,4 +506,6 @@ enum NotificationType {
   COMMENT_REPLY
   ARTICLE_LIKE
   COMMENT_LIKE
+  ARTICLE_PUBLISHED
+  USER_FOLLOWED
 }
