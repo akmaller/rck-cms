@@ -116,6 +116,7 @@ model Article {
   comments        Comment[]
   likes           ArticleLike[]
   notifications   Notification[]
+  socialPostJobs  SocialPostJob[]
 
   @@index([status, publishedAt])
   @@index([authorId])
@@ -280,6 +281,32 @@ model SiteConfig {
   value     Json
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model SocialAccountCredential {
+  id               String         @id @default(cuid())
+  platform         SocialPlatform @unique
+  encryptedPayload String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+}
+
+model SocialPostJob {
+  id             String              @id @default(cuid())
+  platform       SocialPlatform
+  articleId      String
+  status         SocialPostJobStatus @default(PENDING)
+  retryCount     Int                 @default(0)
+  error          String?
+  postedAt       DateTime?
+  idempotencyKey String              @unique
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  article        Article             @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([articleId, createdAt])
+  @@index([platform, status])
 }
 
 model ForbiddenTerm {
@@ -508,4 +535,17 @@ enum NotificationType {
   COMMENT_LIKE
   ARTICLE_PUBLISHED
   USER_FOLLOWED
+}
+
+enum SocialPlatform {
+  FACEBOOK
+  INSTAGRAM
+  TWITTER
+}
+
+enum SocialPostJobStatus {
+  PENDING
+  PROCESSING
+  POSTED
+  FAILED
 }

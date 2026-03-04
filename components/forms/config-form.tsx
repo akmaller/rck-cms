@@ -36,6 +36,7 @@ export type ConfigSection =
   | "social"
   | "metadata"
   | "analytics"
+  | "socialAutopost"
   | "registration"
   | "comments"
   | "cache";
@@ -74,6 +75,23 @@ export type ConfigValues = {
   analytics?: {
     googleTagManagerId?: string | null;
   };
+  socialAutopost?: {
+    enabled?: boolean;
+    facebook?: {
+      enabled?: boolean;
+      pageId?: string;
+      pageAccessToken?: string;
+    };
+    instagram?: {
+      enabled?: boolean;
+      igUserId?: string;
+      pageAccessToken?: string;
+    };
+    twitter?: {
+      enabled?: boolean;
+      accessToken?: string;
+    };
+  };
 };
 
 type ConfigFormProps = {
@@ -89,6 +107,7 @@ const DEFAULT_SECTIONS: ConfigSection[] = [
   "social",
   "metadata",
   "analytics",
+  "socialAutopost",
   "registration",
   "comments",
   "cache",
@@ -114,6 +133,18 @@ export function ConfigForm({
     initialConfig.registration?.autoApprove ?? false
   );
   const [commentsEnabled, setCommentsEnabled] = useState(initialConfig.comments?.enabled ?? true);
+  const [socialAutopostEnabled, setSocialAutopostEnabled] = useState(
+    initialConfig.socialAutopost?.enabled ?? false
+  );
+  const [facebookAutopostEnabled, setFacebookAutopostEnabled] = useState(
+    initialConfig.socialAutopost?.facebook?.enabled ?? false
+  );
+  const [instagramAutopostEnabled, setInstagramAutopostEnabled] = useState(
+    initialConfig.socialAutopost?.instagram?.enabled ?? false
+  );
+  const [twitterAutopostEnabled, setTwitterAutopostEnabled] = useState(
+    initialConfig.socialAutopost?.twitter?.enabled ?? false
+  );
   const [privacyPolicyPageSlug, setPrivacyPolicyPageSlug] = useState(
     initialConfig.registration?.privacyPolicyPageSlug ?? ""
   );
@@ -132,6 +163,7 @@ export function ConfigForm({
   const showSocial = activeSections.has("social");
   const showMetadata = activeSections.has("metadata");
   const showAnalytics = activeSections.has("analytics");
+  const showSocialAutopost = activeSections.has("socialAutopost");
   const showRegistration = activeSections.has("registration");
   const showComments = activeSections.has("comments");
   const showCache = activeSections.has("cache");
@@ -437,6 +469,172 @@ export function ConfigForm({
                 <p className="text-xs text-muted-foreground">
                   Masukkan ID container GTM ({`"GTM-XXXXXXX"`}) atau Google Analytics 4 ({`"G-XXXXXXXX"`}).
                 </p>
+              </div>
+            </section>
+          ) : null}
+
+          {showSocialAutopost ? (
+            <section className="space-y-3">
+              <h3 className="text-sm font-semibold">Auto Post Sosial Media</h3>
+              <p className="text-xs text-muted-foreground">
+                Jika aktif, setiap artikel yang dipublikasikan akan dikirim otomatis ke platform yang dipilih.
+              </p>
+              <div className="space-y-4 rounded-md border border-border/60 bg-muted/10 p-3">
+                <div className="flex items-start gap-3">
+                  <input type="hidden" name="socialAutopost.enabled" value="false" />
+                  <input
+                    id="socialAutopost.enabled"
+                    name="socialAutopost.enabled"
+                    type="checkbox"
+                    value="true"
+                    checked={socialAutopostEnabled}
+                    onChange={(event) => {
+                      const enabled = event.target.checked;
+                      setSocialAutopostEnabled(enabled);
+                      if (!enabled) {
+                        setFacebookAutopostEnabled(false);
+                        setInstagramAutopostEnabled(false);
+                        setTwitterAutopostEnabled(false);
+                      }
+                    }}
+                    className="mt-1 h-4 w-4"
+                  />
+                  <div>
+                    <Label htmlFor="socialAutopost.enabled" className="text-sm font-medium">
+                      Aktifkan auto-post setelah artikel publish
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Berlaku untuk publish baru, publish massal, dan publish terjadwal.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-md border border-border/50 bg-background/80 p-3">
+                  <div className="flex items-start gap-3">
+                    <input type="hidden" name="socialAutopost.facebook.enabled" value="false" />
+                    <input
+                      id="socialAutopost.facebook.enabled"
+                      name="socialAutopost.facebook.enabled"
+                      type="checkbox"
+                      value="true"
+                      checked={facebookAutopostEnabled}
+                      onChange={(event) => setFacebookAutopostEnabled(event.target.checked)}
+                      disabled={!socialAutopostEnabled}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <div>
+                      <Label htmlFor="socialAutopost.facebook.enabled" className="text-sm font-medium">
+                        Facebook Page
+                      </Label>
+                      <p className="text-xs text-muted-foreground">Posting ke feed halaman Facebook.</p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="socialAutopost.facebook.pageId">Page ID</Label>
+                      <Input
+                        id="socialAutopost.facebook.pageId"
+                        name="socialAutopost.facebook.pageId"
+                        defaultValue={initialConfig.socialAutopost?.facebook?.pageId ?? ""}
+                        disabled={!socialAutopostEnabled || !facebookAutopostEnabled}
+                        placeholder="1234567890"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="socialAutopost.facebook.pageAccessToken">Page Access Token</Label>
+                      <Input
+                        id="socialAutopost.facebook.pageAccessToken"
+                        name="socialAutopost.facebook.pageAccessToken"
+                        type="password"
+                        defaultValue={initialConfig.socialAutopost?.facebook?.pageAccessToken ?? ""}
+                        disabled={!socialAutopostEnabled || !facebookAutopostEnabled}
+                        placeholder="EAAB..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-md border border-border/50 bg-background/80 p-3">
+                  <div className="flex items-start gap-3">
+                    <input type="hidden" name="socialAutopost.instagram.enabled" value="false" />
+                    <input
+                      id="socialAutopost.instagram.enabled"
+                      name="socialAutopost.instagram.enabled"
+                      type="checkbox"
+                      value="true"
+                      checked={instagramAutopostEnabled}
+                      onChange={(event) => setInstagramAutopostEnabled(event.target.checked)}
+                      disabled={!socialAutopostEnabled}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <div>
+                      <Label htmlFor="socialAutopost.instagram.enabled" className="text-sm font-medium">
+                        Instagram Business/Creator
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Menggunakan Graph API (butuh akun professional dan media gambar publik).
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="socialAutopost.instagram.igUserId">IG User ID</Label>
+                      <Input
+                        id="socialAutopost.instagram.igUserId"
+                        name="socialAutopost.instagram.igUserId"
+                        defaultValue={initialConfig.socialAutopost?.instagram?.igUserId ?? ""}
+                        disabled={!socialAutopostEnabled || !instagramAutopostEnabled}
+                        placeholder="1784..."
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="socialAutopost.instagram.pageAccessToken">Page Access Token</Label>
+                      <Input
+                        id="socialAutopost.instagram.pageAccessToken"
+                        name="socialAutopost.instagram.pageAccessToken"
+                        type="password"
+                        defaultValue={initialConfig.socialAutopost?.instagram?.pageAccessToken ?? ""}
+                        disabled={!socialAutopostEnabled || !instagramAutopostEnabled}
+                        placeholder="EAAB..."
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-3 rounded-md border border-border/50 bg-background/80 p-3">
+                  <div className="flex items-start gap-3">
+                    <input type="hidden" name="socialAutopost.twitter.enabled" value="false" />
+                    <input
+                      id="socialAutopost.twitter.enabled"
+                      name="socialAutopost.twitter.enabled"
+                      type="checkbox"
+                      value="true"
+                      checked={twitterAutopostEnabled}
+                      onChange={(event) => setTwitterAutopostEnabled(event.target.checked)}
+                      disabled={!socialAutopostEnabled}
+                      className="mt-1 h-4 w-4"
+                    />
+                    <div>
+                      <Label htmlFor="socialAutopost.twitter.enabled" className="text-sm font-medium">
+                        X / Twitter
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Gunakan user access token dengan izin `tweet.write`.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="socialAutopost.twitter.accessToken">Access Token</Label>
+                    <Input
+                      id="socialAutopost.twitter.accessToken"
+                      name="socialAutopost.twitter.accessToken"
+                      type="password"
+                      defaultValue={initialConfig.socialAutopost?.twitter?.accessToken ?? ""}
+                      disabled={!socialAutopostEnabled || !twitterAutopostEnabled}
+                      placeholder="Bearer token"
+                    />
+                  </div>
+                </div>
               </div>
             </section>
           ) : null}

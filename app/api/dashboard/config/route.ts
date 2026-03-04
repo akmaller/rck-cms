@@ -9,7 +9,7 @@ import { writeAuditLog } from "@/lib/audit/log";
 const GENERAL_KEY = "general";
 
 export async function GET() {
-  await assertRole(["EDITOR", "ADMIN"]);
+  await assertRole("ADMIN");
 
   const config = await prisma.siteConfig.findUnique({ where: { key: GENERAL_KEY } });
   return NextResponse.json({
@@ -22,7 +22,7 @@ export async function GET() {
 }
 
 export async function PUT(request: NextRequest) {
-  await assertRole(["EDITOR", "ADMIN"]);
+  await assertRole("ADMIN");
 
   const payload = await request.json().catch(() => null);
   const parsed = siteConfigSchema.safeParse(payload);

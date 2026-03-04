@@ -11,6 +11,7 @@ import { slugify } from "@/lib/utils/slug";
 import { articleCreateSchema } from "@/lib/validators/article";
 import { validateArticleRelations } from "@/lib/articles/validate-relations";
 import { notifyFollowersAboutPublishedArticle } from "@/lib/follows/service";
+import { enqueueSocialPostJobsForArticle } from "@/lib/social/queue";
 
 const MUTATION_WINDOW_MS = 60_000;
 const MUTATION_LIMIT = 20;
@@ -209,6 +210,7 @@ export async function POST(request: NextRequest) {
       articleId: article.id,
       authorId: article.authorId,
     });
+    await enqueueSocialPostJobsForArticle(article.id);
   }
 
   revalidateTag("content");

@@ -14,6 +14,10 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "audit:purge": "tsx scripts/purge-audit-log.ts",
     "visit:purge": "tsx scripts/purge-visit-log.ts",
+    "publish:scheduled": "tsx scripts/publish-scheduled.ts",
+    "visit:summary:refresh": "tsx scripts/refresh-article-visit-summary.ts",
+    "social:dispatch": "tsx scripts/dispatch-social-post.ts",
+    "scheduler:doctor": "tsx scripts/scheduler-doctor.ts",
     "test": "vitest",
     "test:watch": "vitest --watch",
     "e2e": "playwright test"

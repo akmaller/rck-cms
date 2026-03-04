@@ -9,6 +9,7 @@ import { articleUpdateSchema } from "@/lib/validators/article";
 import { writeAuditLog } from "@/lib/audit/log";
 import { validateArticleRelations } from "@/lib/articles/validate-relations";
 import { notifyFollowersAboutPublishedArticle } from "@/lib/follows/service";
+import { enqueueSocialPostJobsForArticle } from "@/lib/social/queue";
 
 
 const MUTATION_WINDOW_MS = 60_000;
@@ -242,6 +243,7 @@ export async function PATCH(
       articleId: transactionResult.id,
       authorId: transactionResult.authorId,
     });
+    await enqueueSocialPostJobsForArticle(transactionResult.id);
   }
 
   return NextResponse.json({

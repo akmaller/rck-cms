@@ -50,8 +50,10 @@ Salin `.env.example` menjadi `.env.local` (untuk pengembangan) atau `.env.produc
 | `NEXTAUTH_URL` | URL publik aplikasi (contoh: `https://cms.domain.com`). |
 | `NEXT_PUBLIC_APP_URL` | URL publik yang digunakan di sisi klien (misal untuk berbagi tautan). |
 | `APP_URL` | URL publik aplikasi untuk pembuatan tautan aktivasi email. |
+| `CRON_SECRET` | Secret Bearer token untuk endpoint internal scheduler (`/api/internal/*`). |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | (Opsional) Site key Cloudflare Turnstile untuk formulir publik (reset password). |
 | `TURNSTILE_SECRET_KEY` | (Opsional) Secret key Turnstile untuk memverifikasi token di server. Wajib saat site key diaktifkan. |
+| `SOCIAL_CREDENTIALS_KEY` | Kunci 32-byte untuk enkripsi kredensial social auto-post (hex 64 char / base64 / plain 32 char). |
 | `CSP_ALLOW_UNSAFE_EVAL` | (Opsional) Set `true`/`1`/`yes` hanya jika benar-benar perlu mengizinkan `unsafe-eval` pada CSP. Default mengikuti mode development saja. |
 | `AWS_S3_BUCKET` | (Opsional) Nama bucket untuk media. Kosongkan untuk penyimpanan lokal. |
 | `AWS_S3_REGION` | (Opsional) Region bucket. |
@@ -98,6 +100,10 @@ Aplikasi akan tersedia di [http://localhost:3000](http://localhost:3000). Login 
 - `npm run prisma:generate` – generate client Prisma.
 - `npm run prisma:migrate` – migrasi dev; gunakan `npx prisma migrate deploy` di server produksi.
 - `npm run prisma:seed` – mengisi data awal.
+- `npm run publish:scheduled` – publish artikel dengan status `SCHEDULED` yang sudah jatuh tempo.
+- `npm run visit:summary:refresh -- --from=2026-03-01 --to=2026-03-03` – refresh summary visit artikel.
+- `npm run social:dispatch -- --limit=20 --maxRetryCount=5` – proses antrian auto-post sosial dari queue.
+- `npm run scheduler:doctor` – cek cepat env scheduler, koneksi DB, validitas key enkripsi, dan statistik queue.
 
 ## Checklist Kesiapan Produksi
 - Pastikan `.env.production` terisi lengkap (database, `NEXTAUTH_SECRET`, URL publik, SMTP, opsi S3 bila diperlukan).
@@ -157,6 +163,8 @@ NEXTAUTH_SECRET="ganti_dengan_random_hex_64"
 # AWS_S3_REGION="ap-southeast-1"
 # AWS_S3_ACCESS_KEY_ID="AKIA..."
 # AWS_S3_SECRET_ACCESS_KEY="..."
+CRON_SECRET="ganti_dengan_random_hex_64"
+SOCIAL_CREDENTIALS_KEY="ganti_dengan_key_32byte"
 ```
 
 Gunakan `chmod 600 .env.production` agar file tidak mudah dibaca pihak lain. Saat menjalankan aplikasi, muat variabel env tersebut (contoh dengan shell bawaan):
@@ -252,6 +260,57 @@ sudo certbot --nginx -d cms.domain.com
 - Jalankan `pm2 restart roemahcita-cms` atau `systemctl restart roemahcita.service` setelah update.
 - Catat backup database secara berkala (`pg_dump` atau managed backup).
 - Gunakan halaman dashboard > Keamanan untuk memantau blokir IP dan mengubah kebijakan rate limit.
+
+## Cron Scheduler (Produksi)
+Untuk job internal, aplikasi menyediakan endpoint:
+- `GET/POST /api/internal/publish-scheduled`
+- `GET/POST /api/internal/purge-visit-log`
+- `GET/POST /api/internal/refresh-article-visit-summary`
+- `GET/POST /api/internal/social-dispatch` (alias dari `/api/internal/dispatch-social-post`)
+
+Semua endpoint di atas butuh header:
+```bash
+Authorization: Bearer <CRON_SECRET>
+```
+
+Contoh cron Linux (`/etc/cron.d/rck-social-dispatch`) tiap 2 menit:
+```cron
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+*/2 * * * * root curl -fsS -m 20 -H "Authorization: Bearer <CRON_SECRET>" "http://127.0.0.1:3033/api/internal/social-dispatch?limit=20&maxRetryCount=5" >/dev/null 2>&1
+```
+
+Jika memakai aaPanel dan lebih nyaman tanpa HTTP internal, gunakan command cron langsung:
+```bash
+cd /www/wwwroot/kabarmerpati/rck-cms && set -a && source .env.production && set +a && npm run social:dispatch -- --limit=20 --maxRetryCount=5
+```
+
+Contoh set jadwal lengkap (metode command cron/aaPanel):
+```cron
+# publish scheduled article, tiap menit
+* * * * * cd /www/wwwroot/kabarmerpati/rck-cms && set -a && source .env.production && set +a && npm run publish:scheduled >/dev/null 2>&1
+
+# dispatch social queue, tiap 2 menit
+*/2 * * * * cd /www/wwwroot/kabarmerpati/rck-cms && set -a && source .env.production && set +a && npm run social:dispatch -- --limit=20 --maxRetryCount=5 >/dev/null 2>&1
+
+# refresh visit summary, setiap 15 menit
+*/15 * * * * cd /www/wwwroot/kabarmerpati/rck-cms && set -a && source .env.production && set +a && npm run visit:summary:refresh >/dev/null 2>&1
+
+# purge visit log, harian jam 02:10
+10 2 * * * cd /www/wwwroot/kabarmerpati/rck-cms && set -a && source .env.production && set +a && npm run visit:purge >/dev/null 2>&1
+```
+
+Checklist jika mendapat `401 Unauthorized`:
+- Pastikan nilai `CRON_SECRET` di `.env.production` sama persis dengan token di cron.
+- Restart proses Next.js setelah mengubah `.env.production` (pm2/systemd/aaPanel app service).
+- Verifikasi env pada process yang listen port aplikasi, bukan shell login saat ini.
+
+Sebelum aktifkan cron, jalankan verifikasi:
+```bash
+cd /www/wwwroot/kabarmerpati/rck-cms
+set -a && source .env.production && set +a
+npm run scheduler:doctor
+```
 
 ## Pengujian & QA
 - **Unit test**: `npm run test`

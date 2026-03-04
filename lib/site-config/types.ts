@@ -15,4 +15,16 @@ export type ResolvedSiteConfig = SiteConfig & {
   analytics: {
     googleTagManagerId: string | null;
   };
+  socialAutopost: {
+    enabled: boolean;
+    facebook: {
+      enabled: boolean;
+    };
+    instagram: {
+      enabled: boolean;
+    };
+    twitter: {
+      enabled: boolean;
+    };
+  };
 };

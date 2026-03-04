@@ -55,6 +55,18 @@ export type SiteConfig = {
   analytics?: {
     googleTagManagerId?: string | null;
   };
+  socialAutopost?: {
+    enabled?: boolean;
+    facebook?: {
+      enabled?: boolean;
+    };
+    instagram?: {
+      enabled?: boolean;
+    };
+    twitter?: {
+      enabled?: boolean;
+    };
+  };
 };
 
 export const siteConfig: SiteConfig = {
@@ -87,5 +99,17 @@ export const siteConfig: SiteConfig = {
   },
   analytics: {
     googleTagManagerId: null,
+  },
+  socialAutopost: {
+    enabled: false,
+    facebook: {
+      enabled: false,
+    },
+    instagram: {
+      enabled: false,
+    },
+    twitter: {
+      enabled: false,
+    },
   },
 };

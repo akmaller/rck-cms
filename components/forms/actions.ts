@@ -16,6 +16,8 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { findForbiddenPhraseInInputs } from "@/lib/moderation/forbidden-terms";
 import { publishDueScheduledArticles } from "@/lib/articles/publish-scheduler";
 import { notifyFollowersAboutPublishedArticle } from "@/lib/follows/service";
+import { saveSocialCredentials } from "@/lib/social/accounts";
+import { enqueueSocialPostJobsForArticle } from "@/lib/social/queue";
 
 const EMPTY_TIPTAP_DOC = { type: "doc", content: [] } as const;
 const bulkArticleStatusSchema = z.object({
@@ -83,6 +85,21 @@ function mergeSiteConfigValues(
 
   if (updates.analytics) {
     result.analytics = { ...(current?.analytics ?? {}), ...updates.analytics };
+  }
+
+  if (updates.socialAutopost) {
+    result.socialAutopost = {
+      enabled: updates.socialAutopost.enabled ?? current?.socialAutopost?.enabled,
+      facebook: {
+        enabled: updates.socialAutopost.facebook?.enabled ?? current?.socialAutopost?.facebook?.enabled,
+      },
+      instagram: {
+        enabled: updates.socialAutopost.instagram?.enabled ?? current?.socialAutopost?.instagram?.enabled,
+      },
+      twitter: {
+        enabled: updates.socialAutopost.twitter?.enabled ?? current?.socialAutopost?.twitter?.enabled,
+      },
+    };
   }
 
   if (updates.comments) {
@@ -367,6 +384,7 @@ export async function createArticle(formData: FormData) {
         articleId: article.id,
         authorId: session.user.id,
       });
+      await enqueueSocialPostJobsForArticle(article.id);
     }
 
     await writeAuditLog({
@@ -788,7 +806,7 @@ export async function createMenuItemAction(formData: FormData) {
 
 export async function updateSiteConfig(formData: FormData) {
   try {
-    await assertRole(["EDITOR", "ADMIN"]);
+    await assertRole("ADMIN");
 
     const sanitize = (value: FormDataEntryValue | null) => {
       if (!value) return undefined;
@@ -860,6 +878,101 @@ export async function updateSiteConfig(formData: FormData) {
     }
     if (Object.keys(analyticsValues).length > 0) {
       data.analytics = analyticsValues;
+    }
+
+    const socialAutopostValues: NonNullable<SiteConfigInput["socialAutopost"]> = {};
+    const socialCredentialValues = {
+      facebook: {
+        pageId: null as string | null,
+        pageAccessToken: null as string | null,
+      },
+      instagram: {
+        igUserId: null as string | null,
+        pageAccessToken: null as string | null,
+      },
+      twitter: {
+        accessToken: null as string | null,
+      },
+    };
+    const socialAutopostEnabledValues = formData.getAll("socialAutopost.enabled").map(String);
+    if (socialAutopostEnabledValues.length > 0) {
+      socialAutopostValues.enabled =
+        socialAutopostEnabledValues.includes("true") || socialAutopostEnabledValues.includes("on");
+    }
+
+    const facebookAutopostValues: NonNullable<NonNullable<SiteConfigInput["socialAutopost"]>["facebook"]> = {};
+    const facebookEnabledValues = formData.getAll("socialAutopost.facebook.enabled").map(String);
+    if (facebookEnabledValues.length > 0) {
+      facebookAutopostValues.enabled =
+        facebookEnabledValues.includes("true") || facebookEnabledValues.includes("on");
+    }
+    const facebookPageIdRaw = formData.get("socialAutopost.facebook.pageId");
+    if (facebookPageIdRaw !== null) {
+      const text = facebookPageIdRaw.toString().trim();
+      socialCredentialValues.facebook.pageId = text.length > 0 ? text : null;
+    }
+    const facebookTokenRaw = formData.get("socialAutopost.facebook.pageAccessToken");
+    if (facebookTokenRaw !== null) {
+      const text = facebookTokenRaw.toString().trim();
+      socialCredentialValues.facebook.pageAccessToken = text.length > 0 ? text : null;
+    }
+    if (Object.keys(facebookAutopostValues).length > 0) {
+      socialAutopostValues.facebook = facebookAutopostValues;
+    }
+
+    const instagramAutopostValues: NonNullable<NonNullable<SiteConfigInput["socialAutopost"]>["instagram"]> = {};
+    const instagramEnabledValues = formData.getAll("socialAutopost.instagram.enabled").map(String);
+    if (instagramEnabledValues.length > 0) {
+      instagramAutopostValues.enabled =
+        instagramEnabledValues.includes("true") || instagramEnabledValues.includes("on");
+    }
+    const instagramUserIdRaw = formData.get("socialAutopost.instagram.igUserId");
+    if (instagramUserIdRaw !== null) {
+      const text = instagramUserIdRaw.toString().trim();
+      socialCredentialValues.instagram.igUserId = text.length > 0 ? text : null;
+    }
+    const instagramTokenRaw = formData.get("socialAutopost.instagram.pageAccessToken");
+    if (instagramTokenRaw !== null) {
+      const text = instagramTokenRaw.toString().trim();
+      socialCredentialValues.instagram.pageAccessToken = text.length > 0 ? text : null;
+    }
+    if (Object.keys(instagramAutopostValues).length > 0) {
+      socialAutopostValues.instagram = instagramAutopostValues;
+    }
+
+    const twitterAutopostValues: NonNullable<NonNullable<SiteConfigInput["socialAutopost"]>["twitter"]> = {};
+    const twitterEnabledValues = formData.getAll("socialAutopost.twitter.enabled").map(String);
+    if (twitterEnabledValues.length > 0) {
+      twitterAutopostValues.enabled =
+        twitterEnabledValues.includes("true") || twitterEnabledValues.includes("on");
+    }
+    const twitterAccessTokenRaw = formData.get("socialAutopost.twitter.accessToken");
+    if (twitterAccessTokenRaw !== null) {
+      const text = twitterAccessTokenRaw.toString().trim();
+      socialCredentialValues.twitter.accessToken = text.length > 0 ? text : null;
+    }
+    if (Object.keys(twitterAutopostValues).length > 0) {
+      socialAutopostValues.twitter = twitterAutopostValues;
+    }
+
+    if (Object.keys(socialAutopostValues).length > 0) {
+      data.socialAutopost = socialAutopostValues;
+    }
+
+    const shouldPersistSocialCredentials =
+      formData.has("socialAutopost.facebook.pageId") ||
+      formData.has("socialAutopost.facebook.pageAccessToken") ||
+      formData.has("socialAutopost.instagram.igUserId") ||
+      formData.has("socialAutopost.instagram.pageAccessToken") ||
+      formData.has("socialAutopost.twitter.accessToken");
+    if (shouldPersistSocialCredentials) {
+      try {
+        await saveSocialCredentials(socialCredentialValues);
+      } catch (error) {
+        return {
+          error: error instanceof Error ? error.message : "Gagal menyimpan kredensial social media",
+        };
+      }
     }
 
     const registrationValues: NonNullable<SiteConfigInput["registration"]> = {};
@@ -1292,6 +1405,7 @@ export async function updateArticle(formData: FormData) {
         articleId: parsed.data.articleId,
         authorId: article.authorId,
       });
+      await enqueueSocialPostJobsForArticle(parsed.data.articleId);
     }
 
     await writeAuditLog({
@@ -1449,6 +1563,7 @@ export async function bulkUpdateArticleStatus(formData: FormData) {
           })
         )
       );
+      await Promise.all(newlyPublishedArticles.map((article) => enqueueSocialPostJobsForArticle(article.id)));
     }
 
     await Promise.all(

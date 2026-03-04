@@ -2,6 +2,7 @@ import { ArticleStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { notifyFollowersAboutPublishedArticle } from "@/lib/follows/service";
+import { enqueueSocialPostJobsForArticle } from "@/lib/social/queue";
 
 export type PublishSchedulerResult = {
   updated: number;
@@ -16,6 +17,7 @@ export async function publishDueScheduledArticles(): Promise<PublishSchedulerRes
   }
 
   const now = new Date();
+  let publishedArticleIds: string[] = [];
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -31,6 +33,7 @@ export async function publishDueScheduledArticles(): Promise<PublishSchedulerRes
         return { updated: 0, slugs: [] };
       }
 
+      publishedArticleIds = dueArticles.map((article) => article.id);
       const articleIds = dueArticles.map((article) => article.id);
       await tx.article.updateMany({
         where: { id: { in: articleIds } },
@@ -52,6 +55,10 @@ export async function publishDueScheduledArticles(): Promise<PublishSchedulerRes
         slugs: dueArticles.map((article) => article.slug).filter((slug): slug is string => Boolean(slug)),
       };
     });
+
+    for (const articleId of publishedArticleIds) {
+      await enqueueSocialPostJobsForArticle(articleId);
+    }
 
     return result;
   } catch (error) {

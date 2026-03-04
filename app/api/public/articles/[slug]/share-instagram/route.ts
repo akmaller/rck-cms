@@ -2,8 +2,9 @@ import sharp from "sharp";
 import { ArticleStatus } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
+import { buildArticleUrl } from "@/lib/social/article-url";
+import { resolveInstagramSourceImageUrl } from "@/lib/social/instagram-media";
 import { getSiteConfig } from "@/lib/site-config/server";
-import { deriveThumbnailUrl } from "@/lib/storage/media";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -228,7 +229,7 @@ export async function GET(
   const siteName = siteConfig.name ?? "Roemah Cita";
   const articleUrl =
     articleUrlParam ??
-    (siteConfig.url ? `${siteConfig.url}/articles/${slug}` : `https://example.com/articles/${slug}`);
+    (siteConfig.url ? buildArticleUrl(siteConfig.url, slug) : `https://example.com/articles/${slug}`);
 
   const displayUrl = (() => {
     const base = siteConfig.url ?? articleUrl;
@@ -240,11 +241,7 @@ export async function GET(
     }
   })();
 
-  const isVideo = article.featuredMedia?.mimeType?.startsWith("video/") ?? false;
-  const featuredImageUrl =
-    (isVideo ? article.featuredMedia?.thumbnailUrl : article.featuredMedia?.url) ??
-    deriveThumbnailUrl(article.featuredMedia?.url ?? "") ??
-    null;
+  const featuredImageUrl = resolveInstagramSourceImageUrl(article.featuredMedia ?? null);
 
   const [logoBuffer, featuredBuffer] = await Promise.all([
     fetchBuffer(siteConfig.logoUrl ?? null),

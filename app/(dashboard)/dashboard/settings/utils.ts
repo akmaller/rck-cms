@@ -35,5 +35,22 @@ export function buildInitialConfig(value: ConfigValues | null | undefined): Conf
     analytics: {
       googleTagManagerId: value?.analytics?.googleTagManagerId ?? "",
     },
+    socialAutopost: {
+      enabled: value?.socialAutopost?.enabled ?? false,
+      facebook: {
+        enabled: value?.socialAutopost?.facebook?.enabled ?? false,
+        pageId: "",
+        pageAccessToken: "",
+      },
+      instagram: {
+        enabled: value?.socialAutopost?.instagram?.enabled ?? false,
+        igUserId: "",
+        pageAccessToken: "",
+      },
+      twitter: {
+        enabled: value?.socialAutopost?.twitter?.enabled ?? false,
+        accessToken: "",
+      },
+    },
   };
 }

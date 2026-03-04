@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/settings/moderation", label: "Moderasi" },
   { href: "/dashboard/settings/wordpress-import", label: "Import WordPress" },
   { href: "/dashboard/settings/performance", label: "Performa" },
+  { href: "/dashboard/settings/social-dispatch", label: "Sosial Queue" },
   { href: "/dashboard/settings/maintenance", label: "Pemeliharaan" },
   { href: "/dashboard/settings/security", label: "Keamanan" },
 ] as const;

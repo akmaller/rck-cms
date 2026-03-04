@@ -65,6 +65,30 @@ export const siteConfigSchema = z.object({
         .nullable(),
     })
     .optional(),
+  socialAutopost: z
+    .object({
+      enabled: z.boolean().optional(),
+      facebook: z
+        .object({
+          enabled: z.boolean().optional(),
+        })
+        .partial()
+        .optional(),
+      instagram: z
+        .object({
+          enabled: z.boolean().optional(),
+        })
+        .partial()
+        .optional(),
+      twitter: z
+        .object({
+          enabled: z.boolean().optional(),
+        })
+        .partial()
+        .optional(),
+    })
+    .partial()
+    .optional(),
   registration: z
     .object({
       enabled: z.boolean().optional(),

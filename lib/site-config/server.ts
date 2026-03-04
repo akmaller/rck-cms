@@ -48,6 +48,14 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
   const analyticsSetting = values?.analytics ?? {};
   const commentsDefaults = defaultSiteConfig.comments ?? { enabled: true };
   const commentsSetting = values?.comments ?? {};
+  const socialAutopostDefaults = defaultSiteConfig.socialAutopost ?? {};
+  const socialAutopostSetting = values?.socialAutopost ?? {};
+  const socialAutopostFacebookDefaults = socialAutopostDefaults.facebook ?? {};
+  const socialAutopostInstagramDefaults = socialAutopostDefaults.instagram ?? {};
+  const socialAutopostTwitterDefaults = socialAutopostDefaults.twitter ?? {};
+  const socialAutopostFacebookSetting = socialAutopostSetting.facebook ?? {};
+  const socialAutopostInstagramSetting = socialAutopostSetting.instagram ?? {};
+  const socialAutopostTwitterSetting = socialAutopostSetting.twitter ?? {};
   const normalizePolicySlug = (value: unknown) =>
     typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
   const privacyPolicyPageSlug =
@@ -109,6 +117,27 @@ const mergeConfig = (values?: ConfigValues | null): ResolvedSiteConfig => {
     analytics: {
       googleTagManagerId: resolvedGoogleTagManagerId,
     },
+    socialAutopost: {
+      enabled: socialAutopostSetting.enabled ?? socialAutopostDefaults.enabled ?? false,
+      facebook: {
+        enabled:
+          socialAutopostFacebookSetting.enabled ??
+          socialAutopostFacebookDefaults.enabled ??
+          false,
+      },
+      instagram: {
+        enabled:
+          socialAutopostInstagramSetting.enabled ??
+          socialAutopostInstagramDefaults.enabled ??
+          false,
+      },
+      twitter: {
+        enabled:
+          socialAutopostTwitterSetting.enabled ??
+          socialAutopostTwitterDefaults.enabled ??
+          false,
+      },
+    },
   };
 };
 
@@ -121,3 +150,5 @@ const fetchSiteConfig = async () => {
 export const getSiteConfig = unstable_cache(fetchSiteConfig, ["site-config"], {
   tags: ["site-config"],
 });
+
+export const getSiteConfigUncached = fetchSiteConfig;
